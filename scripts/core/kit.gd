@@ -18,6 +18,18 @@ static func material_kolor() -> ShaderMaterial:
 	return _mat_vc
 
 
+static var _mat_vm: ShaderMaterial
+
+
+## Materiał broni w rękach: lekko podświetlony, żeby broń była czytelna w ciemności.
+static func material_kolor_vm() -> ShaderMaterial:
+	if _mat_vm == null:
+		_mat_vm = material_kolor().duplicate()
+		_mat_vm.set_shader_parameter("use_emission", true)
+		_mat_vm.set_shader_parameter("emission_energy", 0.22)
+	return _mat_vm
+
+
 static func material_tex(nazwa: String, emisja := 0.0) -> ShaderMaterial:
 	var key := "%s|%s" % [nazwa, emisja]
 	if not _tex_mats.has(key):

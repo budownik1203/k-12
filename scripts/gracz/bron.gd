@@ -64,6 +64,7 @@ func ustaw(p: Przedmiot) -> void:
 	model.add_child(Kit.instancja(Modele.rece(md["przod"], bd["slot"] == "pistolet")))
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
 	_odswiez_mag()
 	stan = "wyciaganie"
 	stan_t = 0.0
@@ -331,7 +332,7 @@ func _process(delta: float) -> void:
 	if model == null:
 		return
 	var pistolet := jest_pistolet()
-	var hip := Vector3(0.15, -0.16, -0.36) if not pistolet else Vector3(0.13, -0.14, -0.36)
+	var hip := Vector3(0.16, -0.18, -0.42) if not pistolet else Vector3(0.13, -0.15, -0.4)
 	var celownik := float(md["celownik"])
 	var ads_poz := Vector3(0.0, -celownik, -0.24 if not pistolet else -0.3)
 	var t := ads * ads * (3.0 - 2.0 * ads)
@@ -341,7 +342,7 @@ func _process(delta: float) -> void:
 	_kick = _kick.lerp(Vector3.ZERO, delta * 14.0)
 	_kick_rot = _kick_rot.lerp(Vector3.ZERO, delta * 12.0)
 	var poz := hip.lerp(ads_poz, t) + bob + _kick + Vector3(-_sway.x, _sway.y, 0) * (1.0 - t * 0.7)
-	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5)
+	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5) + Vector3(0, 0.05, 0) * (1.0 - t)
 	# animacje stanów
 	var f := 0.0
 	if stan != "gotowa" and stan_total > 0.0:

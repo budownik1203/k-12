@@ -58,6 +58,9 @@ func _ready() -> void:
 		_zrzuty.call_deferred(args[args.find("--zrzuty") + 1])
 	elif args.has("--test"):
 		_tryb_testu = "test"
+	elif args.has("--ewakuacja"):
+		_tryb_testu = "ewakuacja"
+		_test_ewakuacji.call_deferred()
 	elif args.has("--walka"):
 		_tryb_testu = "walka"
 		_test_walki.call_deferred()
@@ -135,7 +138,13 @@ func _zrzuty(katalog: String) -> void:
 		gracz.global_position = c
 		gracz.rotation.y = -PI * 0.75
 		gracz.latarka.visible = n % 3 == 2
-		for f in 15:
+		if n == 3:
+			Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
+			gracz._wybierz_bron("glowna")
+		if n == 6:
+			Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("pm63", "a_9x18")
+			gracz._wybierz_bron("glowna")
+		for f in 45:
 			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
 		var img := get_viewport().get_texture().get_image()
@@ -198,5 +207,18 @@ func _test_walki() -> void:
 	var zywi := get_tree().get_nodes_in_group("wrogowie").filter(func(w): return not w.cialo.martwy).size()
 	for w in get_tree().get_nodes_in_group("wrogowie").slice(0, 3):
 		print("  wróg %s stan=%s widzi=%s wykrycie=%.2f hp=%.0f%% dyst=%.1f" % [w.nazwa_jednostki, w.stan, w.widzi, w.wykrycie, w.cialo.procent() * 100, w.global_position.distance_to(gracz.global_position)])
+	if OS.get_cmdline_user_args().has("--pelny") and gracz.cialo.martwy:
+		print("TEST WALKI: gracz zginął, czekam na raport")
+		return
 	print("TEST WALKI: czas %.1f, strzały gracza %d, zdrowie gracza %.0f%%, martwy %s, zabici %d, żywi wrogowie %d" % [t, strzaly, gracz.cialo.procent() * 100.0, gracz.cialo.martwy, zabici.size(), zywi])
 	get_tree().quit()
+
+
+func _test_ewakuacji() -> void:
+	for i in 10:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.queue_free()
+	var ew: Ewakuacja = info["wyjscia"][0]
+	gracz.global_position = ew.global_position + Vector3.UP * 0.1
+	print("TEST EWAKUACJI: gracz w strefie %s" % ew.nazwa)

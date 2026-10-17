@@ -90,6 +90,19 @@ func _ready() -> void:
 	b.pressed.connect(func(): Gra.idz_do_bazy())
 	v.add_child(b)
 	Dzwiek.graj("pieczatka", 0.0)
+	var args := OS.get_cmdline_user_args()
+	for flaga in ["--zrzuty", "--zrzuty_raport"]:
+		if args.has(flaga):
+			_zrzut.call_deferred(args[args.find(flaga) + 1])
+
+
+func _zrzut(k: String) -> void:
+	for f in 10:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(k.path_join("raport.png"))
+	print("zrzut raportu")
+	get_tree().quit()
 
 
 static func dopiski(r: Dictionary) -> Array:
