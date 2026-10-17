@@ -202,6 +202,23 @@ func _process(delta: float) -> void:
 					print("  obiekt: ", n.name, " ", n.get_class(), " ", n.global_position)
 		if aa.has("--mapa"):
 			zapisz_mape(aa[aa.find("--mapa") + 1])
+	if _tryb_testu == "test" and OS.get_cmdline_user_args().has("--sluch"):
+		# test słuchu: seria z karabinu przy starcie, potem stan wszystkich przeciwników
+		if czas > 2.0 and czas - delta <= 2.0:
+			var srodek := Vector3(GeneratorBiomu.GW * GeneratorBiomu.C * 0.5, 0, GeneratorBiomu.GH * GeneratorBiomu.C * 0.5)
+			var naj := Vector2i.ZERO
+			for k in info["komorki"]:
+				if info["komorki"][k]["typ"] == "korytarz" and gen._srodek(k).distance_to(srodek) < gen._srodek(naj).distance_to(srodek):
+					naj = k
+			gracz.global_position = gen._srodek(naj) + Vector3.UP * 0.05
+			for i in 5:
+				Gra.emituj_halas(gracz.global_position, 46.0, gracz)
+		if czas > 7.0 and czas - delta <= 7.0:
+			var stany := {}
+			for w in get_tree().get_nodes_in_group("wrogowie"):
+				var klucz: String = ("%s/%s" % [w.get_class(), w.stan]) + ("/nasluch" if (w is Wrog and w._nasluch) else "") + ("/%dm" % int(w.global_position.distance_to(gracz.global_position)) if w.stan in ["szukanie", "walka", "poscig"] else "")
+				stany[klucz] = stany.get(klucz, 0) + 1
+			print("SLUCH: ", stany)
 	if _tryb_testu == "test" and czas > 8.0:
 		print("TEST RAJDU OK: czas %.1f s, pomieszczeń %d, wrogów %d" % [czas, info["komorki"].size(), get_tree().get_nodes_in_group("wrogowie").size()])
 		get_tree().quit()
@@ -267,6 +284,12 @@ func _zrzuty(katalog: String) -> void:
 		var c := Vector3(k.x * GeneratorBiomu.C + 0.9, 0.05, k.y * GeneratorBiomu.C + 0.9)
 		gracz.global_position = c
 		gracz.rotation.y = -PI * 0.75
+		if info["komorki"][k]["typ"] == "korytarz":
+			# w korytarzu: z wejścia jednego ramienia wzdłuż korytarza
+			var ram: Array = gen._ramiona(k)
+			var d: Vector2i = ram[n % ram.size()]
+			gracz.global_position = Vector3(k.x * GeneratorBiomu.C + 3.0 - d.x * 2.6, 0.05, k.y * GeneratorBiomu.C + 3.0 - d.y * 2.6)
+			gracz.rotation.y = atan2(-float(d.x), -float(d.y))
 		gracz.latarka.visible = n % 3 == 2
 		if n == 3:
 			Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")

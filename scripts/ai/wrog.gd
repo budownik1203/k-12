@@ -54,6 +54,10 @@ var _w_oslonie := false
 var _oslona := {}
 var _napis_t := 0.0
 var _czas_walki := 0.0
+var _nasluch := false         # czujny w miejscu: słyszał odległe strzały, nie idzie sprawdzać
+var _sluch_ms := -10000
+var _sluch_pos := Vector3.ZERO
+var _sluch_d := 0.0
 var _przygwozdzenie := 0.0   # ostrzał gracza psuje celność
 
 
@@ -225,25 +229,49 @@ func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 		return
 	if zrodlo is Wrog:
 		return
-	var d := global_position.distance_to(pos)
+	if global_position.distance_to(pos) > zasieg:
+		return
+	# droga dźwięku przez korytarze i drzwi; seria strzałów z jednego miejsca liczona raz
+	var teraz := Time.get_ticks_msec()
+	var d := _sluch_d
+	if teraz - _sluch_ms > 400 or pos.distance_to(_sluch_pos) > 2.0:
+		d = Balistyka.odleglosc_dzwieku(get_world_3d(), pos, global_position)
+		_sluch_ms = teraz
+		_sluch_pos = pos
+		_sluch_d = d
 	if d > zasieg:
 		return
 	if zrodlo is Gracz:
 		gracz = zrodlo
 	if stan in ["patrol", "szukanie", "czujny"]:
 		var niepewnosc := clampf(d * 0.15, 0.5, 4.0)
-		ostatnia_pozycja = pos + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * niepewnosc
-		if zasieg > 30.0 and stan != "walka":
-			# strzał – od razu w gotowości bojowej
-			_napis(["Strzały!", "Kto strzela?!", "Kontakt!"].pick_random())
+		var strzal := zasieg > 25.0
+		if strzal and d < zasieg * 0.5:
+			# blisko – od razu w gotowości bojowej i alarm dla oddziału
+			ostatnia_pozycja = pos + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * niepewnosc
+			if stan != "szukanie":
+				_napis(["Strzały!", "Kto strzela?!", "Kontakt!"].pick_random())
 			stan = "szukanie"
+			_nasluch = false
 			czas_bez_kontaktu = 0.0
 			if oddzial:
 				oddzial.alarm(ostatnia_pozycja, self)
+		elif strzal:
+			# daleko – nasłuchuje i trzyma pozycję, nie biegnie przez pół budynku
+			if stan == "patrol":
+				ostatnia_pozycja = pos + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * niepewnosc * 2.0
+				_napis(["Strzelają gdzieś...", "Słyszysz? Daleko.", "Ktoś się tam tłucze."].pick_random())
+				stan = "czujny"
+				_nasluch = true
+				czas_bez_kontaktu = 0.0
+			elif stan == "czujny" and _nasluch:
+				czas_bez_kontaktu = 0.0
 		else:
+			ostatnia_pozycja = pos + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * niepewnosc
 			if stan == "patrol":
 				_napis(["Słyszałeś?", "Co to było?", "Ktoś tu jest..."].pick_random())
-			stan = "czujny"
+				stan = "czujny"
+			_nasluch = false
 			czas_bez_kontaktu = 0.0
 
 
@@ -341,14 +369,16 @@ func _aktualizuj_wykrycie(dt: float) -> void:
 				_napis(["Tam jest!", "Kontakt!", "Widzę go!", "Mam go!"].pick_random())
 				if oddzial:
 					oddzial.alarm(ostatnia_pozycja, self)
-		elif wykrycie > 0.35 and stan == "patrol":
+		elif wykrycie > 0.35 and (stan == "patrol" or _nasluch):
 			stan = "czujny"
+			_nasluch = false
 			ostatnia_pozycja = gracz.global_position
 	else:
 		wykrycie = maxf(0.0, wykrycie - dt * 0.25)
 
 
 func _wejdz_w_walke() -> void:
+	_nasluch = false
 	if stan != "walka":
 		_czas_walki = 0.0
 	stan = "walka"
@@ -362,6 +392,7 @@ func alarm_od_oddzialu(pos: Vector3) -> void:
 	if stan == "ucieczka" or cialo.martwy:
 		return
 	ostatnia_pozycja = pos
+	_nasluch = false
 	if stan != "walka":
 		stan = "szukanie"
 		czas_bez_kontaktu = 0.0
@@ -383,6 +414,14 @@ func _czujny(delta: float) -> void:
 	biegnie = false
 	_kucanie_cel = 0.3 if cecha == "ostrozny" else 0.0
 	czas_bez_kontaktu += delta
+	if _nasluch:
+		_kucanie_cel = 0.5
+		_idz(global_position)
+		_obroc_do(ostatnia_pozycja, delta, 2.0)
+		if czas_bez_kontaktu > 15.0:
+			stan = "patrol"
+			_nasluch = false
+		return
 	_idz(ostatnia_pozycja)
 	if _agent.is_navigation_finished():
 		_obroc_do(ostatnia_pozycja + Vector3(sin(czas_bez_kontaktu), 0, cos(czas_bez_kontaktu)) * 3.0, delta, 2.0)

@@ -195,10 +195,10 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	_kick_rot += Vector3(deg_to_rad(4.0 + sila * 1.5), randf_range(-0.02, 0.02), 0)
 	var wylot := model.global_transform * Vector3(md["lufa"])
 	Efekty.blysk(gracz.get_parent(), wylot, 3.0)
-	var halas := 38.0
+	var halas := 32.0
 	match bd["kaliber"]:
-		"7.62x39": halas = 55.0
-		"12/70": halas = 48.0
+		"7.62x39": halas = 46.0
+		"12/70": halas = 40.0
 	Gra.emituj_halas(gracz.global_position, halas, gracz)
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}
 	Dzwiek.graj(dzw.get(bd["kaliber"], "strzal_pistolet"), -2.0)

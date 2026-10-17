@@ -114,7 +114,9 @@ func trafiony(czesc: String, obr: float, _pen: float, od_kogo: Node, punkt: Vect
 func _halas(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 	if cialo == null or cialo.martwy or not (zrodlo is Gracz):
 		return
-	if global_position.distance_to(pos) < zasieg * 1.2 and stan == "wedrowka":
+	if stan != "wedrowka" or global_position.distance_to(pos) > zasieg:
+		return
+	if Balistyka.odleglosc_dzwieku(get_world_3d(), pos, global_position) < zasieg * 0.8:
 		gracz = zrodlo
 		cel = pos
 		_decyzja_t = 6.0

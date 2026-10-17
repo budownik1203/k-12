@@ -44,7 +44,7 @@ a magazynek na broń, żeby go włożyć.
 
 1. **Baza** (schron, chodzony w pierwszej osobie): Zbrojmistrz, Medyk i Pośrednik, skrytka w szafkach,
    leczenie, ubezpieczenie, darmowy zestaw startowy, gdy nie masz broni.
-2. **Rajd**: losowy graf pomieszczeń bloku (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
+2. **Rajd**: losowa sieć korytarzy z pomieszczeniami bloku (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
    szabrownicy i najemnicy z taktycznym AI, zdziczałe psy, łup w szafkach i na zwłokach.
 3. **Wyjścia**: brama (zawsze), piwnica nr 7 (na klucz z rajdu), okno na rusztowanie (tylko w oknie czasowym).
 4. **Raport urzędowy**: przeżycie albo zgon, z komunikatem zależnym od przyczyny i dopiskami z przebiegu rajdu.
@@ -78,6 +78,7 @@ godot --headless --path . res://tests/test_ekwipunek.tscn     # siatki, stosy, w
 godot --path . res://tests/test_ui.tscn                       # przeciąganie w ekwipunku
 godot --headless --path . res://scenes/rajd.tscn -- --test --ziarno 31   # generator + spójność nawigacji
 godot --headless --path . res://scenes/rajd.tscn -- --walka   # starcie z oddziałem
+godot --headless --path . res://scenes/rajd.tscn -- --test --sluch   # kto reaguje na strzał ze środka mapy
 godot --path . res://scenes/rajd.tscn -- --zrzuty <katalog>   # zrzuty ekranu
 ```
 
