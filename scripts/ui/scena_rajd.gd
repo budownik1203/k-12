@@ -150,6 +150,32 @@ func _zrzuty(katalog: String) -> void:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(katalog.path_join("rajd_%02d_%s.png" % [n, info["komorki"][k]["typ"]]))
 		n += 1
+	# postacie: pies i szabrownik w oświetlonym pomieszczeniu startowym
+	gracz.global_position = info["start"]
+	gracz.rotation.y = info["start_rot"]
+	gracz.latarka.visible = true
+	var przod := -gracz.global_basis.z
+	var pies := Fauna.new()
+	swiat.add_child(pies)
+	pies.global_position = gracz.global_position + przod * 2.6 + gracz.global_basis.x * -0.6
+	pies.rotation.y = gracz.rotation.y + 2.4
+	pies.set_physics_process(false)
+	var wr: Node3D = null
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w is Wrog:
+			wr = w
+			break
+	if wr:
+		wr.global_position = gracz.global_position + przod * 4.0 + gracz.global_basis.x * 0.9
+		wr.rotation.y = gracz.rotation.y + PI * 0.85
+		wr.set_physics_process(false)
+		wr.stan = "walka"
+		for i in 10:
+			wr._animuj(0.05)
+	for f in 30:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("postacie.png"))
 	# ekran ekwipunku z pojemnikiem
 	var pojemniki := swiat.get_children().filter(func(x): return x is Pojemnik)
 	if not pojemniki.is_empty() and ekran_ekw:

@@ -48,6 +48,9 @@ func _ready() -> void:
 	komunikat("Baza. [F] rozmowa/użycie, [Tab] ekwipunek i skrytka.")
 	if not Gra.zdrowie.is_empty():
 		komunikat("Masz nieleczone urazy. Medyk przyjmuje (odpłatnie).")
+	var zwrot := Gra.odbierz_poczte()
+	if not zwrot.is_empty():
+		komunikat("Pośrednik: ubezpieczyciel zwrócił do skrytki: " + ", ".join(zwrot))
 	var args := OS.get_cmdline_user_args()
 	if args.has("--zrzuty"):
 		_zrzuty.call_deferred(args[args.find("--zrzuty") + 1])

@@ -39,7 +39,9 @@ func _ready() -> void:
 	Sterowanie.przechwyc(false)
 	Sterowanie.blokada = true
 	_ui()
-	if OS.get_cmdline_user_args().has("--zrzuty"):
+	if OS.get_cmdline_user_args().has("--test"):
+		Gra.rozpocznij_rajd.call_deferred()
+	elif OS.get_cmdline_user_args().has("--zrzuty"):
 		var k: String = OS.get_cmdline_user_args()[OS.get_cmdline_user_args().find("--zrzuty") + 1]
 		_zrzut.call_deferred(k)
 

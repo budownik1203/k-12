@@ -69,6 +69,9 @@ func _ready() -> void:
 		kom.autowrap_mode = TextServer.AUTOWRAP_WORD
 		v.add_child(kom)
 		v.add_child(Motyw.etykieta("Utracone wyposażenie: %d bonów" % int(r.get("wartosc_utracona", 0)), 15, ciem, Motyw.mono()))
+		var ub: Array = r.get("ubezpieczone", [])
+		if not ub.is_empty():
+			v.add_child(Motyw.etykieta("Ubezpieczenie: wróci do skrytki – " + ", ".join(ub), 13, Color(0.2, 0.4, 0.18), Motyw.mono()))
 		var ut: Array = r.get("utracone", [])
 		if not ut.is_empty():
 			var l := Motyw.etykieta(", ".join(ut.slice(0, 14)) + ("..." if ut.size() > 14 else ""), 12, szary)
@@ -119,7 +122,9 @@ static func dopiski(r: Dictionary) -> Array:
 		var f := parts[0]
 		var o := parts[1]
 		var n: int = oddzialy[k]
-		if f == "najemnik":
+		if f == "fauna":
+			out.append("Unieszkodliwiono %d okaz%s fauny. Wniosek schroniska o odszkodowanie odrzucono." % [n, "" if n == 1 else "y"])
+		elif f == "najemnik":
 			out.append("Zlikwidowano %d najemnik%s z oddziału %s. Konkurencja ograniczona." % [n, "a" if n == 1 else "ów", o if o != "" else "bez nazwy"])
 		else:
 			var dop: String = ["dopisek: to dalej cywile", "dopisek: inwentarz zmniejszony", "dopisek: bez komentarza"][randi() % 3]

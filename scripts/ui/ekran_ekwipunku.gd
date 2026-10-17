@@ -212,6 +212,8 @@ func _przebuduj() -> void:
 	_srodek.add_child(_siatka_ui(ekw.siatka_kamizelki(), "kamizelka"))
 	_srodek.add_child(Motyw.naglowek("Plecak" + _opis_red(ekw.sloty["plecak"])))
 	_srodek.add_child(_siatka_ui(ekw.siatka_plecaka(), "plecak"))
+	_srodek.add_child(Motyw.naglowek("Kontener bezpieczny (przeżywa śmierć)"))
+	_srodek.add_child(_siatka_ui(ekw.bezpieczny, "bezpieczny"))
 	# prawy
 	if _prawa_siatka != null:
 		var naz := "Skrytka" if _pojemnik == null else _pojemnik.nazwa
@@ -747,6 +749,8 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 		"med":
 			var m: Dictionary = d["med"]
 			t += "Czas użycia %.1f s\n" % m["czas"]
+	if p.dane.get("ubezp", false):
+		t += "[color=#6f9a68]UBEZPIECZONY – wróci do skrytki po śmierci[/color]\n"
 	t += "[i][color=#a49d86]%s[/color][/i]" % d.get("opis", "")
 	return t
 

@@ -642,14 +642,15 @@ func _animuj(delta: float) -> void:
 	var amp := clampf(pozioma / 4.0, 0.0, 1.0) * 0.7
 	var biodra: Node3D = _czesci["biodra"]
 	biodra.position.y = lerpf(0.95, 0.6, kucanie)
-	(_czesci["noga_l"] as Node3D).rotation.x = faza * amp - kucanie * 1.1
-	(_czesci["noga_p"] as Node3D).rotation.x = -faza * amp - kucanie * 0.3
+	(_czesci["noga_l"] as Node3D).rotation.x = faza * amp + kucanie * 1.2
+	(_czesci["noga_p"] as Node3D).rotation.x = -faza * amp + kucanie * 0.4
 	(_czesci["tulow"] as Node3D).rotation.x = -0.1 - kucanie * 0.25
 	var celuje := stan == "walka" or stan == "szukanie"
-	var ram_cel := -1.25 if celuje else -0.5
+	var ram_cel := 1.3 if celuje else 0.35
 	(_czesci["ramie_p"] as Node3D).rotation.x = lerpf((_czesci["ramie_p"] as Node3D).rotation.x, ram_cel, delta * 8.0)
-	(_czesci["ramie_l"] as Node3D).rotation.x = lerpf((_czesci["ramie_l"] as Node3D).rotation.x, ram_cel - 0.15, delta * 8.0)
-	(_czesci["ramie_l"] as Node3D).rotation.z = 0.5 if celuje else 0.1
+	(_czesci["ramie_l"] as Node3D).rotation.x = lerpf((_czesci["ramie_l"] as Node3D).rotation.x, ram_cel + 0.1, delta * 8.0)
+	(_czesci["ramie_l"] as Node3D).rotation.z = -0.45 if celuje else -0.05
+	(_czesci["ramie_p"] as Node3D).rotation.z = 0.15 if celuje else 0.05
 	var b: Node3D = _czesci["bron"]
 	b.position = Vector3(0.12, 0.38 if celuje else 0.2, -0.32 if celuje else -0.15)
 	b.rotation.x = 0.0 if celuje else 0.6

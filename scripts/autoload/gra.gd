@@ -14,6 +14,7 @@ var zdrowie := {}            # część ciała -> hp po rajdzie (puste = pełne)
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8}
 var ostatni_raport := {}
+var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0
 var rajd_w_toku := false
 
@@ -29,6 +30,7 @@ func nowa_gra() -> void:
 	ekw = Ekwipunek.new()
 	zdrowie = {}
 	statystyki = {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
+	poczta = []
 	# ekwipunek startowy
 	var pistolet := Przedmiot.nowy("pw9")
 	_zaladuj_bron(pistolet, "a_9x18")
@@ -142,10 +144,23 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 	else:
 		statystyki["zgony"] += 1
 		var utracone := []
-		for p in ekw.wszystkie():
+		var wartosc := 0
+		var zwrot := []
+		for p in ekw.ryzykowane():
 			utracone.append(p.nazwa())
+			if p.dane.get("ubezp", false):
+				p.dane.erase("ubezp")
+				# zwracany pusty (bez magazynka i zawartości)
+				var kopia := Przedmiot.nowy(p.id)
+				poczta.append(kopia.to_dict())
+				zwrot.append(p.nazwa())
+		for sl in Ekwipunek.SLOTY:
+			if ekw.sloty[sl] != null:
+				wartosc += ekw.sloty[sl].wartosc()
+		wartosc += ekw.kieszenie.wartosc()
 		wynik["utracone"] = utracone
-		wynik["wartosc_utracona"] = ekw.wartosc()
+		wynik["wartosc_utracona"] = wartosc
+		wynik["ubezpieczone"] = zwrot
 		ekw.wyczysc()
 		zdrowie = {}
 	ostatni_raport = wynik
@@ -158,7 +173,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
-		"zdrowie": zdrowie, "statystyki": statystyki, "ustawienia": ustawienia,
+		"zdrowie": zdrowie, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -184,6 +199,7 @@ func wczytaj() -> bool:
 		zdrowie = d.get("zdrowie", {})
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
+		poczta = d.get("poczta", [])
 		return true
 	return false
 
@@ -197,3 +213,24 @@ func usun_zapis() -> void:
 		DirAccess.remove_absolute(ZAPIS)
 	if FileAccess.file_exists(ZAPIS + ".bak"):
 		DirAccess.remove_absolute(ZAPIS + ".bak")
+
+
+## Koszt ubezpieczenia przedmiotu (ok. 18% wartości, minimum 300).
+func koszt_ubezpieczenia(p: Przedmiot) -> int:
+	return maxi(300, int(float(p.defn().get("cena", 0)) * 0.18))
+
+
+## Odbiera zwrócone ubezpieczone przedmioty do skrytki. Zwraca nazwy odebranych.
+func odbierz_poczte() -> Array:
+	var odebrane := []
+	var zostaje := []
+	for d in poczta:
+		var p := Przedmiot.from_dict(d)
+		if skrytka.dodaj(p):
+			odebrane.append(p.nazwa())
+		else:
+			zostaje.append(d)
+	poczta = zostaje
+	if not odebrane.is_empty():
+		zapisz()
+	return odebrane

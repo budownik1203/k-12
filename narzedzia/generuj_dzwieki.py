@@ -151,6 +151,14 @@ def main():
     st = bp(szum(1.6), 800, 3500) * env(int(SR * 1.6), 0.05, 0.8) * 0.5
     beep = np.sin(2 * np.pi * 1000 * t(0.15)) * 0.6
     zapisz("start_rajdu", sekwencja(1.6, [(0.0, st), (0.9, beep), (1.15, beep)]), 0.5)
+    # fauna: warkot i ugryzienie
+    tt = t(1.2)
+    f0 = 70 + 15 * np.sin(2 * np.pi * 3 * tt)
+    war = signal.sawtooth(2 * np.pi * np.cumsum(f0) / SR) * (0.5 + 0.5 * np.abs(np.sin(2 * np.pi * 9 * tt)))
+    war = lp(war + bp(szum(1.2), 200, 900) * 0.6, 900) * env(len(tt), 0.08, 0.6)
+    zapisz("warkot", war, 0.7)
+    n = int(SR * 0.35)
+    zapisz("ugryzienie", lp(szum(0.35), 1500) * env(n, 0.001, 0.05) + hp(szum(0.35), 2500) * env(n, 0.0005, 0.015) + np.sin(2 * np.pi * 110 * t(0.35)) * env(n, 0.001, 0.05), 0.8)
     # ambient rajdu: niski szum wentylacji, buczenie i odległe trzaski (pętla 24 s)
     dl = 24.0
     tt = t(dl)

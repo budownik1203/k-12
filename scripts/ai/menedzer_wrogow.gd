@@ -69,6 +69,14 @@ func rozstaw(r: Node) -> void:
 		var ile := rng.randi_range(2, 3) if frak == "szabrownik" else 2
 		_oddzial(frak, po_komorce[k], ile, i)
 		i += 1
+	# fauna: watahy psów w piwnicach i magazynach
+	var stada := 0
+	for k in komorki:
+		if stada >= 2:
+			break
+		if r.info["komorki"][k]["typ"] in ["piwnica", "magazyn"] and rng.randf() < 0.7:
+			_stado(po_komorce[k][0]["pos"], rng.randi_range(1, 2))
+			stada += 1
 
 
 func _oddzial(frak: String, punkty: Array, ile: int, idx: int) -> void:
@@ -139,12 +147,24 @@ func _process(delta: float) -> void:
 		_fala()
 
 
-## Nowa grupa szabrowników z dala od gracza.
+func _stado(pos: Vector3, ile: int) -> void:
+	for j in ile:
+		var f := Fauna.new()
+		rajd.swiat.add_child(f)
+		f.global_position = pos + Vector3(rng.randf_range(-0.8, 0.8), 0, rng.randf_range(-0.8, 0.8))
+		f.rotation.y = rng.randf() * TAU
+
+
+## Nowa grupa (szabrownicy albo fauna) z dala od gracza.
 func _fala() -> void:
 	var g: Node3D = rajd.gracz
 	var kandydaci: Array = rajd.info["spawny"].filter(func(s): return s["pos"].distance_to(g.global_position) > 18.0)
 	if kandydaci.is_empty():
 		return
 	var s: Dictionary = kandydaci[rng.randi() % kandydaci.size()]
-	_oddzial("szabrownik", [s], 2, oddzialy.size())
-	rajd.dodaj_zdarzenie("Do strefy weszła nowa grupa szabrowników.")
+	if zagrozenie > 3.0 and rng.randf() < 0.5:
+		_stado(s["pos"], rng.randi_range(2, 3))
+		rajd.dodaj_zdarzenie("Hałas zwabił faunę strefy.")
+	else:
+		_oddzial("szabrownik", [s], 2, oddzialy.size())
+		rajd.dodaj_zdarzenie("Do strefy weszła nowa grupa szabrowników.")

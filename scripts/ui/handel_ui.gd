@@ -206,6 +206,23 @@ func _przebuduj() -> void:
 				_powitanie.text = "„Gotowe. Blizny w cenie.”"
 				_przebuduj())
 			_dodatki.add_child(b)
+		"posrednik":
+			for sl in ["glowna", "pistolet", "pancerz", "helm", "plecak"]:
+				var p: Przedmiot = Gra.ekw.sloty[sl]
+				if p == null or p.dane.get("ubezp", false):
+					continue
+				var koszt := Gra.koszt_ubezpieczenia(p)
+				var bu := Button.new()
+				bu.text = "Ubezpiecz: %s (%d)" % [p.nazwa(), koszt]
+				bu.disabled = Gra.bony < koszt
+				bu.tooltip_text = "Po śmierci przedmiot (pusty) wróci do skrytki."
+				bu.pressed.connect(func():
+					Gra.dodaj_bony(-koszt)
+					p.dane["ubezp"] = true
+					_powitanie.text = "„Ubezpieczone. Gdyby co, przyjdzie pocztą. Bez naboi, bez sentymentów.”"
+					Dzwiek.graj("pieczatka", -4.0)
+					_przebuduj())
+				_dodatki.add_child(bu)
 		"zbrojmistrz":
 			var b2 := Button.new()
 			b2.text = "Darmowy zestaw startowy"

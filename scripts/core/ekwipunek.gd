@@ -13,6 +13,7 @@ const NAZWY_SLOTOW := {
 
 var sloty := {}
 var kieszenie := Siatka.new(4, 1, 0.0)
+var bezpieczny := Siatka.new(2, 2, 0.0)   # kontener bezpieczny: przeżywa śmierć
 
 
 func _init() -> void:
@@ -73,6 +74,7 @@ func siatki(tylko_szybkie := false) -> Array:
 		var pl := siatka_plecaka()
 		if pl:
 			out.append(pl)
+		out.append(bezpieczny)
 	return out
 
 
@@ -90,13 +92,14 @@ func waga() -> float:
 			total += float(p.defn()["waga"]) + (p.dane["siatka"] as Siatka).masa_efektywna()
 		else:
 			total += p.waga()
-	total += kieszenie.masa()
+	total += kieszenie.masa() + bezpieczny.masa()
 	return total
 
 
 ## Dokłada przedmiot do ekwipunku. Magazynki, amunicja i leki najpierw do kamizelki.
 func dodaj(p: Przedmiot) -> bool:
 	var kolejnosc := siatki()
+	kolejnosc.erase(bezpieczny)
 	if p.typ() not in ["magazynek", "amunicja", "med"]:
 		kolejnosc = [siatka_plecaka(), kieszenie, siatka_kamizelki()].filter(func(s): return s != null)
 	for s in kolejnosc:
@@ -207,6 +210,7 @@ func wartosc() -> int:
 	return v
 
 
+## Czyści ekwipunek po śmierci. Kontener bezpieczny zostaje.
 func wyczysc() -> void:
 	for s in SLOTY:
 		sloty[s] = null
@@ -214,11 +218,23 @@ func wyczysc() -> void:
 	zmieniony.emit()
 
 
+## Przedmioty, które przepadają przy śmierci (bez kontenera bezpiecznego).
+func ryzykowane() -> Array:
+	var out := []
+	for sl in SLOTY:
+		if sloty[sl] != null:
+			out.append(sloty[sl])
+			if sloty[sl].typ() == "pojemnik":
+				out.append_array((sloty[sl].dane["siatka"] as Siatka).wszystkie())
+	out.append_array(kieszenie.wszystkie())
+	return out
+
+
 func to_dict() -> Dictionary:
 	var sl := {}
 	for s in SLOTY:
 		sl[s] = sloty[s].to_dict() if sloty[s] != null else null
-	return {"sloty": sl, "kieszenie": kieszenie.to_dict()}
+	return {"sloty": sl, "kieszenie": kieszenie.to_dict(), "bezpieczny": bezpieczny.to_dict()}
 
 
 static func from_dict(d: Dictionary) -> Ekwipunek:
@@ -228,4 +244,6 @@ static func from_dict(d: Dictionary) -> Ekwipunek:
 		e.sloty[s] = Przedmiot.from_dict(v) if v != null else null
 	if d.has("kieszenie"):
 		e.kieszenie = Siatka.from_dict(d["kieszenie"])
+	if d.has("bezpieczny"):
+		e.bezpieczny = Siatka.from_dict(d["bezpieczny"])
 	return e
