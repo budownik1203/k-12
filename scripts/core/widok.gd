@@ -55,8 +55,11 @@ static func wypiecz_nawigacje(swiat: Node3D) -> NavigationRegion3D:
 	nm.agent_height = 1.7
 	nm.agent_max_climb = 0.3
 	nm.agent_max_slope = 40.0
-	nm.cell_size = 0.25
-	nm.cell_height = 0.25
+	nm.cell_size = 0.1
+	nm.cell_height = 0.1
+	var mapa := swiat.get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(mapa, 0.1)
+	NavigationServer3D.map_set_cell_height(mapa, 0.1)
 	var region := NavigationRegion3D.new()
 	region.name = "Nawigacja"
 	swiat.add_child(region)

@@ -102,6 +102,7 @@ func _ready() -> void:
 	cs.position.y = 0.875
 	add_child(cs)
 	_agent = NavigationAgent3D.new()
+	_agent.path_search_max_polygons = 20000
 	_agent.path_desired_distance = 0.6
 	_agent.target_desired_distance = 0.6
 	_agent.radius = 0.35

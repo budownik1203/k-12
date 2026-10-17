@@ -95,7 +95,7 @@ func _k(a: Vector2i, b: Vector2i) -> String:
 
 func _uklad() -> void:
 	var start := Vector2i(0, rng.randi_range(1, GH - 2))
-	komorki[start] = {"typ": "klatka", "glebokosc": 0, "zajete": []}
+	komorki[start] = {"typ": "klatka", "glebokosc": 0, "zajete": [], "meble": []}
 	var cel := rng.randi_range(14, 18)
 	var lista: Array = [start]
 	var proby := 0
@@ -106,7 +106,7 @@ func _uklad() -> void:
 		var n := z + d
 		if n.x < 0 or n.y < 0 or n.x >= GW or n.y >= GH or komorki.has(n):
 			continue
-		komorki[n] = {"typ": "", "glebokosc": 0, "zajete": []}
+		komorki[n] = {"typ": "", "glebokosc": 0, "zajete": [], "meble": []}
 		lista.append(n)
 		krawedzie[_k(z, n)] = {"a": z, "b": n, "drzwi": 0.0, "otwarte": false}
 	# pętle: dodatkowe przejścia między sąsiadami
@@ -390,6 +390,7 @@ func _wyposaz(k: Vector2i) -> void:
 		var ile := rng.randi_range(szablon[2], szablon[3])
 		for i in ile:
 			_umiesc(k, szablon[0], szablon[1], drzwi)
+	_zapewnij_przejscie(k, drzwi)
 	# dekoracyjne drzwi do zamkniętych mieszkań na ścianach korytarzy
 	if typ in ["klatka", "korytarz"]:
 		for d in DIRS:
@@ -406,6 +407,122 @@ func _wyposaz(k: Vector2i) -> void:
 				if _wolne(k, Rect2(p - Vector2(0.4, 0.4), Vector2(0.8, 0.8)), []):
 					spawny.append({"pos": Vector3(p.x, 0.05, p.y), "komorka": k, "glebokosc": komorki[k]["glebokosc"]})
 					break
+
+
+## Usuwa meble, jeśli dzielą pomieszczenie tak, że nie da się przejść między drzwiami.
+func _zapewnij_przejscie(k: Vector2i, drzwi: Array) -> void:
+	for proba in 8:
+		if _spojne(k, drzwi):
+			return
+		var lista: Array = komorki[k]["meble"]
+		if lista.is_empty():
+			return
+		# najpierw usuwane meble stojące na środku
+		var idx := -1
+		for i in range(lista.size() - 1, -1, -1):
+			if not lista[i]["przy_scianie"]:
+				idx = i
+				break
+		if idx < 0:
+			idx = lista.size() - 1
+		var m: Dictionary = lista[idx]
+		lista.remove_at(idx)
+		komorki[k]["zajete"].erase(m["rect"])
+		if is_instance_valid(m["node"]):
+			# usunięcie z drzewa od razu: siatka nawigacji jest wypiekana jeszcze w tej klatce
+			var nd: Node = m["node"]
+			nd.get_parent().remove_child(nd)
+			nd.queue_free()
+		oslony = oslony.filter(func(o): return o["mebel"].distance_to(m["pos"]) > 0.01)
+
+
+func _spojne(k: Vector2i, drzwi: Array) -> bool:
+	var krok := 0.25
+	var x0 := k.x * C + T
+	var z0 := k.y * C + T
+	var n := int((C - 2 * T) / krok)
+	var zablok := PackedByteArray()
+	zablok.resize(n * n)
+	for ix in n:
+		for iz in n:
+			var p := Vector2(x0 + (ix + 0.5) * krok, z0 + (iz + 0.5) * krok)
+			for r in komorki[k]["zajete"]:
+				if (r as Rect2).grow(0.5).has_point(p):
+					zablok[iz * n + ix] = 1
+					break
+	# punkty wejść: środki stref przed drzwiami
+	var punkty := []
+	for d in drzwi:
+		var c: Vector2 = (d as Rect2).get_center()
+		var ix := clampi(int((c.x - x0) / krok), 0, n - 1)
+		var iz := clampi(int((c.y - z0) / krok), 0, n - 1)
+		punkty.append(Vector2i(ix, iz))
+	if punkty.size() < 2:
+		return true
+	var odw := PackedByteArray()
+	odw.resize(n * n)
+	var kol: Array = [punkty[0]]
+	odw[punkty[0].y * n + punkty[0].x] = 1
+	while not kol.is_empty():
+		var c2: Vector2i = kol.pop_back()
+		for dd in DIRS:
+			var nb: Vector2i = c2 + dd
+			if nb.x < 0 or nb.y < 0 or nb.x >= n or nb.y >= n:
+				continue
+			var i := nb.y * n + nb.x
+			if odw[i] == 1 or zablok[i] == 1:
+				continue
+			odw[i] = 1
+			kol.append(nb)
+	for p in punkty:
+		if odw[p.y * n + p.x] == 0:
+			return false
+	return true
+
+
+## Punkty 1 m za każdymi drzwiami w głąb pomieszczenia (do sprawdzania spójności na siatce nawigacji).
+func punkty_drzwi(k: Vector2i) -> Array:
+	var pts := []
+	for d in DIRS:
+		var n: Vector2i = k + d
+		var key := _k(k, n)
+		if not krawedzie.has(key):
+			continue
+		var e: Dictionary = krawedzie[key]
+		var srodek: float = (C * 0.5) if e["otwarte"] else (e["drzwi"] + DRZWI_W * 0.5)
+		var c := Vector3(k.x * C, 0, k.y * C)
+		match d:
+			Vector2i(1, 0): pts.append(c + Vector3(C - 1.0, 0, srodek))
+			Vector2i(-1, 0): pts.append(c + Vector3(1.0, 0, srodek))
+			Vector2i(0, 1): pts.append(c + Vector3(srodek, 0, C - 1.0))
+			Vector2i(0, -1): pts.append(c + Vector3(srodek, 0, 1.0))
+	if k == _komorka_startu():
+		pts.append(start_pos)
+	return pts
+
+
+## Usuwa mebel najbliżej środka pomieszczenia (naprawa podzielonego pomieszczenia). Zwraca false, gdy nie ma co usuwać.
+func usun_srodkowy_mebel(k: Vector2i) -> bool:
+	var lista: Array = komorki[k]["meble"]
+	if lista.is_empty():
+		return false
+	var srodek := _srodek(k)
+	var best := 0
+	var bd := INF
+	for i in lista.size():
+		var d: float = (lista[i]["pos"] as Vector3).distance_to(srodek) + (2.0 if lista[i]["przy_scianie"] else 0.0)
+		if d < bd:
+			bd = d
+			best = i
+	var m: Dictionary = lista[best]
+	lista.remove_at(best)
+	komorki[k]["zajete"].erase(m["rect"])
+	oslony = oslony.filter(func(o): return o["mebel"].distance_to(m["pos"]) > 0.01)
+	if is_instance_valid(m["node"]):
+		var nd: Node = m["node"]
+		nd.get_parent().remove_child(nd)
+		nd.queue_free()
+	return true
 
 
 func _komorka_startu() -> Vector2i:
@@ -461,13 +578,15 @@ func _umiesc(k: Vector2i, id: String, przy_scianie: bool, drzwi: Array) -> void:
 			"apteczka_scienna": y = 1.3
 			"skrzynki_pocztowe": y = 1.1
 			"kaloryfer": y = 0.12
-		_mebel(id, Vector3(pos.x, y, pos.y), rot, true, k)
+		var node := _mebel(id, Vector3(pos.x, y, pos.y), rot, true, k)
+		if id != "dywan" and not montowany:
+			komorki[k]["meble"].append({"rect": r, "node": node, "przy_scianie": przy_scianie, "pos": Vector3(pos.x, y, pos.y)})
 		return
 
 
 func _koliduje_z_otworem(k: Vector2i, r: Rect2) -> bool:
 	for z in _drzwi_w_komorce(k):
-		if (z as Rect2).grow(-0.4).intersects(r):
+		if (z as Rect2).grow(0.15).intersects(r):
 			return true
 	return false
 
@@ -491,6 +610,8 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 			"apteczka_scienna": sw = 3; sh = 2
 		pj.siatka = Siatka.new(sw, sh)
 		pj.wypelnij(info["pojemnik"], rng.randi_range(1, 4), rng)
+		if id in MONTOWANE_NA_SCIANIE:
+			pj.collision_layer = Balistyka.WARSTWA_INTERAKCJE   # nie blokuje przejść
 		korzen = pj
 	elif z_kolizja and id not in BEZ_KOLIZJI:
 		var sb := StaticBody3D.new()

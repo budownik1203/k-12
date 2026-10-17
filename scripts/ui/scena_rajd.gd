@@ -18,11 +18,14 @@ var _tryb_testu := ""
 
 func _ready() -> void:
 	add_to_group("ui_rajdu")
+	var a := OS.get_cmdline_user_args()
+	if a.has("--ziarno"):
+		Gra.ziarno_rajdu = int(a[a.find("--ziarno") + 1])
 	widok = Widok3D.zbuduj(self)
 	swiat = widok["swiat"]
 	gen = GeneratorBiomu.new()
 	info = gen.generuj(Gra.ziarno_rajdu, swiat)
-	Widok3D.wypiecz_nawigacje(swiat)
+	await _nawigacja_ze_sprawdzeniem()
 	gracz = Gracz.new()
 	swiat.add_child(gracz)
 	gracz.global_position = info["start"]
@@ -66,12 +69,133 @@ func _ready() -> void:
 		_test_walki.call_deferred()
 
 
+## Wypieka siatkę nawigacji i sprawdza, czy meble nie dzielą pomieszczeń; jeśli tak – usuwa mebel i powtarza.
+func _nawigacja_ze_sprawdzeniem() -> void:
+	var mapa := swiat.get_world_3d().navigation_map
+	for proba in 8:
+		var region := Widok3D.wypiecz_nawigacje(swiat)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var naprawione := false
+		for k in info["komorki"]:
+			var pts: Array = gen.punkty_drzwi(k)
+			for i in range(1, pts.size()):
+				var q1 := NavigationServer3D.map_get_closest_point(mapa, pts[0])
+				var q2 := NavigationServer3D.map_get_closest_point(mapa, pts[i])
+				var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
+				if sc.is_empty() or sc[sc.size() - 1].distance_to(q2) > 0.35:
+					if gen.usun_srodkowy_mebel(k):
+						naprawione = true
+					break
+		if not naprawione:
+			info["oslony"] = gen.oslony
+			return
+		region.get_parent().remove_child(region)
+		region.queue_free()
+
+
 func _process(delta: float) -> void:
-	if koniec:
+	if koniec or gracz == null:
 		return
 	czas += delta
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).rajd_czas = czas
+	if _tryb_testu == "test" and czas > 1.0 and czas - delta <= 1.0:
+		# spójność siatki nawigacji: ścieżka od startu do każdego pomieszczenia
+		var mapa := swiat.get_world_3d().navigation_map
+		var ok := 0
+		for k in info["komorki"]:
+			var c := Vector3(k.x * GeneratorBiomu.C + 3.0, 0.0, k.y * GeneratorBiomu.C + 3.0)
+			var cel := NavigationServer3D.map_get_closest_point(mapa, c)
+			var q := NavigationPathQueryParameters3D.new()
+			q.map = mapa
+			q.start_position = NavigationServer3D.map_get_closest_point(mapa, info["start"])
+			q.target_position = cel
+			q.path_search_max_polygons = 0
+			q.path_search_max_distance = 0.0
+			var wynik := NavigationPathQueryResult3D.new()
+			NavigationServer3D.query_path(q, wynik)
+			var sciezka := wynik.path
+			var kon: Vector3 = sciezka[sciezka.size() - 1] if sciezka.size() > 0 else Vector3(-99, 0, -99)
+			if int(kon.x / GeneratorBiomu.C) == k.x and int(kon.z / GeneratorBiomu.C) == k.y:
+				ok += 1
+			else:
+				print("  nieosiągalne: %s typ=%s cel=%s koniec=%s" % [k, info["komorki"][k]["typ"], cel, sciezka[sciezka.size() - 1] if sciezka.size() > 0 else "brak"])
+		print("NAWIGACJA: osiągalne pomieszczenia %d/%d (wielokąty: %d)" % [ok, info["komorki"].size(), (swiat.get_node("Nawigacja") as NavigationRegion3D).navigation_mesh.get_polygon_count()])
+		var aa := OS.get_cmdline_user_args()
+		if aa.has("--sciezka"):
+			var i0 := aa.find("--sciezka")
+			var pa := NavigationServer3D.map_get_closest_point(mapa, Vector3(float(aa[i0 + 1]), 0, float(aa[i0 + 2])))
+			var pb := NavigationServer3D.map_get_closest_point(mapa, Vector3(float(aa[i0 + 3]), 0, float(aa[i0 + 4])))
+			print("  sciezka %s -> %s: %s" % [pa, pb, NavigationServer3D.map_get_path(mapa, pa, pb, true)])
+		if aa.has("--drzwi"):
+			for kk in gen.krawedzie:
+				var e: Dictionary = gen.krawedzie[kk]
+				var a: Vector2i = e["a"]
+				var b: Vector2i = e["b"]
+				var srodek: float = (GeneratorBiomu.C * 0.5) if e["otwarte"] else (e["drzwi"] + GeneratorBiomu.DRZWI_W * 0.5)
+				var p1: Vector3
+				var p2: Vector3
+				if a.x != b.x:
+					var x := maxi(a.x, b.x) * GeneratorBiomu.C
+					var z := a.y * GeneratorBiomu.C + srodek
+					p1 = Vector3(x - 1.0, 0, z)
+					p2 = Vector3(x + 1.0, 0, z)
+				else:
+					var z2 := maxi(a.y, b.y) * GeneratorBiomu.C
+					var x2 := a.x * GeneratorBiomu.C + srodek
+					p1 = Vector3(x2, 0, z2 - 1.0)
+					p2 = Vector3(x2, 0, z2 + 1.0)
+				var q1 := NavigationServer3D.map_get_closest_point(mapa, p1)
+				var q2 := NavigationServer3D.map_get_closest_point(mapa, p2)
+				var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
+				var ok2: bool = sc.size() > 0 and sc[sc.size() - 1].distance_to(q2) < 0.3 and q1.distance_to(p1) < 0.8 and q2.distance_to(p2) < 0.8
+				if not ok2:
+					print("  DRZWI ZABLOKOWANE %s p1=%s->%s p2=%s->%s" % [kk, p1, q1, p2, q2])
+		if aa.has("--pokoje"):
+			for k in info["komorki"]:
+				var pts := []
+				for d in GeneratorBiomu.DIRS:
+					var n: Vector2i = k + d
+					var kk2 := gen._k(k, n)
+					if not gen.krawedzie.has(kk2):
+						continue
+					var e: Dictionary = gen.krawedzie[kk2]
+					var srodek: float = (GeneratorBiomu.C * 0.5) if e["otwarte"] else (e["drzwi"] + GeneratorBiomu.DRZWI_W * 0.5)
+					var c := Vector3(k.x * GeneratorBiomu.C, 0, k.y * GeneratorBiomu.C)
+					match d:
+						Vector2i(1, 0): pts.append(c + Vector3(GeneratorBiomu.C - 1.0, 0, srodek))
+						Vector2i(-1, 0): pts.append(c + Vector3(1.0, 0, srodek))
+						Vector2i(0, 1): pts.append(c + Vector3(srodek, 0, GeneratorBiomu.C - 1.0))
+						Vector2i(0, -1): pts.append(c + Vector3(srodek, 0, 1.0))
+				for i in range(1, pts.size()):
+					var q1 := NavigationServer3D.map_get_closest_point(mapa, pts[0])
+					var q2 := NavigationServer3D.map_get_closest_point(mapa, pts[i])
+					var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
+					if sc.is_empty() or sc[sc.size() - 1].distance_to(q2) > 0.3:
+						print("  POKOJ PODZIELONY %s typ=%s %s -> %s (q %s -> %s)" % [k, info["komorki"][k]["typ"], pts[0], pts[i], q1, q2])
+		if aa.has("--kolizje_w"):
+			var i1 := aa.find("--kolizje_w")
+			var kx := int(aa[i1 + 1])
+			var kz := int(aa[i1 + 2])
+			for n in swiat.get_children():
+				if n is CollisionObject3D and (n.collision_layer & 1) and n.name != "Sciany":
+					var gp: Vector3 = n.global_position
+					if int(gp.x / GeneratorBiomu.C) == kx and int(gp.z / GeneratorBiomu.C) == kz:
+						for c in n.get_children():
+							if c is CollisionShape3D and c.shape is BoxShape3D:
+								print("  KOLIZJA %s %s rot=%.2f size=%s" % [n.name, gp, n.rotation.y, (c.shape as BoxShape3D).size])
+		if aa.has("--krawedzie"):
+			for kk in gen.krawedzie:
+				var e: Dictionary = gen.krawedzie[kk]
+				print("  krawedz %s drzwi=%.2f otwarte=%s" % [kk, e["drzwi"], e["otwarte"]])
+		if aa.has("--blizej"):
+			var pp := Vector3(float(aa[aa.find("--blizej") + 1]), 0, float(aa[aa.find("--blizej") + 2]))
+			for n in swiat.get_children():
+				if n is Node3D and Vector2(n.global_position.x, n.global_position.z).distance_to(Vector2(pp.x, pp.z)) < 1.5:
+					print("  obiekt: ", n.name, " ", n.get_class(), " ", n.global_position)
+		if aa.has("--mapa"):
+			zapisz_mape(aa[aa.find("--mapa") + 1])
 	if _tryb_testu == "test" and czas > 8.0:
 		print("TEST RAJDU OK: czas %.1f s, pomieszczeń %d, wrogów %d" % [czas, info["komorki"].size(), get_tree().get_nodes_in_group("wrogowie").size()])
 		get_tree().quit()
@@ -248,3 +372,53 @@ func _test_ewakuacji() -> void:
 	var ew: Ewakuacja = info["wyjscia"][0]
 	gracz.global_position = ew.global_position + Vector3.UP * 0.1
 	print("TEST EWAKUACJI: gracz w strefie %s" % ew.nazwa)
+
+
+## Debug: mapa z góry – siatka nawigacji (zielony), kolizje (szary), drzwi i wyjścia.
+func zapisz_mape(plik: String) -> void:
+	var px := 10
+	var img := Image.create(int(GeneratorBiomu.GW * GeneratorBiomu.C * px), int(GeneratorBiomu.GH * GeneratorBiomu.C * px), false, Image.FORMAT_RGB8)
+	img.fill(Color(0.05, 0.05, 0.05))
+	var reg: NavigationRegion3D = swiat.get_node("Nawigacja")
+	var nm := reg.navigation_mesh
+	var verts := nm.get_vertices()
+	for i in nm.get_polygon_count():
+		var poly := nm.get_polygon(i)
+		var y0 := verts[poly[0]].y
+		var kol := Color(0.15, 0.5, 0.2) if y0 < 0.3 else Color(0.5, 0.5, 0.1)
+		for t in range(1, poly.size() - 1):
+			_trojkat(img, verts[poly[0]], verts[poly[t]], verts[poly[t + 1]], px, kol)
+	for n in swiat.get_children():
+		if n is CollisionObject3D and (n.collision_layer & 1):
+			for c in n.get_children():
+				if c is CollisionShape3D and c.shape is BoxShape3D:
+					var bs: BoxShape3D = c.shape
+					var t: Transform3D = (c as Node3D).global_transform
+					if t.origin.y + bs.size.y * 0.5 < 0.05:
+						continue
+					for xx in range(int(-bs.size.x * px / 2), int(bs.size.x * px / 2)):
+						for zz in range(int(-bs.size.z * px / 2), int(bs.size.z * px / 2)):
+							var p := t * Vector3(float(xx) / px, 0, float(zz) / px)
+							var ix := int(p.x * px)
+							var iz := int(p.z * px)
+							if ix >= 0 and iz >= 0 and ix < img.get_width() and iz < img.get_height():
+								img.set_pixel(ix, iz, Color(0.5, 0.5, 0.5) if n.name == "Sciany" else Color(0.7, 0.35, 0.2))
+	for w in info["wyjscia"]:
+		var p: Vector3 = (w as Node3D).global_position
+		img.fill_rect(Rect2i(int(p.x * px) - 4, int(p.z * px) - 4, 8, 8), Color(0.2, 0.9, 1.0))
+	var s: Vector3 = info["start"]
+	img.fill_rect(Rect2i(int(s.x * px) - 4, int(s.z * px) - 4, 8, 8), Color(1, 1, 1))
+	img.save_png(plik)
+
+
+func _trojkat(img: Image, a: Vector3, b: Vector3, c: Vector3, px: int, kol: Color) -> void:
+	var mnx := int(minf(a.x, minf(b.x, c.x)) * px)
+	var mxx := int(maxf(a.x, maxf(b.x, c.x)) * px)
+	var mnz := int(minf(a.z, minf(b.z, c.z)) * px)
+	var mxz := int(maxf(a.z, maxf(b.z, c.z)) * px)
+	for x in range(mnx, mxx + 1):
+		for z in range(mnz, mxz + 1):
+			var p := Vector2(float(x) / px, float(z) / px)
+			if Geometry2D.point_is_inside_triangle(p, Vector2(a.x, a.z), Vector2(b.x, b.z), Vector2(c.x, c.z)):
+				if x >= 0 and z >= 0 and x < img.get_width() and z < img.get_height():
+					img.set_pixel(x, z, kol)
