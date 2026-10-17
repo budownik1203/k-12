@@ -6,7 +6,7 @@ extends CharacterBody3D
 signal zginal(wrog: Wrog)
 
 const MASKA_WZROKU := Balistyka.WARSTWA_SWIAT
-const MASKA_STRZALU := Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_HITBOX_GRACZA
+const MASKA_STRZALU := Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_HITBOX_GRACZA | Balistyka.WARSTWA_HITBOX_WROGA
 
 var frakcja := "szabrownik"
 var dane_frakcji := {}
@@ -25,7 +25,9 @@ var zapas_mag := 0
 var amunicja_id := ""
 
 var stan := "patrol"
-var gracz: Gracz
+var gracz: Node3D              # bieżący cel: gracz, wróg z innej frakcji albo mutant (nazwa historyczna)
+var _wybor_t := 0.0
+var _moje_hitboxy: Array[RID] = []
 var ostatnia_pozycja := Vector3.ZERO
 var widzi := false
 var wykrycie := 0.0
@@ -279,6 +281,99 @@ func _hitbox(rodzic: Node3D, czesc: String, poz: Vector3, roz: Vector3) -> void:
 	cs.position = poz
 	a.add_child(cs)
 	rodzic.add_child(a)
+	_moje_hitboxy.append(a.get_rid())
+
+
+# ------------------------------------------------------------------ cele (gracz, inne frakcje, mutanty)
+
+## Czy ta postać jest dla nas wroga: inna frakcja ludzka, mutant albo gracz.
+func wrogi(n: Node) -> bool:
+	if n == null or n == self or not is_instance_valid(n):
+		return false
+	if n is Gracz:
+		return true
+	var f = n.get("frakcja")
+	if f == null:
+		return false
+	return String(f) != frakcja
+
+
+func _zywy(n: Node) -> bool:
+	if n == null or not is_instance_valid(n) or not n.is_inside_tree():
+		return false
+	var c = n.get("cialo")
+	return c != null and not c.martwy
+
+
+static func _kuc(n: Node) -> float:
+	var k = n.get("kucanie")
+	return float(k) if k != null else 0.0
+
+
+static func _halas_celu(n: Node) -> float:
+	var h = n.get("halas_ruchu")
+	return float(h) if h != null else 0.4
+
+
+static func _swieci(n: Node) -> bool:
+	if n is Gracz:
+		return (n as Gracz).latarka.visible
+	var l = n.get("_latarka")
+	return l != null and is_instance_valid(l) and (l as Node3D).visible
+
+
+func _wysokosc_celu(n: Node, gora: bool) -> float:
+	if n is Fauna:
+		return 0.5
+	return lerpf(1.45, 0.85, _kuc(n)) if gora else lerpf(1.12, 0.7, _kuc(n))
+
+
+func _widze(n: Node3D, oko: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
+	var cel := n.global_position + Vector3.UP * _wysokosc_celu(n, true)
+	var d := oko.distance_to(cel)
+	if d > 32.0:
+		return false
+	var przod := -global_basis.z
+	var kat := rad_to_deg(acos(clampf(przod.dot((cel - oko).normalized()), -1.0, 1.0)))
+	if kat > 62.0 and d > 2.5 and stan != "walka":
+		return false
+	if kat > 95.0 and d > 2.5:
+		return false
+	var q := PhysicsRayQueryParameters3D.create(oko, cel, MASKA_WZROKU)
+	if not space.intersect_ray(q).is_empty():
+		var cel2 := n.global_position + Vector3.UP * 0.6
+		q = PhysicsRayQueryParameters3D.create(oko, cel2, MASKA_WZROKU)
+		if not space.intersect_ray(q).is_empty():
+			return false
+	return true
+
+
+## Wybór celu: najbliższy widoczny wróg (gracz nie ma pierwszeństwa). Bieżący cel trzymany, dopóki
+## ktoś inny nie jest wyraźnie bliżej – bez przeskakiwania co chwilę.
+func _wybierz_cel() -> void:
+	var oko := _oko()
+	var space := get_world_3d().direct_space_state
+	var kandydaci: Array = get_tree().get_nodes_in_group("gracz") + get_tree().get_nodes_in_group("wrogowie") + get_tree().get_nodes_in_group("fauna")
+	var najlepszy: Node3D = null
+	var best_d := INF
+	for n in kandydaci:
+		if not (n is Node3D) or not wrogi(n) or not _zywy(n):
+			continue
+		var d := global_position.distance_to((n as Node3D).global_position)
+		if d > 32.0:
+			continue
+		if not _widze(n, oko, space):
+			continue
+		if n == gracz:
+			d *= 0.6          # trzyma obecny cel
+		if d < best_d:
+			best_d = d
+			najlepszy = n
+	if najlepszy != null and najlepszy != gracz:
+		if gracz != null and _zywy(gracz) and stan == "walka" and najlepszy is not Gracz:
+			_napis(["Tam! Następni!", "Obcy na dziewiątej!", "Uwaga, z boku!"].pick_random())
+		gracz = najlepszy
+		wykrycie = maxf(wykrycie, 0.5) if stan == "walka" else wykrycie
 
 
 ## Trafienie z broni gracza.
@@ -310,8 +405,8 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 		_napis(["Krwawię! Osłaniajcie!", "Trafili mnie! Krwawię!", "Medyka!"].pick_random())
 	else:
 		_napis(["Dostałem!", "Trafiony!", "Kurwa, boli!"].pick_random())
-	# reakcja: wie, skąd strzelano
-	if od_kogo is Gracz:
+	# reakcja: wie, skąd strzelano (gracz, inna frakcja albo mutant)
+	if od_kogo is Node3D and wrogi(od_kogo):
 		gracz = od_kogo
 		ostatnia_pozycja = gracz.global_position
 		wykrycie = 1.0
@@ -327,7 +422,7 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 	if cialo == null or cialo.martwy or zrodlo == self:
 		return
-	if zrodlo is Wrog:
+	if zrodlo is Wrog and not wrogi(zrodlo):
 		return
 	if global_position.distance_to(pos) > zasieg:
 		return
@@ -341,7 +436,7 @@ func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 		_sluch_d = d
 	if d > zasieg:
 		return
-	if zrodlo is Gracz:
+	if zrodlo is Node3D and wrogi(zrodlo) and (gracz == null or not _zywy(gracz) or stan != "walka"):
 		gracz = zrodlo
 	if stan in ["patrol", "szukanie", "czujny"]:
 		var niepewnosc := clampf(d * 0.15, 0.5, 4.0)
@@ -377,36 +472,18 @@ func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 
 func _sprawdz_wzrok() -> void:
 	widzi = false
-	if gracz == null or not is_instance_valid(gracz) or gracz.cialo.martwy:
-		var g := get_tree().get_first_node_in_group("gracz")
-		gracz = g as Gracz
-		if gracz == null:
-			return
-	var oko := _oko()
-	var cel := gracz.global_position + Vector3.UP * lerpf(1.45, 0.85, gracz.kucanie)
-	var d := oko.distance_to(cel)
-	if d > 32.0:
+	_wybor_t -= 0.15
+	if _wybor_t <= 0.0 or gracz == null or not _zywy(gracz):
+		_wybor_t = 0.45
+		_wybierz_cel()
+	if gracz == null or not _zywy(gracz):
+		gracz = null
 		return
-	var przod := -global_basis.z
-	var do_celu := (cel - oko).normalized()
-	var kat := rad_to_deg(acos(clampf(przod.dot(do_celu), -1.0, 1.0)))
-	if kat > 62.0 and d > 2.5 and stan != "walka":
-		return
-	if kat > 95.0 and d > 2.5:
-		return
-	var space := get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(oko, cel, MASKA_WZROKU)
-	if not space.intersect_ray(q).is_empty():
-		# druga próba: nogi/tułów (gracz częściowo zasłonięty)
-		var cel2 := gracz.global_position + Vector3.UP * 0.6
-		q = PhysicsRayQueryParameters3D.create(oko, cel2, MASKA_WZROKU)
-		if not space.intersect_ray(q).is_empty():
-			return
-	widzi = true
+	widzi = _widze(gracz, _oko(), get_world_3d().direct_space_state)
 
 
 func _oswietlenie_gracza() -> float:
-	if gracz.latarka.visible:
+	if _swieci(gracz):
 		return 1.0
 	var best := 0.18
 	if menedzer:
@@ -481,7 +558,9 @@ func _aktualizuj_wykrycie(dt: float) -> void:
 	if widzi:
 		var d := global_position.distance_to(gracz.global_position)
 		var tempo := 1.6 * clampf(12.0 / maxf(d, 1.0), 0.25, 3.0) * _oswietlenie_gracza()
-		tempo *= lerpf(1.0, 0.55, gracz.kucanie) * (1.0 + gracz.halas_ruchu * 0.6)
+		tempo *= lerpf(1.0, 0.55, _kuc(gracz)) * (1.0 + _halas_celu(gracz) * 0.6)
+		if gracz is not Gracz:
+			tempo *= 1.6     # obcy w walce są głośni i nie kryją się
 		if stan in ["walka", "szukanie"]:
 			tempo *= 3.0
 		wykrycie = minf(1.0, wykrycie + tempo * dt)
@@ -823,14 +902,14 @@ func _strzelaj(delta: float) -> void:
 	_w_magazynku -= 1
 	var ad: Dictionary = Dane.def(amunicja_id)["amunicja"]
 	var oko := _oko() + Vector3.UP * -0.1
-	var cel := gracz.global_position + Vector3.UP * lerpf(1.12, 0.7, gracz.kucanie)
+	var cel := gracz.global_position + Vector3.UP * _wysokosc_celu(gracz, false)
 	var d := oko.distance_to(cel)
 	var celnosc := float(dane_frakcji.get("celnosc", 0.6))
-	var kat := (4.5 * (1.5 - celnosc)) * (1.0 + d / 25.0) * (1.0 + gracz.halas_ruchu * 0.8)
+	var kat := (4.5 * (1.5 - celnosc)) * (1.0 + d / 25.0) * (1.0 + _halas_celu(gracz) * 0.8)
 	kat *= cialo.mnoznik_celnosci()
 	# pierwsze strzały są nerwowe i niecelne, potem przeciwnik się "wstrzeliwuje"
 	kat *= lerpf(2.2, 1.0, clampf(_czas_walki / 3.5, 0.0, 1.0)) * (1.0 + _przygwozdzenie)
-	if gracz.kucanie > 0.5:
+	if _kuc(gracz) > 0.5:
 		kat *= 1.15
 	var srut := int(ad.get("srut", 1))
 	var space := get_world_3d().direct_space_state
@@ -839,6 +918,7 @@ func _strzelaj(delta: float) -> void:
 		var kier := Balistyka.rozrzut(kier0, kat + (float(bd.get("rozrzut_srutu", 0.0)) if srut > 1 else 0.0))
 		var q := PhysicsRayQueryParameters3D.create(oko, oko + kier * 120.0, MASKA_STRZALU)
 		q.collide_with_areas = true
+		q.exclude = _moje_hitboxy
 		var r := space.intersect_ray(q)
 		if r.is_empty():
 			continue
@@ -847,17 +927,25 @@ func _strzelaj(delta: float) -> void:
 			var g: Gracz = col.get_meta("gracz")
 			g.set_meta("zabojca", "%s (%s)" % [nazwa_jednostki, Dane.nazwa(bron.id)])
 			g.trafiony(r["position"], float(ad["obrazenia"]) * float(bd.get("mnoznik", 1.0)), float(ad["penetracja"]), self, srut > 1)
+		elif col.has_meta("czesc"):
+			# trafiony ktoś inny: wróg innej frakcji, mutant albo (pechowo) swój
+			var wl = col.get_meta("wlasciciel")
+			if is_instance_valid(wl) and wl.has_method("trafiony"):
+				wl.trafiony(String(col.get_meta("czesc")), float(ad["obrazenia"]) * float(bd.get("mnoznik", 1.0)), float(ad["penetracja"]), self, r["position"], kier)
 		else:
 			Efekty.slad(get_parent(), r["position"], r["normal"])
 			Efekty.czastki(get_parent(), r["position"], r["normal"], Color(0.5, 0.48, 0.44), 5)
 			# świst kuli blisko gracza
-			if gracz and r["position"].distance_to(gracz.global_position) < 2.5:
+			var gr := get_tree().get_first_node_in_group("gracz") as Node3D
+			if gr and r["position"].distance_to(gr.global_position) < 2.5:
 				Dzwiek.graj("swist", -6.0)
 	var wylot: Vector3 = (_czesci["bron"] as Node3D).global_transform * Vector3(_czesci["wylot"])
 	Efekty.blysk(get_parent(), wylot, 2.5)
 	var bxf: Transform3D = (_czesci["bron"] as Node3D).global_transform
 	Efekty.plomien_wylotu(get_parent(), Transform3D(bxf.basis.orthonormalized(), wylot), 1.8)
 	_odrzut_anim = 1.0
+	# strzał słychać: inne frakcje i mutanty schodzą się na odgłos walki (także bez udziału gracza)
+	Gra.emituj_halas(global_position, 34.0, self)
 	if randf() < 0.45:
 		Efekty.smuga(get_parent(), wylot, wylot + kier0 * minf(d, 60.0))
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}

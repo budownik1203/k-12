@@ -76,6 +76,9 @@ func _ready() -> void:
 	elif args.has("--vm"):
 		_tryb_testu = "vm"
 		_zrzut_vm.call_deferred(args[args.find("--vm") + 1])
+	elif args.has("--frakcje"):
+		_tryb_testu = "frakcje"
+		_test_frakcji.call_deferred()
 	elif args.has("--test_bron"):
 		_tryb_testu = "bron"
 		_test_broni.call_deferred()
@@ -784,3 +787,37 @@ func _trojkat(img: Image, a: Vector3, b: Vector3, c: Vector3, px: int, kol: Colo
 			if Geometry2D.point_is_inside_triangle(p, Vector2(a.x, a.z), Vector2(b.x, b.z), Vector2(c.x, c.z)):
 				if x >= 0 and z >= 0 and x < img.get_width() and z < img.get_height():
 					img.set_pixel(x, z, kol)
+
+
+## Test walk frakcji: szabrownik i najemnik w jednym pokoju, gracz daleko – mają się zwalczać sami.
+func _test_frakcji() -> void:
+	for i in 30:
+		await get_tree().physics_frame
+	var szab: Array = get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog and w.frakcja == "szabrownik")
+	var naj: Array = get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog and w.frakcja != "szabrownik")
+	if szab.is_empty() or naj.is_empty():
+		print("TEST FRAKCJI: brak obu frakcji na mapie")
+		get_tree().quit(1)
+		return
+	var a: Wrog = szab[0]
+	var b: Wrog = naj[0]
+	var mapa := swiat.get_world_3d().navigation_map
+	var start := gracz.global_position
+	a.posterunek = {}
+	b.posterunek = {}
+	a.global_position = NavigationServer3D.map_get_closest_point(mapa, start + Vector3(2.5, 0, -1.5))
+	b.global_position = NavigationServer3D.map_get_closest_point(mapa, start + Vector3(2.5, 0, 2.0))
+	a.look_at(b.global_position, Vector3.UP)
+	b.look_at(a.global_position, Vector3.UP)
+	# gracz poza zasięgiem: najdalszy punkt startowy
+	gracz.global_position = start + Vector3(0, 60, 0)
+	gracz.sterowanie = false
+	gracz.set_physics_process(false)
+	var t := 0.0
+	while t < 30.0 and not (a.cialo.martwy or b.cialo.martwy):
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	print("TEST FRAKCJI: czas %.1f, %s %s hp %.0f%% (cel %s), %s %s hp %.0f%% (cel %s)" % [t, a.frakcja, a.stan, a.cialo.procent() * 100.0, a.gracz.name if a.gracz else "-", b.frakcja, b.stan, b.cialo.procent() * 100.0, b.gracz.name if b.gracz else "-"])
+	var ok := a.cialo.procent() < 1.0 or b.cialo.procent() < 1.0
+	print("TEST FRAKCJI: ", "OK" if ok else "BRAK WALKI")
+	get_tree().quit(0 if ok else 1)
