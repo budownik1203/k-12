@@ -26,7 +26,8 @@ static func nowy(pid: String, ile := 1) -> Przedmiot:
 		"magazynek":
 			p.dane = {"amunicja": "", "naboje": 0}
 		"bron":
-			p.dane = {"mag": null, "komora": "", "wewn": 0, "wewn_typ": "", "tryb": 0}
+			p.dane = {"mag": null, "komora": "", "wewn": 0, "wewn_typ": "", "tryb": 0,
+				"dod_wylot": null, "dod_celownik": null, "dod_chwyt": null, "dod_latarka": null}
 		"med":
 			p.dane = {"uzycia": int(d["med"]["uzycia"])}
 		"pojemnik":
@@ -36,6 +37,31 @@ static func nowy(pid: String, ile := 1) -> Przedmiot:
 		"klucz":
 			p.dane = {"uzycia": int(d["klucz"]["uzycia"])}
 	return p
+
+
+const SLOTY_DODATKOW := ["wylot", "celownik", "chwyt", "latarka"]
+
+
+## Dodatki zamontowane na broni.
+func dodatki() -> Array:
+	var out := []
+	for s in SLOTY_DODATKOW:
+		var d = dane.get("dod_" + s)
+		if d != null:
+			out.append(d)
+	return out
+
+
+func dodatek(slot: String) -> Przedmiot:
+	return dane.get("dod_" + slot)
+
+
+## Iloczyn mnożników z dodatków (np. "odrzut", "halas", "rozrzut_ads"); brak = 1.
+func mod(nazwa: String) -> float:
+	var m := 1.0
+	for d in dodatki():
+		m *= float((d as Przedmiot).defn()["dodatek"].get(nazwa, 1.0))
+	return m
 
 
 func defn() -> Dictionary:
@@ -94,6 +120,8 @@ func waga() -> float:
 		"bron":
 			if dane["mag"] != null:
 				w += (dane["mag"] as Przedmiot).waga()
+			for dd in dodatki():
+				w += (dd as Przedmiot).waga()
 			if dane["wewn"] > 0:
 				w += Dane.def(dane["wewn_typ"]).get("waga", 0.0) * dane["wewn"]
 		"pojemnik":
@@ -112,6 +140,8 @@ func wartosc() -> int:
 		"bron":
 			if dane["mag"] != null:
 				v += (dane["mag"] as Przedmiot).wartosc()
+			for dd in dodatki():
+				v += (dd as Przedmiot).wartosc()
 		"pancerz":
 			v *= clamp(dane["wytrz"] / float(d["pancerz"]["wytrzymalosc"]), 0.2, 1.0)
 		"med":

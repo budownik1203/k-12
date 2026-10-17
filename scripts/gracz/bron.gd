@@ -73,9 +73,21 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 	else:
 		bd = p.defn()["bron"]
 		md = Modele.bron(p.id)
+		var dod_bryly := _zastosuj_dodatki(p)
 		model = Node3D.new()
 		add_child(model)
 		model.add_child(Kit.instancja(md["cialo"]))
+		if not dod_bryly.is_empty():
+			model.add_child(Kit.instancja(dod_bryly))
+		if _kropka_poz != Vector3.ZERO:
+			# czerwona kropka kolimatora: świecąca, widoczna przez okienko
+			var kr := Kit.instancja([[_kropka_poz, Vector3(0.004, 0.004, 0.002), Color(1.0, 0.15, 0.1)]])
+			var km := StandardMaterial3D.new()
+			km.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			km.albedo_color = Color(1.0, 0.18, 0.12)
+			kr.material_override = km
+			kr.name = "Kropka"
+			model.add_child(kr)
 		mag_node = Node3D.new()
 		model.add_child(mag_node)
 		if not md["mag"].is_empty():
@@ -123,9 +135,100 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 
 
 var _szklo: MeshInstance3D
+var _kropka_poz := Vector3.ZERO
+var _lat_bron_poz := Vector3.ZERO    # soczewka latarki na broni (współrzędne modelu)
+var _bez_plomienia := false
+var _montaz := 0.0
 var _lewa: Node3D
 var _bieg := 0.0
 var _byl_pusty := false
+
+
+## Dodatki zamontowane na broni: zmieniają punkty modelu (wylot, linia celowania, chwyt lewej ręki)
+## i zwracają bryły do dorysowania.
+func _zastosuj_dodatki(p: Przedmiot) -> Array:
+	md = md.duplicate(true)
+	_kropka_poz = Vector3.ZERO
+	_lat_bron_poz = Vector3.ZERO
+	_bez_plomienia = false
+	var bryly := []
+	var lufa: Vector3 = Vector3(md["lufa"])
+	var ciemny := Color(0.13, 0.14, 0.13)
+	var w := p.dodatek("wylot")
+	if w:
+		var dd: Dictionary = w.defn()["dodatek"]
+		var dl := float(dd.get("dl", 0.1))
+		var gr := float(dd.get("gr", 0.035))
+		bryly.append([lufa + Vector3(0, 0, -dl * 0.5), Vector3(gr, gr, dl), ciemny])
+		if w.id == "hamulec":
+			for z in [0.015, 0.035]:
+				bryly.append([lufa + Vector3(0, gr * 0.5, -z), Vector3(gr * 0.6, 0.006, 0.008), Color(0.05, 0.05, 0.05)])
+		else:
+			for i in 3:
+				bryly.append([lufa + Vector3(0, 0, -dl * (0.25 + i * 0.25)), Vector3(gr + 0.003, gr + 0.003, 0.006), Color(0.09, 0.09, 0.09)])
+		_bez_plomienia = not bool(dd.get("plomien", true))
+		md["lufa"] = lufa + Vector3(0, 0, -dl)
+	var c := p.dodatek("celownik")
+	if c:
+		var dd2: Dictionary = c.defn()["dodatek"]
+		var os_y := float(md["celownik"]) + float(dd2.get("wys", 0.04))
+		var z0 := -0.05 if p.id == "kb47" else -0.01
+		if c.id == "kolimator":
+			bryly.append([Vector3(0, (float(md["celownik"]) + os_y) * 0.5 - 0.01, z0), Vector3(0.024, os_y - float(md["celownik"]), 0.05), ciemny])
+			# okienko: cztery cienkie ramki wokół osi optycznej
+			bryly.append([Vector3(0, os_y + 0.018, z0), Vector3(0.036, 0.005, 0.03), ciemny])
+			bryly.append([Vector3(0, os_y - 0.016, z0), Vector3(0.036, 0.005, 0.03), ciemny])
+			bryly.append([Vector3(-0.017, os_y, z0), Vector3(0.004, 0.036, 0.03), ciemny])
+			bryly.append([Vector3(0.017, os_y, z0), Vector3(0.004, 0.036, 0.03), ciemny])
+			_kropka_poz = Vector3(0, os_y, z0 - 0.01)
+		else:
+			bryly.append([Vector3(0, (float(md["celownik"]) + os_y) * 0.5, z0), Vector3(0.018, os_y - float(md["celownik"]), 0.06), ciemny])
+			bryly.append([Vector3(0, os_y, z0), Vector3(0.026, 0.026, 0.17), Color(0.1, 0.11, 0.1)])
+			bryly.append([Vector3(0, os_y, z0 - 0.095), Vector3(0.036, 0.036, 0.03), Color(0.12, 0.12, 0.12)])
+			bryly.append([Vector3(0, os_y, z0 + 0.095), Vector3(0.032, 0.032, 0.025), Color(0.12, 0.12, 0.12)])
+			bryly.append([Vector3(0, os_y + 0.02, z0), Vector3(0.01, 0.014, 0.012), Modele.METAL])
+		md["celownik"] = os_y
+		md["luneta"] = c.id == "luneta"
+	var ch := p.dodatek("chwyt")
+	if ch:
+		var pz: Vector3 = Vector3(md["przod"])
+		bryly.append([pz + Vector3(0, -0.035, 0), Vector3(0.024, 0.07, 0.028), Color(0.27, 0.15, 0.09)])
+		bryly.append([pz + Vector3(0, 0.0, 0), Vector3(0.03, 0.012, 0.05), ciemny])
+		md["przod"] = pz + Vector3(0, -0.06, 0.0)
+	var lt := p.dodatek("latarka")
+	if lt:
+		var lp := lufa + Vector3(0.024, -0.022, 0.12)
+		bryly.append([lp, Vector3(0.022, 0.022, 0.07), ciemny])
+		bryly.append([lp + Vector3(-0.012, 0.0, 0), Vector3(0.008, 0.016, 0.03), Modele.METAL_C])
+		bryly.append([lp + Vector3(0, 0, -0.036), Vector3(0.018, 0.018, 0.004), Color(0.95, 0.92, 0.75)])
+		_lat_bron_poz = lp + Vector3(0, 0, -0.04)
+	return bryly
+
+
+func ma_latarke_broni() -> bool:
+	return przedmiot != null and przedmiot.dodatek("latarka") != null and model != null
+
+
+## Powiększenie przy celowaniu (luneta).
+func zoom() -> float:
+	return przedmiot.mod("zoom") if przedmiot else 1.0
+
+
+func ma_lunete() -> bool:
+	return przedmiot != null and md.get("luneta", false)
+
+
+## Animacja montażu dodatku: broń obrócona bokiem, lewa ręka kręci przy wylocie.
+func _animuj_montaz(rot: Vector3, poz: Vector3) -> Array:
+	var e := _montaz * _montaz * (3.0 - 2.0 * _montaz)
+	rot += Vector3(0.22, 0.78, -0.2) * e
+	poz += Vector3(0.02, -0.035, -0.03) * e
+	if _lewa:
+		var cel: Vector3 = (Vector3(md["lufa"]) + Vector3(0, 0, 0.06)) - Vector3(md["przod"])
+		var t := _anim_akcji_t
+		_lewa.position = cel * e + Vector3(sin(t * 9.0) * 0.01, cos(t * 9.0) * 0.01, 0) * e
+		_lewa.rotation = Vector3(0, 0, sin(t * 9.0) * 0.6 * e)
+	return [rot, poz]
 
 
 func _wezel_latarki() -> Node3D:
@@ -143,6 +246,8 @@ func _wezel_latarki() -> Node3D:
 
 ## Punkt i kierunek snopu latarki w świecie (soczewka trzymanej latarki).
 func transform_latarki() -> Transform3D:
+	if (_lat_node == null or not is_instance_valid(_lat_node)) and ma_latarke_broni():
+		return Transform3D(model.global_basis.orthonormalized(), model.global_transform * _lat_bron_poz)
 	if _lat_node == null or not is_instance_valid(_lat_node):
 		return Transform3D(kamera.global_basis, kamera.global_position)
 	var b := _lat_node.global_basis.orthonormalized()
@@ -156,7 +261,7 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
-	if nazwa != "" and nazwa != "schowaj" and nazwa != _rece_typ:
+	if nazwa != "" and nazwa != "schowaj" and nazwa != "montaz" and nazwa != _rece_typ:
 		_zbuduj_rece_akcji(nazwa)
 	_anim_akcji = nazwa
 	_anim_akcji_t = 0.0
@@ -240,7 +345,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	bloom = maxf(0.0, bloom - delta * 2.5)
 	var moze: bool = we.get("moze", true) and przedmiot != null
-	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0)
+	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0 / (1.0 + (zoom() - 1.0) * 0.35))
 	if przedmiot == null:
 		# sama latarka: tylko animacja wyjmowania
 		if stan != "gotowa":
@@ -326,19 +431,19 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	cooldown = 60.0 / float(bd["rpm"])
 	var ad: Dictionary = Dane.def(amun)["amunicja"]
 	var srut := int(ad.get("srut", 1))
-	var baza: float = lerpf(float(bd["rozrzut_biodro"]), float(bd["rozrzut_ads"]), ads)
+	var baza: float = lerpf(float(bd["rozrzut_biodro"]) * przedmiot.mod("rozrzut_biodro"), float(bd["rozrzut_ads"]) * przedmiot.mod("rozrzut_ads"), ads)
 	var kat: float = baza * (1.0 + _ruch * 1.4) * lerpf(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) + bloom
 	var space := kamera.get_world_3d().direct_space_state
 	var od := kamera.global_position
 	var przod := -kamera.global_basis.z
-	var obr := float(ad["obrazenia"]) * float(bd.get("mnoznik", 1.0))
+	var obr := float(ad["obrazenia"]) * float(bd.get("mnoznik", 1.0)) * przedmiot.mod("obrazenia")
 	for i in srut:
 		var kier := Balistyka.rozrzut(przod, kat)
 		if srut > 1:
 			kier = Balistyka.rozrzut(kier, float(bd.get("rozrzut_srutu", 3.0)))
 		_promien(space, od, kier, obr, float(ad["penetracja"]))
 	# odrzut
-	var sila: float = float(bd["odrzut"]) * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0))
+	var sila: float = float(bd["odrzut"]) * przedmiot.mod("odrzut") * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0))
 	if gracz.has_method("dodaj_odrzut"):
 		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
 	if _tryb() == "auto":
@@ -346,8 +451,8 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	_kick += Vector3(randf_range(-0.006, 0.006), 0.012, 0.07 + sila * 0.016)
 	_kick_rot += Vector3(deg_to_rad(6.0 + sila * 2.0), randf_range(-0.04, 0.04), randf_range(-0.05, 0.05))
 	var wylot := model.global_transform * Vector3(md["lufa"])
-	Efekty.blysk(gracz.get_parent(), wylot, 3.0 if bd["slot"] == "pistolet" else 4.0)
-	if _blysk:
+	Efekty.blysk(gracz.get_parent(), wylot, (3.0 if bd["slot"] == "pistolet" else 4.0) * (0.15 if _bez_plomienia else 1.0))
+	if _blysk and not _bez_plomienia:
 		_blysk.visible = true
 		_blysk.rotation.z = randf() * TAU
 		# przy celowaniu płomień jest tuż przed okiem: mały i krótki, żeby nie zasłaniał celu
@@ -361,13 +466,19 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	match bd["kaliber"]:
 		"7.62x39": halas = 36.0
 		"12/70": halas = 32.0
+	halas *= przedmiot.mod("halas")
 	Gra.emituj_halas(gracz.global_position, halas, gracz)
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}
 	var nazwa_dzw: String = dzw.get(bd["kaliber"], "strzal_pistolet")
-	Dzwiek.graj(nazwa_dzw, -1.0)
-	# pogłos w ciasnych wnętrzach: przytłumione odbicie po ułamku sekundy
-	get_tree().create_timer(0.09).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -15.0, 0.78))
-	get_tree().create_timer(0.21).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -22.0, 0.7))
+	if _bez_plomienia:
+		# tłumik: krótki, suchy trzask bez pogłosu
+		Dzwiek.graj(nazwa_dzw, -13.0, 1.45)
+		Dzwiek.graj("klik", -6.0, 0.6)
+	else:
+		Dzwiek.graj(nazwa_dzw, -1.0 + (2.0 if przedmiot.mod("halas") > 1.0 else 0.0))
+		# pogłos w ciasnych wnętrzach: przytłumione odbicie po ułamku sekundy
+		get_tree().create_timer(0.09).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -15.0, 0.78))
+		get_tree().create_timer(0.21).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -22.0, 0.7))
 	zmiana.emit()
 
 
@@ -506,7 +617,8 @@ func dodaj_sway(mysz: Vector2) -> void:
 
 func _process(delta: float) -> void:
 	_anim_akcji_t += delta
-	_opusc = move_toward(_opusc, 1.0 if _anim_akcji != "" else 0.0, delta * 4.0)
+	_opusc = move_toward(_opusc, 1.0 if (_anim_akcji != "" and _anim_akcji != "montaz") else 0.0, delta * 4.0)
+	_montaz = move_toward(_montaz, 1.0 if _anim_akcji == "montaz" else 0.0, delta * 3.0)
 	if _rece_akcji:
 		_rece_akcji.visible = _opusc > 0.05 and _anim_akcji != "schowaj"
 		if _rece_akcji.visible:
@@ -522,7 +634,7 @@ func _process(delta: float) -> void:
 	if przedmiot == null:
 		hip = Vector3(-0.07, -0.17, -0.36)
 	var celownik := float(md["celownik"])
-	var ads_poz := Vector3(0.0, -celownik, -0.24 if not pistolet else -0.3)
+	var ads_poz := Vector3(0.0, -celownik, (-0.24 if not pistolet else -0.3) + (0.06 if md.get("luneta", false) else 0.0))
 	var t := ads * ads * (3.0 - 2.0 * ads)
 	_bob += delta * (6.0 * _ruch + 2.5 * _bieg)
 	var bob := Vector3(sin(_bob) * 0.011, absf(cos(_bob)) * -0.014, 0) * _ruch * (1.0 - t * 0.85) * (1.0 + _bieg * 0.8)
@@ -574,11 +686,16 @@ func _process(delta: float) -> void:
 		if _anim_akcji == "magazynek":
 			# rytm wciskania nabojów
 			poz.y += sin(_anim_akcji_t * 14.0) * 0.006 * e
+	if _montaz > 0.0:
+		var rp := _animuj_montaz(rot, poz)
+		rot = rp[0]
+		poz = rp[1]
 	model.position = poz
 	model.rotation = rot
-	model.visible = _opusc < 0.95
+	# przy lunecie patrzymy przez okular: model znika, HUD rysuje siatkę PSO
+	model.visible = _opusc < 0.95 and not (ma_lunete() and ads > 0.9)
 	# snop latarki z soczewki, po ustawieniu modelu w tej klatce (bez opóźnienia)
-	if _lat_node and gracz and gracz.get("latarka") and gracz.latarka.visible:
+	if (_lat_node or ma_latarke_broni()) and gracz and gracz.get("latarka") and gracz.latarka.visible:
 		gracz.latarka.global_transform = transform_latarki()
 
 

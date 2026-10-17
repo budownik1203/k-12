@@ -29,9 +29,9 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
-| Tab | wybór: [1] kamizelka (spojrzenie w dół), [2] plecak (zdjęcie i rozpięcie), [3] całe oporządzenie; w sklepie Tab zamyka |
+| Tab | panel operatora; „Otwórz” przy kamizelce, plecaku, kieszeniach i kontenerze wyświetla pojemnik na środku (kilka naraz); w sklepie Tab zamyka |
 | G | napełnij magazynki z amunicji luzem |
-| L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz |
+| L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz; z latarką taktyczną na broni włącza ją |
 | O | lista wyjść z kierunkiem i odległością |
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
@@ -45,7 +45,9 @@ pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kie
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** szybko przenosi, **PPM** menu
 (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
-w panelu zdrowia leczy właśnie ją. Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
+w panelu zdrowia leczy właśnie ją.
+Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu
+**PPM** na broni. Kolimator, lunetę i chwyt montuje się tylko przy stole roboczym w schronie (podejdź i wciśnij **F**). Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
 
 ## Pętla gry
 

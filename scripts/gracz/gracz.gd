@@ -46,6 +46,7 @@ var _trafienie_shake := 0.0
 var _biegnie := false
 var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
 var latarka_wlaczona := true
+var latarka_broni_wl := false   # latarka taktyczna na broni
 var _kop := 0.0                 # kopnięcie kamery po strzale
 var oglusz := 0.0               # ogłuszenie po trafieniu w hełm (sekundy, malejąco)
 var ekw_pitch := 0.0            # widok przy ekwipunku: spojrzenie w dół, przechył, przysiad
@@ -171,7 +172,7 @@ func _wybierz_bron(slot: String) -> void:
 
 
 func _odswiez_latarke() -> void:
-	latarka.visible = latarka_w_rece and latarka_wlaczona and not tryb_bazy
+	latarka.visible = not tryb_bazy and ((latarka_w_rece and latarka_wlaczona) or (not latarka_w_rece and bron.ma_latarke_broni() and latarka_broni_wl))
 	bron.swiecenie_szkla(latarka.visible)
 	latarka.position = Vector3(-0.03, -0.17, -0.15) if bron.przedmiot != null else Vector3(-0.09, -0.14, -0.15)
 
@@ -272,6 +273,10 @@ func _physics_process(delta: float) -> void:
 			latarka_wlaczona = not latarka_wlaczona
 			_odswiez_latarke()
 			Dzwiek.graj("klik", -10.0)
+		elif bron.ma_latarke_broni():
+			latarka_broni_wl = not latarka_broni_wl
+			_odswiez_latarke()
+			Dzwiek.graj("klik", -10.0, 1.3)
 		else:
 			wez_latarke()
 	# snop wychodzi z soczewki trzymanej latarki i podąża za ręką (kołysanie, odrzut, animacje)
@@ -340,7 +345,7 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	glowa.position = Vector3(wychylenie * 0.32 + bob_x, wys - absf(wychylenie) * 0.06 + bob_y - _ladowanie - ekw_glowa, 0)
 	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp + ekw_roll
 	var fov_baza := float(Gra.ustawienia.get("fov", 75.0))
-	kamera.fov = lerpf(fov_baza, fov_baza * 0.8, bron.ads) + _kop * 2.2
+	kamera.fov = lerpf(fov_baza, fov_baza * 0.8 / bron.zoom(), bron.ads) + _kop * 2.2
 
 
 func _sciana_przy_wychyleniu(strona: float) -> bool:

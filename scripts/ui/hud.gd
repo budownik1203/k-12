@@ -267,6 +267,8 @@ func _process(delta: float) -> void:
 		linie_b.append("latarka w ręce" if gracz.latarka_w_rece else "bez broni")
 	if gracz.latarka_w_rece:
 		linie_b.append("latarka: " + ("WŁ" if gracz.latarka_wlaczona else "wył") + "  [L]")
+	elif gracz.bron.ma_latarke_broni():
+		linie_b.append("latarka na broni: " + ("WŁ" if gracz.latarka_broni_wl else "wył") + "  [L]")
 	_bron.text = "\n".join(linie_b)
 	# interakcja
 	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
@@ -410,7 +412,9 @@ class Kropka:
 		var g: Gracz = hud.gracz
 		if g == null or g.cialo.martwy or Sterowanie.blokada:
 			return
-		var c := size * 0.5
+		var c := get_viewport_rect().size * 0.5
+		if g.bron.ma_lunete() and g.bron.ads > 0.85:
+			_luneta(c, clampf((g.bron.ads - 0.85) / 0.15, 0.0, 1.0))
 		if g.bron.ads < 0.5 and g.bron.przedmiot != null:
 			draw_rect(Rect2(c - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.85, 0.82, 0.7, 0.7))
 		if hud._znacznik > 0.0:
@@ -424,6 +428,36 @@ class Kropka:
 			var p := c + Vector2(sin(a), -cos(a)) * 110.0
 			var kol := Color(0.8, 0.1, 0.05, hud._trafienie)
 			draw_line(p - Vector2(cos(a), sin(a)) * 26, p + Vector2(cos(a), sin(a)) * 26, kol, 4.0)
+
+
+	## Nakładka lunety (PSO): czarne pole wokół okularu, siatka z szewronami i skalą boczną.
+	func _luneta(c: Vector2, a: float) -> void:
+		var vs := get_viewport_rect().size
+		var r := minf(vs.x, vs.y) * 0.44
+		var diag := vs.length()
+		var czern := Color(0.0, 0.0, 0.0, a)
+		var n := 72
+		for i in n:
+			var a0 := TAU * float(i) / n
+			var a1 := TAU * float(i + 1) / n
+			var d0 := Vector2(cos(a0), sin(a0))
+			var d1 := Vector2(cos(a1), sin(a1))
+			draw_colored_polygon(PackedVector2Array([c + d0 * r, c + d0 * diag, c + d1 * diag, c + d1 * r]), czern)
+		draw_arc(c, r, 0.0, TAU, 128, Color(0.05, 0.05, 0.04, a), 6.0)
+		draw_arc(c, r - 10.0, 0.0, TAU, 128, Color(0.0, 0.0, 0.0, a * 0.35), 18.0)
+		var k := Color(0.05, 0.05, 0.04, a * 0.95)
+		var ch := r * 0.035
+		for i in 3:
+			var y := float(i) * r * 0.16
+			draw_line(c + Vector2(-ch, y + ch), c + Vector2(0, y), k, 2.0)
+			draw_line(c + Vector2(ch, y + ch), c + Vector2(0, y), k, 2.0)
+		draw_line(c + Vector2(0, r * 0.38), c + Vector2(0, r), k, 2.0)
+		draw_line(c + Vector2(-r, 0), c + Vector2(-r * 0.3, 0), k, 2.0)
+		for i in range(1, 6):
+			var x := r * 0.3 + float(i) * r * 0.1
+			draw_line(c + Vector2(-x, 0), c + Vector2(-x, -r * 0.03), k, 1.5)
+			draw_line(c + Vector2(x, 0), c + Vector2(x, -r * 0.03), k, 1.5)
+		draw_line(c + Vector2(r * 0.3, 0), c + Vector2(r, 0), k, 2.0)
 
 
 ## Kompas (gdy jest na slocie wyposażenia): pasek kierunków, przy liście [O] także znaczniki wyjść.

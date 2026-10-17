@@ -21,8 +21,9 @@ const HANDLARZE := {
 		"powitania": ["Broń jest. Amunicji też trochę. Sumienia brak na stanie.", "Zwrotów nie przyjmuję. Zwłaszcza od nieboszczyków.", "Podpisz tu, tu i tu. Nie, nie czytaj."],
 		"oferta": [["pw9", 1], ["obrzyn", 1], ["pm63", 1], ["kb47", 1], ["mag_pw9", 1], ["mag_pm63", 1], ["mag_kb47", 1],
 			["a_9x18", 50], ["a_12", 20], ["a_762", 60], ["a_762bp", 30], ["kamizelka_kl2", 1], ["helm_wz67", 1],
+			["tlumik_9", 1], ["tlumik_762", 1], ["hamulec", 1], ["kolimator", 1], ["luneta", 1], ["chwyt", 1], ["latarka_taktyczna", 1],
 			["kamizelka_kl4", 1], ["kamizelka_lbv", 1], ["napiersnik", 1], ["plecak_szturmowy", 1], ["plecak_turystyczny", 1], ["plecak_wojskowy", 1]],
-		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik"], "skup": 0.5,
+		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik", "dodatek"], "skup": 0.5,
 	},
 	"medyk": {
 		"nazwa": "Medyk", "opis": "zmęczony lekarz-uciekinier z kompleksu",

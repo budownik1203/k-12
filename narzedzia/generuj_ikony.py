@@ -143,6 +143,35 @@ def draw(pid, d, W, H):
         for i, x in enumerate((5, 13, 21)):
             shaded_rect(d, [x, 6, x + 6, 22], CZERWIEN)
             shaded_rect(d, [x, 22, x + 6, 27], MOSIADZ)
+    elif pid in ("tlumik_9", "tlumik_762"):
+        g = 10 if pid == "tlumik_9" else 13
+        shaded_rect(d, [4, 16 - g // 2, 54, 16 + g // 2], (46, 48, 46))
+        for x in range(10, 52, 8):
+            d.line([(x, 16 - g // 2 + 1), (x, 16 + g // 2 - 1)], fill=(30, 30, 30))
+        shaded_rect(d, [54, 13, 60, 19], METAL)
+    elif pid == "hamulec":
+        shaded_rect(d, [6, 11, 26, 21], METAL)
+        for x in (10, 15, 20):
+            d.rectangle([x, 11, x + 2, 14], fill=METAL_C)
+            d.rectangle([x, 18, x + 2, 21], fill=METAL_C)
+    elif pid == "kolimator":
+        shaded_rect(d, [4, 20, 28, 26], METAL_C)
+        d.rectangle([7, 6, 25, 20], outline=(40, 42, 44), width=3)
+        d.ellipse([14, 11, 18, 15], fill=(230, 40, 30))
+    elif pid == "luneta":
+        shaded_rect(d, [12, 11, 52, 19], (40, 42, 40))
+        shaded_rect(d, [4, 8, 14, 22], (50, 52, 50))
+        shaded_rect(d, [50, 9, 60, 21], (50, 52, 50))
+        d.rectangle([26, 20, 36, 27], fill=METAL_C)
+        d.rectangle([28, 5, 32, 11], fill=METAL)
+    elif pid == "chwyt":
+        shaded_rect(d, [6, 4, 26, 10], METAL_C)
+        poly(d, [(11, 10), (21, 10), (19, 29), (13, 29)], BAKELIT if False else (70, 40, 26))
+    elif pid == "latarka_taktyczna":
+        shaded_rect(d, [4, 11, 24, 21], (40, 42, 40))
+        shaded_rect(d, [22, 9, 29, 23], METAL)
+        d.rectangle([27, 11, 29, 21], fill=(250, 236, 170))
+        d.rectangle([8, 21, 14, 26], fill=METAL_C)
     elif pid == "mapa":
         poly(d, [(3, 6), (12, 3), (20, 6), (29, 3), (29, 26), (20, 29), (12, 26), (3, 29)], (200, 190, 150))
         d.line([(12, 3), (12, 26)], fill=(150, 140, 100))

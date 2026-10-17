@@ -8,6 +8,8 @@ var calosc := 0.0          # cała akcja 0..1
 var tekst := ""
 var licznik := ""
 var promien := 22.0
+var podpowiedz := true       # "[X] przerwij" pod kółkiem
+var srodkuj := false         # rysuj na środku kontrolki (w kontenerach)
 
 
 func _ready() -> void:
@@ -28,7 +30,7 @@ func ustaw_z_gracza(g: Gracz) -> void:
 
 
 func _draw() -> void:
-	var c := Vector2.ZERO
+	var c := size * 0.5 if srodkuj else Vector2.ZERO
 	var r := promien
 	draw_circle(c, r + 5.0, Color(0, 0, 0, 0.55))
 	draw_arc(c, r, 0.0, TAU, 48, Color(0.3, 0.29, 0.24, 0.6), 3.0)
@@ -45,6 +47,8 @@ func _draw() -> void:
 	var tw := fc.get_string_size(tekst, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 	draw_string(fc, c + Vector2(-tw * 0.5 + 1, r + 22), tekst, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0, 0, 0, 0.8))
 	draw_string(fc, c + Vector2(-tw * 0.5, r + 21), tekst, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.9, 0.86, 0.72))
+	if not podpowiedz:
+		return
 	var hint := "[X] przerwij"
 	var hw := fc.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	draw_string(fc, c + Vector2(-hw * 0.5, r + 37), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.6, 0.57, 0.48))

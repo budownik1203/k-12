@@ -58,6 +58,30 @@ func _ready() -> void:
 			mag = e["p"]
 	ekran.napelnij_wszystkie()
 	_ok(mag.dane["naboje"] == 8, "napełnianie magazynków w bazie (jest %d)" % mag.dane["naboje"])
+	# dodatki: kolimator (warsztatowy) bez stołu – odmowa, przy stole – montaż; tłumik polowy na PW-9
+	var pm := Przedmiot.nowy("pm63")
+	var kol := Przedmiot.nowy("kolimator")
+	Gra.skrytka.dodaj(kol)
+	var zr := {"typ": "siatka", "siatka": Gra.skrytka}
+	ekran._warsztat = false
+	ekran._montuj(pm, kol, zr)
+	_ok(pm.dodatek("celownik") == null, "kolimator bez stołu roboczego nie montuje się")
+	ekran._warsztat = true
+	ekran._montuj(pm, kol, zr)
+	_ok(pm.dodatek("celownik") == kol and not Gra.skrytka.zawiera(kol), "kolimator zamontowany przy stole")
+	var tl := Przedmiot.nowy("tlumik_762")
+	Gra.skrytka.dodaj(tl)
+	ekran._montuj(pm, tl, zr)
+	_ok(pm.dodatek("wylot") == null and Gra.skrytka.zawiera(tl), "tłumik 7,62 nie pasuje do PM-63")
+	ekran._zdejmij_dodatek(pm, "celownik")
+	_ok(pm.dodatek("celownik") == null, "kolimator zdjęty")
+	var t9 := Przedmiot.nowy("tlumik_9")
+	Gra.skrytka.dodaj(t9)
+	ekran._montuj(pm, t9, zr)
+	_ok(pm.dodatek("wylot") == t9, "tłumik 9 mm na PM-63")
+	var kopia := Przedmiot.from_dict(pm.to_dict())
+	_ok(kopia.dodatek("wylot") != null and kopia.dodatek("wylot").id == "tlumik_9", "dodatek przetrwał zapis")
+	_ok(pm.waga() > Przedmiot.nowy("pm63").waga(), "dodatek zwiększa wagę broni")
 	print("BLEDY UI: ", bledy)
 	get_tree().quit(bledy)
 

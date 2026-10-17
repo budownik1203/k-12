@@ -126,6 +126,18 @@ func _buduj_schron() -> void:
 	gen._mebel("telewizor", Vector3(15.6, 0, 7.5), -PI / 2.0, true)
 	gen._mebel("szafa", Vector3(15.6, 0, 9.3), -PI / 2.0, true)
 	gen._mebel("stol_warsztatowy", Vector3(0.45, 0, 8.6), PI / 2.0, true)
+	# stół roboczy: montaż dodatków do broni (także warsztatowych)
+	var ws := StaticBody3D.new()
+	ws.collision_layer = Balistyka.WARSTWA_INTERAKCJE
+	ws.set_meta("interakcja", _Warsztat.new(self))
+	var wcs := CollisionShape3D.new()
+	var wbs := BoxShape3D.new()
+	wbs.size = Vector3(0.8, 1.2, 1.9)
+	wcs.shape = wbs
+	wcs.position.y = 0.6
+	ws.add_child(wcs)
+	swiat.add_child(ws)
+	ws.position = Vector3(0.45, 0, 8.6)
 	# wyjście do strefy
 	var drzwi: Node3D = load("res://assets/models/drzwi_piwnica.glb").instantiate()
 	swiat.add_child(drzwi)
@@ -179,6 +191,20 @@ func interakcja(_g) -> void:
 
 func otworz_handel(id: String) -> void:
 	handel.otworz(id)
+
+
+class _Warsztat:
+	extends RefCounted
+	var baza
+
+	func _init(b) -> void:
+		baza = b
+
+	func tekst_interakcji(_g) -> String:
+		return "Stół roboczy (dodatki do broni)"
+
+	func interakcja(_g) -> void:
+		baza.ekran_ekw.otworz_warsztat()
 
 
 class _Wyjscie:

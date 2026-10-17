@@ -372,28 +372,22 @@ func _zrzuty(katalog: String) -> void:
 			pl.dane["siatka"].dodaj(q)
 		if e.sloty["util1"] == null:
 			e.sloty["util1"] = Przedmiot.nowy("mapa")
-		ekran_ekw._wybierz("kamizelka")
+		ekran_ekw.otworz(null)
+		ekran_ekw.przelacz_pojemnik("kamizelka")
 		for f in 50:
 			await get_tree().process_frame
+		ekran_ekw.przelacz_pojemnik("plecak")
+		for f in 20:
+			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_kamizelka.png"))
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_otwieranie.png"))
+		for f in 60:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_kamizelka_plecak.png"))
 		ekran_ekw.zamknij()
 		for f in 30:
 			await get_tree().process_frame
-		ekran_ekw._wybierz("plecak")
-		for f in 70:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_plecak.png"))
-		ekran_ekw.zamknij()
-		for f in 30:
-			await get_tree().process_frame
-		ekran_ekw._otworz_wybor()
-		for f in 5:
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_wybor.png"))
-		ekran_ekw._zamknij_wybor()
 	# ekran ekwipunku z pojemnikiem
 	var pojemniki := swiat.get_children().filter(func(x): return x is Pojemnik)
 	if not pojemniki.is_empty() and ekran_ekw:
@@ -539,6 +533,51 @@ func _zrzut_vm(katalog: String) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_bieg.png"))
+	gracz.bron._bieg = 0.0
+	# dodatki: KB-47 z kolimatorem, tłumikiem i latarką; potem luneta przy celowaniu
+	var kb: Przedmiot = Gra.ekw.sloty["glowna"]
+	kb.dane["dod_wylot"] = Przedmiot.nowy("tlumik_762")
+	kb.dane["dod_celownik"] = Przedmiot.nowy("kolimator")
+	kb.dane["dod_latarka"] = Przedmiot.nowy("latarka_taktyczna")
+	kb.dane["dod_chwyt"] = Przedmiot.nowy("chwyt")
+	gracz._wybierz_bron("glowna")
+	gracz.latarka_broni_wl = true
+	gracz._odswiez_latarke()
+	for f in 50:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_dodatki.png"))
+	gracz.sterowanie = true
+	Input.action_press("celuj")
+	for f in 110:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_kolimator.png"))
+	Input.action_release("celuj")
+	kb.dane["dod_celownik"] = Przedmiot.nowy("luneta")
+	gracz._wybierz_bron("glowna")
+	for f in 40:
+		await get_tree().process_frame
+	gracz.sterowanie = true
+	Input.action_press("celuj")
+	for f in 110:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_luneta.png"))
+	Input.action_release("celuj")
+	for f in 40:
+		await get_tree().process_frame
+	# montaż polowy (animacja)
+	var tl: Przedmiot = kb.dane["dod_wylot"]
+	kb.dane["dod_wylot"] = null
+	gracz._wybierz_bron("glowna")
+	for f in 40:
+		await get_tree().process_frame
+	gracz.zacznij_akcje("Montaż: " + tl.nazwa(), 3.0, func(): kb.dane["dod_wylot"] = tl, "montaz")
+	for f in 70:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_montaz.png"))
 	get_tree().quit()
 
 

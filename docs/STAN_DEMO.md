@@ -1,4 +1,4 @@
-# Stan demo (17.10.2026)
+# Stan demo (18.10.2026, v0.5)
 
 Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.6, renderer Compatibility.
 
@@ -19,7 +19,8 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 | Animacje | przeładowanie lewą ręką (wyjęcie, sięgnięcie do kamizelki, włożenie, zamek przy pustej komorze), broń opuszczona w biegu, ręce przy leczeniu i napełnianiu |
 | Modele wrogów | stawy łokci i kolan, dłonie na broni (kinematyka odwrotna), chód ze zgięciem kolan, przyklęk, celowanie tułowiem, rozglądanie się, przeładowanie z magazynkiem w dłoni, odrzut, osuwanie przy śmierci, smugi pocisków, latarki na broni najemników |
 | HUD | pasek szybkiego dostępu [1-9] budowany z ekwipunku, kółko postępu akcji, znacznik trafienia, zapas magazynków pod ręką, stany ciała |
-| Ekwipunek (Tab) | wybór: kamizelka (kamera w dół, ładownice na dole ekranu, świat widoczny), plecak (zdjęcie z animacją kamery, rozpięty plecak z zamkiem), całe oporządzenie; sloty wyposażenia dodatkowego (pas + 0–2 z kamizelki) na latarkę, mapę, kompas; przegródki w kamizelkach i plecakach (6 kamizelek/plecaków o różnych układach); stosy amunicji rosną z ilością (garść 1x1 → pudełko 1x2); 54 przedmioty w rozmiarach od 1x1 do 4x5 |
+| Ekwipunek (Tab) | Tab otwiera panel operatora (oporządzenie na sylwetce, panel zdrowia, bronie, wyposażenie); kamizelka, plecak, kieszenie i kontener bezpieczny mają przycisk „Otwórz” – otwieranie trwa (kieszenie 0,25 s, kamizelka 0,45 s, plecak 1 s z kółkiem) i pojemnik pojawia się na środku, kilka otwartych naraz pozwala przerzucać między nimi; w rajdzie na start otwarte są tylko kieszenie; sloty wyposażenia dodatkowego (pas + 0–2 z kamizelki) na latarkę, mapę, kompas; przegródki w kamizelkach i plecakach; stosy amunicji rosną z ilością (garść 1x1 → pudełko 1x2); 61 przedmiotów w rozmiarach od 1x1 do 4x5 |
+| Dodatki do broni | 7 dodatków w 4 slotach (wylot, celownik, chwyt, latarka): tłumiki 9 mm i 7,62 (ciszej, bez płomienia), hamulec wylotowy (mniejszy odrzut), latarka taktyczna (snop tam, gdzie celujesz, [L]) – polowe: montaż przeciągnięciem dodatku na broń, z animacją (broń obrócona, lewa ręka przy wylocie), przerywany [X], demontaż z menu PPM; kolimator, luneta PSO 4x (nakładka okularu z siatką) i chwyt przedni – tylko na stole roboczym w schronie; modele dodatków na broni, wpływ na wagę i wartość, zapis w save |
 | Ekwipunek (wygląd) | wygląd rozpiętego oporządzenia (płótno, kieszenie z przeszyciem, naszywki), sloty wokół sylwetki, wyrzucanie przeciągnięciem poza sloty, siatki pojemników (kieszenie, kamizelka, plecak, skrytka, kontener bezpieczny), obracanie, stosy, redukcja wagi pojemnika, sloty na ciele, przeszukiwanie ze stopniowym odkrywaniem zawartości |
 | Przeciwnicy | Szabrownicy, Najemnicy i Wojskowi (posterunki z worków z piaskiem: siedzą w gnieździe, wstają do strzału, nie wychodzą); krwawienie z kroplami krwi na podłodze, opatrywanie się za osłoną, szok przy dużej utracie krwi (mniej „gąbek”), zachwianie po trafieniu; trzymanie kątów po utracie kontaktu, w oddziale naprzód idzie jeden, reszta osłania; krótkie przemyślane skoki do osłon (bieg tylko pod ostrzałem), pod silnym ogniem chowają głowę; w oddziałach; wzrok (stożek, oświetlenie gracza, kucanie), słuch liczony po drodze dźwięku przez korytarze i drzwi (zakręty tłumią), blisko: alarm i szukanie, daleko: nasłuch w miejscu; pamięć pozycji; osłony, flankowanie, wychylanie zza osłon, łączność w oddziale, morale i ucieczka, nowy dowódca u najemników; okrzyki z napisami; łup z ciał; rosnące zagrożenie (kolejne grupy) |
 | Fauna | zdziczałe psy: reagują na hałas, gonią, gryzą (krwawienie), uciekają ranne |
@@ -31,7 +32,7 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 
 - Jedno piętro w rajdzie (bez pionowości), drzwi bez otwierania.
 - Obraz 3D w 1/2 rozdzielczości (wcześniej 1/3) i słabsza mgła – cel widać z kilkunastu metrów.
-- Brak granatów, zacięć i modyfikacji broni.
+- Brak granatów i zacięć; modyfikacje broni tylko jako dodatki (bez wymiany luf i kolb).
 - Brak zapisu zawieszającego w trakcie rajdu (wyjście z rajdu = zaginięcie w akcji).
 - Sojusze frakcji statyczne, tylko 2 frakcje ludzkie (Wojskowi w kolejnej iteracji).
 - Ręce i bronie animowane proceduralnie (bez szkieletu).
@@ -44,5 +45,5 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 2. Boss biomu 1: dowódca z oddziałem i zadaniem terenowym.
 3. Granaty (odłamkowy, dymny) i otwierane drzwi.
 4. Pionowość: klatka schodowa jako łącznik pięter (model już istnieje).
-5. Modyfikacje broni i craft amunicji w bazie.
+5. Craft amunicji w bazie, więcej dodatków (kolby, magazynki bębnowe).
 6. Kontrakty handlarzy (cele rajdu).
