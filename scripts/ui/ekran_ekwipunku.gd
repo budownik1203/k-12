@@ -36,6 +36,9 @@ var _otwieranie := ""          # pojemnik w trakcie otwierania (czas, animacja)
 var _otw_t := 0.0
 var _otw_czas := 0.0
 var _kolko_otw: KolkoPostepu
+var _swiezy := ""              # właśnie otwarty pojemnik: jego ramka dostaje animację wejścia
+var _ramki := {}               # pojemnik -> ramka na środku
+var _zamykany := ""
 var _warsztat := false          # otwarte przy stole roboczym: wolno montować dodatki warsztatowe
 var _tlo: TextureRect
 var _lp: PanelContainer
@@ -77,14 +80,14 @@ func _buduj() -> void:
 	tlo.stretch_mode = TextureRect.STRETCH_TILE
 	tlo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	tlo.mouse_filter = Control.MOUSE_FILTER_STOP
-	tlo.modulate = Color(0.85, 0.85, 0.85, 0.97)
+	tlo.modulate = Color(1, 1, 1, 0)   # bez tła: łapie tylko mysz (upuszczenie poza celami = wyrzuć)
 	_root.add_child(tlo)
 	var cien := ColorRect.new()
 	cien.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cien.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sm := ShaderMaterial.new()
 	var sh := Shader.new()
-	sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 q = UV - 0.5; COLOR = vec4(0.0, 0.0, 0.0, smoothstep(0.18, 0.62, dot(q, q) * 1.6)); }"
+	sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 q = UV - 0.5; COLOR = vec4(0.0, 0.0, 0.0, 0.18 + 0.4 * smoothstep(0.1, 0.6, dot(q, q) * 1.6)); }"
 	sm.shader = sh
 	cien.material = sm
 	_root.add_child(cien)
@@ -115,7 +118,7 @@ func _buduj() -> void:
 	kol.add_child(rzad)
 	# lewy: sloty i zdrowie
 	var lp := PanelContainer.new()
-	lp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
+	lp.add_theme_stylebox_override("panel", RamkaStyl.new())
 	lp.custom_minimum_size = Vector2(350, 0)
 	rzad.add_child(lp)
 	_lp = lp
@@ -123,24 +126,43 @@ func _buduj() -> void:
 	_lewy = VBoxContainer.new()
 	_lewy.add_theme_constant_override("separation", 6)
 	lp.add_child(_lewy)
-	# środek: kieszenie, kamizelka, plecak
+	# środek: otwarte pojemniki, każdy we własnej ramce; w rajdzie na środku ekranu
 	var sp := PanelContainer.new()
-	sp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni())
-	sp.custom_minimum_size = Vector2(320, 0)
-	rzad.add_child(sp)
+	sp.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	sp.custom_minimum_size = Vector2(340, 0)
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if tryb_bazy:
+		rzad.add_child(sp)
+	else:
+		var odst := Control.new()
+		odst.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		odst.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rzad.add_child(odst)
+		sp.anchor_left = 0.5
+		sp.anchor_right = 0.5
+		sp.anchor_bottom = 1.0
+		sp.offset_left = -185
+		sp.offset_right = 185
+		sp.offset_top = 64
+		sp.offset_bottom = -44
 	_sp = sp
 	_panele.append(sp)
 	var ss := ScrollContainer.new()
 	ss.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	ss.mouse_filter = Control.MOUSE_FILTER_PASS
 	sp.add_child(ss)
 	_ss = ss
 	_srodek = VBoxContainer.new()
-	_srodek.add_theme_constant_override("separation", 6)
+	_srodek.add_theme_constant_override("separation", 10)
+	_srodek.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ss.add_child(_srodek)
 	# prawy: pojemnik / skrytka
 	var pp := PanelContainer.new()
-	pp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
-	pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pp.add_theme_stylebox_override("panel", RamkaStyl.new(true))
+	if tryb_bazy:
+		pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		pp.custom_minimum_size = Vector2(330, 0)
 	rzad.add_child(pp)
 	_pp = pp
 	_panele.append(pp)
@@ -159,8 +181,14 @@ func _buduj() -> void:
 	kol.add_child(_odstep_d)
 	var dol := HBoxContainer.new()
 	_dol = dol
-	dol.add_child(Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz, dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono()))
+	var podp := Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz, dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
+	podp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	podp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	podp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dol.add_child(podp)
 	kol.add_child(dol)
+	if not tryb_bazy:
+		_root.add_child(sp)
 	# tooltip i menu
 	_tooltip = PanelContainer.new()
 	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -207,10 +235,27 @@ func _siatka_pojemnika(co: String) -> Siatka:
 ## Otwiera (albo zamyka, jeśli otwarty) pojemnik na środku ekranu. W rajdzie trwa to chwilę i rusza kamerą.
 func przelacz_pojemnik(co: String) -> void:
 	if co in otwarte:
-		otwarte.erase(co)
-		_ustaw_widok()
-		_przebuduj()
+		if _zamykany != "":
+			return
 		Dzwiek.graj("plecak", -12.0, 1.3)
+		var r: Control = _ramki.get(co)
+		var dokoncz := func():
+			_zamykany = ""
+			otwarte.erase(co)
+			_ustaw_widok()
+			_przebuduj()
+		if r == null or not is_instance_valid(r) or not r.is_visible_in_tree():
+			dokoncz.call()
+			return
+		_zamykany = co
+		r.pivot_offset = Vector2(r.size.x * 0.5, 0.0 if co == "plecak" else r.size.y)
+		var tw := r.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(r, "modulate:a", 0.0, 0.16)
+		if co == "plecak":
+			tw.tween_property(r, "scale:y", 0.05, 0.18)
+		else:
+			tw.tween_property(r, "position:y", r.position.y + 50.0, 0.16)
+		tw.chain().tween_callback(dokoncz)
 		return
 	if _otwieranie != "" or _siatka_pojemnika(co) == null:
 		if _siatka_pojemnika(co) == null:
@@ -219,6 +264,7 @@ func przelacz_pojemnik(co: String) -> void:
 	var czas: float = 0.0 if (tryb_bazy or gracz == null) else float(CZAS_OTW[co])
 	if czas <= 0.0:
 		otwarte.append(co)
+		_swiezy = co
 		_przebuduj()
 		return
 	_otwieranie = co
@@ -260,8 +306,11 @@ func _pokaz() -> void:
 	if not otwarty:
 		otwarte = _domyslnie_otwarte()
 		_otwieranie = ""
+		if not tryb_bazy:
+			_swiezy = "kieszenie"
 	otwarty = true
 	_root.visible = true
+	get_tree().call_group("hud", "ukryj", true)
 	# otwarcie: rozpinany plecak wjeżdża od dołu
 	_root.modulate.a = 0.0
 	_root.position.y = 26.0
@@ -280,6 +329,7 @@ func zamknij() -> void:
 	_upusc_drag(true)
 	otwarty = false
 	_root.visible = false
+	get_tree().call_group("hud", "ukryj", false)
 	_menu.hide()
 	_tooltip.visible = false
 	Sterowanie.blokada = false
@@ -345,12 +395,18 @@ func _przebuduj() -> void:
 	_lewy.add_child(_opis_ciala)
 	_info_waga = Motyw.etykieta("", 13, Motyw.TEKST, Motyw.mono())
 	_lewy.add_child(_info_waga)
-	# środek: otwarte pojemniki
-	_srodek.add_child(Motyw.naszywka("Otwarte"))
+	# środek: otwarte pojemniki, każdy we własnej ramce (bez tła – pod spodem widać świat)
+	_ramki.clear()
 	for co in otwarte:
 		var siatka := _siatka_pojemnika(co)
 		if siatka == null:
 			continue
+		var ramka := PanelContainer.new()
+		ramka.add_theme_stylebox_override("panel", RamkaStyl.new(false, 8.0))
+		ramka.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var wn := VBoxContainer.new()
+		wn.add_theme_constant_override("separation", 4)
+		ramka.add_child(wn)
 		var nag := HBoxContainer.new()
 		var tytul: String = NAZWY_POJ[co]
 		if co in ["kamizelka", "plecak"] and ekw.sloty[co] != null:
@@ -358,6 +414,7 @@ func _przebuduj() -> void:
 		nag.add_child(Motyw.naszywka(tytul))
 		var sp2 := Control.new()
 		sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sp2.custom_minimum_size = Vector2(8, 0)
 		nag.add_child(sp2)
 		var x := Button.new()
 		x.text = "✕"
@@ -366,21 +423,37 @@ func _przebuduj() -> void:
 		var c2: String = co
 		x.pressed.connect(func(): przelacz_pojemnik(c2))
 		nag.add_child(x)
-		_srodek.add_child(nag)
+		wn.add_child(nag)
 		if co == "plecak":
-			_srodek.add_child(Zamek.new())
-		_srodek.add_child(_siatka_ui(siatka, co))
+			wn.add_child(Zamek.new())
+		var gui := _siatka_ui(siatka, co)
+		gui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		wn.add_child(gui)
+		_srodek.add_child(ramka)
+		_ramki[co] = ramka
+		if co == _swiezy:
+			_animuj_wejscie.call_deferred(ramka, co)
+	_swiezy = ""
 	if _otwieranie != "":
+		var ramka_o := PanelContainer.new()
+		ramka_o.add_theme_stylebox_override("panel", RamkaStyl.new(true, 10.0))
+		ramka_o.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var wo := VBoxContainer.new()
+		wo.alignment = BoxContainer.ALIGNMENT_CENTER
+		ramka_o.add_child(wo)
 		var l := Motyw.etykieta({"kieszenie": "Sięgasz do kieszeni...", "kamizelka": "Spoglądasz na ładownice...", "plecak": "Zdejmujesz i rozpinasz plecak...", "bezpieczny": "Otwierasz kontener..."}[_otwieranie], 14, Motyw.ZOLC, Motyw.cond())
-		_srodek.add_child(l)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wo.add_child(l)
 		_kolko_otw = KolkoPostepu.new()
-		_kolko_otw.custom_minimum_size = Vector2(60, 70)
+		_kolko_otw.custom_minimum_size = Vector2(220, 64)
 		_kolko_otw.promien = 18.0
 		_kolko_otw.podpowiedz = false
 		_kolko_otw.srodkuj = true
-		_srodek.add_child(_kolko_otw)
+		wo.add_child(_kolko_otw)
+		_srodek.add_child(ramka_o)
 	elif otwarte.is_empty():
 		var l2 := Motyw.etykieta("Otwórz pojemnik przyciskiem przy slocie.", 14, Motyw.TEKST_CIEMNY, Motyw.cond())
+		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_srodek.add_child(l2)
 	# prawy: przeszukiwany pojemnik / skrytka
 	if _prawa_siatka != null:
@@ -396,6 +469,34 @@ func _przebuduj() -> void:
 		_prawa_ui = null
 		_pp.visible = false
 	_odswiez()
+
+
+## Wejście ramki pojemnika: kamizelka wjeżdża od dołu (spojrzenie w dół), plecak rozwija się jak rozpinany zamek,
+## kieszenie i kontener – krótkie rozwinięcie.
+func _animuj_wejscie(r: Control, co: String) -> void:
+	if not is_instance_valid(r):
+		return
+	var tw := r.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	r.modulate.a = 0.0
+	match co:
+		"plecak":
+			r.pivot_offset = Vector2(r.size.x * 0.5, 0.0)
+			r.scale = Vector2(0.92, 0.04)
+			tw.tween_property(r, "modulate:a", 1.0, 0.12)
+			tw.tween_property(r, "scale", Vector2.ONE, 0.32)
+		"kamizelka":
+			r.pivot_offset = r.size * 0.5
+			r.scale = Vector2(1.06, 1.06)
+			var y0 := r.position.y
+			r.position.y = y0 + 90.0
+			tw.tween_property(r, "modulate:a", 1.0, 0.18)
+			tw.tween_property(r, "position:y", y0, 0.26)
+			tw.tween_property(r, "scale", Vector2.ONE, 0.26)
+		_:
+			r.pivot_offset = r.size * 0.5
+			r.scale = Vector2(0.9, 0.9)
+			tw.tween_property(r, "modulate:a", 1.0, 0.12)
+			tw.tween_property(r, "scale", Vector2.ONE, 0.16)
 
 
 ## Przycisk otwierania pojemnika przy slocie (stan: otwórz / zamknij / otwieranie).
@@ -497,6 +598,7 @@ func _process(delta: float) -> void:
 			_otwieranie = ""
 			if _siatka_pojemnika(co) != null:
 				otwarte.append(co)
+				_swiezy = co
 				if co == "plecak":
 					Dzwiek.graj("plecak", -9.0, 1.3)
 			_przebuduj()

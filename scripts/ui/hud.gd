@@ -383,6 +383,11 @@ func napis_wroga(kto: String, tekst: String, pos: Vector3) -> void:
 
 
 ## Ogłuszenie: biały błysk i rozmycie, które powoli schodzą.
+## Ekwipunek otwarty: HUD znika, żeby nie nachodził na panele (świat dalej widać).
+func ukryj(t: bool) -> void:
+	_root.visible = not t
+
+
 func ogluszenie(sila: float) -> void:
 	_oglusz_blysk = maxf(_oglusz_blysk, 0.35 + sila * 0.6)
 

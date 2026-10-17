@@ -47,24 +47,33 @@ func _draw() -> void:
 		draw_string(Motyw.cond(), Vector2(6, 22), "—", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Motyw.TEKST_CIEMNY)
 		return
 	var kt := Motyw.tekstura("komorka")
-	if kt:
-		draw_texture_rect(kt, Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), true)
+	if siatka.maska.is_empty():
+		if kt:
+			draw_texture_rect(kt, Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), true, Color(1, 1, 1, 0.82))
+		else:
+			draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Motyw.KOMORKA)
+		for x in siatka.w + 1:
+			draw_line(Vector2(x * KOM, 0), Vector2(x * KOM, siatka.h * KOM), Motyw.KOMORKA_LINIA)
+		for y in siatka.h + 1:
+			draw_line(Vector2(0, y * KOM), Vector2(siatka.w * KOM, y * KOM), Motyw.KOMORKA_LINIA)
 	else:
-		draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Motyw.KOMORKA)
-	for x in siatka.w + 1:
-		draw_line(Vector2(x * KOM, 0), Vector2(x * KOM, siatka.h * KOM), Motyw.KOMORKA_LINIA)
-	for y in siatka.h + 1:
-		draw_line(Vector2(0, y * KOM), Vector2(siatka.w * KOM, y * KOM), Motyw.KOMORKA_LINIA)
+		# tylko pola ładownic; szwy między nimi przezroczyste
+		for y in siatka.h:
+			for x in siatka.w:
+				if not siatka.dostepna(x, y):
+					continue
+				var rk := Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM))
+				if kt:
+					draw_texture_rect(kt, rk, true, Color(1, 1, 1, 0.82))
+				else:
+					draw_rect(rk, Motyw.KOMORKA)
+				draw_rect(rk, Motyw.KOMORKA_LINIA, false, 1.0)
 	if not siatka.maska.is_empty():
 		# przegródki: puste pola to szwy między ładownicami, każda ładownica ma własną obwódkę
 		for y in siatka.h:
 			for x in siatka.w:
 				var r := Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM))
 				if not siatka.dostepna(x, y):
-					draw_rect(r, Color(0.05, 0.05, 0.04, 0.0))
-					var tl := Motyw.tekstura("plotno")
-					if tl:
-						draw_texture_rect_region(tl, r, Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM)), Color(0.75, 0.75, 0.75))
 					continue
 				var c := Color(0.02, 0.02, 0.015, 0.95)
 				if not siatka.dostepna(x - 1, y):
