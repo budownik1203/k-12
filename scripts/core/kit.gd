@@ -26,7 +26,7 @@ static func material_kolor_vm() -> ShaderMaterial:
 	if _mat_vm == null:
 		_mat_vm = material_kolor().duplicate()
 		_mat_vm.set_shader_parameter("use_emission", true)
-		_mat_vm.set_shader_parameter("emission_energy", 0.22)
+		_mat_vm.set_shader_parameter("emission_energy", 0.34)
 	return _mat_vm
 
 

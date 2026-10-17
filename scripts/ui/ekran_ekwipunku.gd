@@ -24,8 +24,12 @@ var _tooltip_txt: RichTextLabel
 var _menu: PopupMenu
 var _menu_p: Przedmiot
 var _menu_zrodlo := {}
-var _postep: ProgressBar
-var _postep_txt: Label
+var _kolko: KolkoPostepu
+var _panel_ciala: PanelCiala
+var _opis_ciala: Label
+var _panele: Array[Control] = []
+var _hover_p: Przedmiot = null
+var _seria_mag := false        # napełnianie wszystkich magazynków po kolei
 var _siatki: Array[SiatkaUI] = []
 var _sloty: Array[SlotUI] = []
 
@@ -77,6 +81,7 @@ func _buduj() -> void:
 	var lp := PanelContainer.new()
 	lp.custom_minimum_size = Vector2(330, 0)
 	rzad.add_child(lp)
+	_panele.append(lp)
 	_lewy = VBoxContainer.new()
 	_lewy.add_theme_constant_override("separation", 6)
 	lp.add_child(_lewy)
@@ -84,6 +89,7 @@ func _buduj() -> void:
 	var sp := PanelContainer.new()
 	sp.custom_minimum_size = Vector2(300, 0)
 	rzad.add_child(sp)
+	_panele.append(sp)
 	var ss := ScrollContainer.new()
 	ss.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sp.add_child(ss)
@@ -94,6 +100,7 @@ func _buduj() -> void:
 	var pp := PanelContainer.new()
 	pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rzad.add_child(pp)
+	_panele.append(pp)
 	_prawy = VBoxContainer.new()
 	pp.add_child(_prawy)
 	_prawy_tytul = Motyw.naglowek("")
@@ -104,17 +111,7 @@ func _buduj() -> void:
 	_prawy.add_child(_prawy_scroll)
 	# dół: podpowiedzi i pasek postępu
 	var dol := HBoxContainer.new()
-	dol.add_child(Motyw.etykieta("[LPM] przeciągnij  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [G] napełnij magazynki  [Tab] zamknij", 13, Motyw.TEKST_CIEMNY, Motyw.mono()))
-	var sp2 := Control.new()
-	sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dol.add_child(sp2)
-	_postep_txt = Motyw.etykieta("", 13, Motyw.ZOLC, Motyw.mono())
-	dol.add_child(_postep_txt)
-	_postep = ProgressBar.new()
-	_postep.custom_minimum_size = Vector2(180, 14)
-	_postep.show_percentage = false
-	_postep.visible = false
-	dol.add_child(_postep)
+	dol.add_child(Motyw.etykieta("[LPM] przeciągnij (poza okno = wyrzuć, lek na ciało = lecz)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono()))
 	kol.add_child(dol)
 	# tooltip i menu
 	_tooltip = PanelContainer.new()
@@ -138,6 +135,9 @@ func _buduj() -> void:
 	var duch := Duch.new()
 	duch.ekran = self
 	_root.add_child(duch)
+	_kolko = KolkoPostepu.new()
+	_kolko.visible = false
+	_root.add_child(_kolko)
 
 
 # ------------------------------------------------------------------ otwieranie
@@ -192,17 +192,27 @@ func _przebuduj() -> void:
 	# lewy panel
 	_lewy.add_child(Motyw.naglowek("Wyposażenie osobiste"))
 	var g1 := GridContainer.new()
-	g1.columns = 2
+	g1.columns = 4
 	g1.add_theme_constant_override("h_separation", 8)
 	g1.add_theme_constant_override("v_separation", 4)
 	_lewy.add_child(g1)
-	for para in [["helm", Vector2i(2, 2)], ["pancerz", Vector2i(3, 3)], ["kamizelka", Vector2i(2, 2)], ["plecak", Vector2i(3, 3)]]:
+	for para in [["helm", Vector2i(2, 2)], ["pancerz", Vector2i(2, 2)], ["kamizelka", Vector2i(2, 2)], ["plecak", Vector2i(2, 2)]]:
 		g1.add_child(_slot(para[0], para[1]))
-	_lewy.add_child(_slot("glowna", Vector2i(5, 2)))
-	_lewy.add_child(_slot("pistolet", Vector2i(3, 1)))
-	_lewy.add_child(Motyw.naglowek("Stan zdrowia"))
+	var bronie := HBoxContainer.new()
+	bronie.add_theme_constant_override("separation", 8)
+	_lewy.add_child(bronie)
+	bronie.add_child(_slot("glowna", Vector2i(6, 2)))
+	bronie.add_child(_slot("pistolet", Vector2i(3, 2)))
+	_lewy.add_child(Motyw.naglowek("Stan zdrowia – przeciągnij lek na część ciała"))
 	_info_zdrowie = VBoxContainer.new()
 	_lewy.add_child(_info_zdrowie)
+	_panel_ciala = PanelCiala.new()
+	_panel_ciala.cialo = gracz.cialo if gracz else Cialo.new(Gra.zdrowie)
+	_info_zdrowie.add_child(_panel_ciala)
+	_opis_ciala = Motyw.etykieta("", 12, Motyw.TEKST, Motyw.cond())
+	_opis_ciala.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_opis_ciala.custom_minimum_size = Vector2(300, 18)
+	_info_zdrowie.add_child(_opis_ciala)
 	_info_waga = Motyw.etykieta("", 14, Motyw.TEKST, Motyw.mono())
 	_lewy.add_child(_info_waga)
 	# środek
@@ -263,33 +273,8 @@ func _odswiez() -> void:
 	if not otwarty:
 		return
 	_info_bony.text = "%d bonów" % Gra.bony if tryb_bazy else ""
-	for c in _info_zdrowie.get_children():
-		c.queue_free()
-	var cialo: Cialo = gracz.cialo if gracz else Cialo.new(Gra.zdrowie)
-	for cz in Cialo.MAX:
-		var h := HBoxContainer.new()
-		h.add_child(Motyw.etykieta(Cialo.NAZWY[cz], 13, Motyw.TEKST, Motyw.cond()))
-		h.get_child(0).custom_minimum_size = Vector2(118, 0)
-		var pb := ProgressBar.new()
-		pb.custom_minimum_size = Vector2(90, 12)
-		pb.max_value = Cialo.MAX[cz]
-		pb.value = cialo.hp[cz]
-		pb.show_percentage = false
-		var f := StyleBoxFlat.new()
-		var frac: float = cialo.hp[cz] / Cialo.MAX[cz]
-		f.bg_color = Motyw.ZIELEN if frac > 0.6 else (Motyw.ZOLC if frac > 0.3 else Motyw.CZERWIEN)
-		pb.add_theme_stylebox_override("fill", f)
-		pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		h.add_child(pb)
-		var st := ""
-		if cialo.krwawienie[cz] == 2:
-			st += " KRWAWI!"
-		elif cialo.krwawienie[cz] == 1:
-			st += " krwawi"
-		if cialo.zlamanie[cz]:
-			st += " złamanie"
-		h.add_child(Motyw.etykieta(" %d%s" % [int(cialo.hp[cz]), st], 12, Motyw.CZERWIEN if st != "" else Motyw.TEKST_CIEMNY, Motyw.mono()))
-		_info_zdrowie.add_child(h)
+	if _panel_ciala:
+		_panel_ciala.queue_redraw()
 	var w := ekw.waga()
 	var progi := ["lekki", "obciążony", "przeciążony", "krytyczny"]
 	var p := 0 if w < 18.0 else (1 if w < 28.0 else (2 if w < 40.0 else 3))
@@ -327,17 +312,24 @@ func _process(delta: float) -> void:
 	elif _pojemnik != null and _prawa_ui:
 		_pojemnik.odkryte = _pojemnik.siatka.items.size()
 		_prawa_ui.widoczne = -1
-	# postęp akcji gracza
-	if gracz and not gracz.akcja.is_empty():
-		_postep.visible = true
-		_postep.max_value = gracz.akcja["czas"]
-		_postep.value = gracz.akcja["t"]
-		_postep_txt.text = gracz.akcja["nazwa"] + "  "
-	else:
-		_postep.visible = false
-		_postep_txt.text = ""
+	# postęp akcji gracza: kółko przy kursorze
+	_kolko.ustaw_z_gracza(gracz)
+	_kolko.position = _root.get_local_mouse_position() + Vector2(-34, -34)
+	# panel ciała: opis części pod kursorem, podświetlenie przy przeciąganiu leku
+	if _panel_ciala:
+		var pod := _panel_ciala.czesc_pod(_root.get_global_mouse_position())
+		var lek: bool = not _drag.is_empty() and (_drag["p"] as Przedmiot).typ() == "med"
+		var nowe := pod if lek else ""
+		if nowe != _panel_ciala.podswietl:
+			_panel_ciala.podswietl = nowe
+			_panel_ciala.queue_redraw()
+		_opis_ciala.text = _panel_ciala.opis_czesci(pod) if pod != "" else "Najedź na część ciała, żeby zobaczyć urazy."
+		if Engine.get_process_frames() % 10 == 0:
+			_panel_ciala.queue_redraw()
 	if Input.is_action_just_pressed("napelnij"):
 		napelnij_wszystkie()
+	if Input.is_action_just_pressed("wyrzuc") and _drag.is_empty() and _hover_p != null:
+		_wyrzuc(_hover_p)
 	if not _drag.is_empty():
 		if Input.is_action_just_pressed("przeladuj"):
 			_drag["rot"] = not _drag["rot"]
@@ -405,6 +397,30 @@ func _upusc_drag(anuluj: bool) -> void:
 		return
 	var mysz := _root.get_global_mouse_position()
 	var p: Przedmiot = d["p"]
+	# cel: część ciała (leczenie wybranej części)
+	if _panel_ciala and p.typ() == "med" and gracz and not tryb_bazy:
+		var cz := _panel_ciala.czesc_pod(mysz)
+		if cz != "":
+			var szybki := true
+			if d["z"]["typ"] == "siatka":
+				szybki = ekw.czy_szybka(d["z"]["siatka"])
+			gracz.uzyj_leku(p, szybki, cz)
+			_odswiez()
+			return
+	# poza oknami: wyrzucenie na ziemię
+	var nad_panelem := false
+	for pn in _panele:
+		if pn.get_global_rect().has_point(mysz):
+			nad_panelem = true
+	if not nad_panelem:
+		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and d["z"]["siatka"] == _prawa_siatka):
+			_usun_ze_zrodla(p, d["z"])
+			gracz.upusc(p)
+			Dzwiek.graj("odloz", -8.0)
+			_po_zmianie()
+		else:
+			_odswiez()
+		return
 	# cel: slot
 	for s in _sloty:
 		if s.get_global_rect().has_point(mysz):
@@ -490,6 +506,7 @@ func _polacz(p: Przedmiot, z: Dictionary, q: Przedmiot, ui: SiatkaUI) -> bool:
 			_usun_ze_zrodla(p, z)
 		return true
 	if p.typ() == "amunicja" and q.typ() == "magazynek":
+		_seria_mag = false
 		return _napelnij(q, p, z)
 	if p.typ() == "magazynek" and q.typ() == "bron":
 		var bd: Dictionary = q.defn()["bron"]
@@ -534,7 +551,7 @@ func _szybkie_przeniesienie(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA }
 
 
 func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
@@ -544,6 +561,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 	var t := p.typ()
 	if t == "med" and not tryb_bazy and gracz:
 		_menu.add_item("Użyj", M_UZYJ)
+	if t == "latarka" and not tryb_bazy and gracz:
+		_menu.add_item("Weź do ręki [L]", M_LATARKA)
 	if t == "magazynek":
 		_menu.add_item("Napełnij", M_NAPELNIJ)
 		if p.dane["naboje"] > 0:
@@ -578,7 +597,13 @@ func _menu_akcja(id: int) -> void:
 			var szybki: bool = not (z["typ"] == "siatka" and z["siatka"] == ekw.siatka_plecaka())
 			gracz.uzyj_leku(p, szybki)
 		M_NAPELNIJ:
+			_seria_mag = false
 			_napelnij(p, null, {})
+		M_LATARKA:
+			if gracz:
+				gracz.wez_latarke()
+				zamknij()
+				return
 		M_ROZLADUJ:
 			_rozladuj(p)
 		M_WYJMIJ_MAG:
@@ -611,6 +636,9 @@ func _menu_akcja(id: int) -> void:
 
 ## Napełnia magazynek: z podanego stosu albo z dowolnej pasującej amunicji w ekwipunku (i skrytce w bazie).
 func _napelnij(mag: Przedmiot, stos: Przedmiot, z_stosu: Dictionary) -> bool:
+	if gracz != null and not tryb_bazy and not gracz.akcja.is_empty():
+		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]) + "  [X] przerywa")
+		return true
 	var md: Dictionary = mag.defn()["magazynek"]
 	var wolne: int = int(md["pojemnosc"]) - int(mag.dane["naboje"])
 	if wolne <= 0:
@@ -625,10 +653,12 @@ func _napelnij(mag: Przedmiot, stos: Przedmiot, z_stosu: Dictionary) -> bool:
 			_komunikat("W magazynku jest inna amunicja – najpierw rozładuj")
 			return true
 		var ile: int = mini(wolne, stos.ilosc)
-		_zaplanuj_ladowanie(mag, stos.id, ile, func():
-			stos.ilosc -= ile
+		_zaplanuj_ladowanie(mag, stos.id, ile, func(n: int) -> int:
+			var w: int = mini(n, stos.ilosc)
+			stos.ilosc -= w
 			if stos.ilosc <= 0:
-				_usun_ze_zrodla(stos, z_stosu))
+				_usun_ze_zrodla(stos, z_stosu)
+			return w)
 		return true
 	# z ekwipunku / skrytki
 	var zrodla := ekw.siatki()
@@ -641,26 +671,37 @@ func _napelnij(mag: Przedmiot, stos: Przedmiot, z_stosu: Dictionary) -> bool:
 			if a.typ() == "amunicja" and a.defn()["amunicja"]["kaliber"] == kal and (typ == "" or a.id == typ):
 				var ile2: int = mini(wolne, a.ilosc)
 				var siatka_a: Siatka = s
-				_zaplanuj_ladowanie(mag, a.id, ile2, func():
-					siatka_a.zabierz(a.id, ile2))
+				_zaplanuj_ladowanie(mag, a.id, ile2, func(n: int) -> int:
+					return siatka_a.zabierz(a.id, n))
 				return true
 	_komunikat("Brak amunicji %s" % kal)
 	return true
 
 
+## Ładowanie nabój po naboju (jak w Wardogs): każdy nabój to krok akcji z dźwiękiem.
+## Przerwanie zostawia w magazynku to, co już włożono. zabierz(n) -> ile faktycznie zabrano.
 func _zaplanuj_ladowanie(mag: Przedmiot, amun: String, ile: int, zabierz: Callable) -> void:
-	var wykonaj := func():
-		zabierz.call()
+	if tryb_bazy or gracz == null:
+		var w: int = zabierz.call(ile)
 		mag.dane["amunicja"] = amun
-		mag.dane["naboje"] += ile
+		mag.dane["naboje"] += w
 		ekw.zmieniony.emit()
 		_odswiez()
 		Dzwiek.graj("klik", -10.0)
-	if tryb_bazy or gracz == null:
-		wykonaj.call()
-	else:
-		gracz.zacznij_akcje("Napełnianie magazynka (%d)" % ile, 0.32 * ile, wykonaj)
-		Dzwiek.graj("napelnianie", -8.0)
+		return
+	var na_krok := func():
+		if int(zabierz.call(1)) <= 0:
+			gracz.przerwij_akcje(true)
+			return
+		mag.dane["amunicja"] = amun
+		mag.dane["naboje"] += 1
+		Dzwiek.graj("klik", -12.0, randf_range(1.1, 1.3))
+		ekw.zmieniony.emit()
+	var koniec := func():
+		Dzwiek.graj("napelnianie", -10.0)
+		if _seria_mag:
+			napelnij_wszystkie()
+	gracz.zacznij_akcje(mag.nazwa(), 0.36 * ile, koniec, "magazynek", ile, na_krok)
 
 
 func napelnij_wszystkie() -> void:
@@ -681,8 +722,12 @@ func napelnij_wszystkie() -> void:
 			_napelnij(m, null, {})
 		_odswiez()
 		return
-	# w rajdzie: po kolei, każdy jako akcja
-	_napelnij(mags[0], null, {})
+	# w rajdzie: po kolei, każdy jako akcja; kolejny startuje po zakończeniu poprzedniego
+	if gracz.akcja.is_empty():
+		_seria_mag = true
+		_napelnij(mags[0], null, {})
+		if gracz.akcja.is_empty():
+			_seria_mag = false
 
 
 func _rozladuj(p: Przedmiot) -> void:
@@ -712,7 +757,30 @@ func _rozladuj(p: Przedmiot) -> void:
 
 # ------------------------------------------------------------------ podpowiedzi
 
+## Wyrzuca przedmiot na ziemię (rajd). Szuka, gdzie leży.
+func _wyrzuc(p: Przedmiot) -> void:
+	if tryb_bazy or gracz == null:
+		_komunikat("W schronie nic nie wyrzucasz – sprzedaj handlarzowi")
+		return
+	var z := {}
+	for sl in Ekwipunek.SLOTY:
+		if ekw.sloty[sl] == p:
+			z = {"typ": "slot", "slot": sl}
+	for s in ekw.siatki():
+		if (s as Siatka).zawiera(p):
+			z = {"typ": "siatka", "siatka": s}
+	if z.is_empty():
+		return
+	_usun_ze_zrodla(p, z)
+	gracz.upusc(p)
+	_hover_p = null
+	_tooltip.visible = false
+	Dzwiek.graj("odloz", -8.0)
+	_po_zmianie()
+
+
 func _hover(p: Przedmiot) -> void:
+	_hover_p = p
 	if p == null:
 		_tooltip.visible = false
 		return
@@ -725,7 +793,7 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 	var d := p.defn()
 	var t := "[b]%s[/b]\n" % p.nazwa()
 	var typy := {"bron": "Broń", "magazynek": "Magazynek", "amunicja": "Amunicja", "med": "Środek medyczny",
-		"pojemnik": "Pojemnik", "pancerz": "Ochrona", "lup": "Łup", "klucz": "Klucz"}
+		"pojemnik": "Pojemnik", "pancerz": "Ochrona", "lup": "Łup", "klucz": "Klucz", "latarka": "Wyposażenie"}
 	t += "[color=#8c8670]%s · %.2f kg · %d bonów[/color]\n" % [typy.get(d.get("typ", ""), ""), p.waga(), p.wartosc()]
 	match d.get("typ", ""):
 		"bron":

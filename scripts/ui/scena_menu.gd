@@ -8,7 +8,7 @@ var _potw: Control
 
 
 func _ready() -> void:
-	var w := Widok3D.zbuduj(self, 0.12, 0.05)
+	var w := Widok3D.zbuduj(self, 0.08, 0.05)
 	var swiat: Node3D = w["swiat"]
 	var klatka: Node3D = load("res://assets/models/klatka_schodowa.glb").instantiate()
 	swiat.add_child(klatka)

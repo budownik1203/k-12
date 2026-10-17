@@ -33,8 +33,8 @@ const HANDLARZE := {
 	"posrednik": {
 		"nazwa": "Pośrednik", "opis": "skup i sprzedaż, znajomości u Szabrowników",
 		"powitania": ["Wszystko ma swoją cenę. Ty też, ale na razie kupuję zegarki.", "Pochodzenie towaru mnie nie interesuje. Stan – owszem.", "Dla stałych klientów rabat. Ty jeszcze nie jesteś stały. Ani żywy na dłużej."],
-		"oferta": [["worek", 1], ["kamizelka_wedkarska", 1], ["klucz_piwnica", 1], ["konserwa", 1], ["papierosy", 1]],
-		"skupuje": ["lup", "klucz", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.45, "skup_lup": 0.7,
+		"oferta": [["worek", 1], ["kamizelka_wedkarska", 1], ["latarka", 1], ["klucz_piwnica", 1], ["konserwa", 1], ["papierosy", 1]],
+		"skupuje": ["lup", "klucz", "latarka", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.45, "skup_lup": 0.7,
 	},
 }
 

@@ -75,7 +75,10 @@
     {"id": "spirytus", "nazwa": "Spirytus salicylowy", "typ": "lup", "w": 1, "h": 1, "waga": 0.2, "cena": 1800, "opis": "Do użytku zewnętrznego. W strefie wszystko jest zewnętrzne."},
 
     {"id": "klucz_piwnica", "nazwa": "Klucz do piwnicy nr 7", "typ": "klucz", "w": 1, "h": 1, "waga": 0.02, "cena": 5000,
-     "opis": "Otwiera wyjście przez piwnice. Piwnica nr 7 nie figuruje w dokumentacji budynku.", "klucz": {"otwiera": "wyjscie_piwnica", "uzycia": 3}}
+     "opis": "Otwiera wyjście przez piwnice. Piwnica nr 7 nie figuruje w dokumentacji budynku.", "klucz": {"otwiera": "wyjscie_piwnica", "uzycia": 3}},
+
+    {"id": "latarka", "nazwa": "Latarka KZ-3", "typ": "latarka", "w": 2, "h": 1, "waga": 0.35, "cena": 900,
+     "opis": "Trzymana w lewej ręce, sama albo pod pistoletem. Świeci, dopóki ktoś nie zobaczy, skąd świeci."}
   ],
 
   "tabele_lootu": {
@@ -85,7 +88,7 @@
     "skrzynia": [["a_762", 14], ["a_9x18", 16], ["a_12", 14], ["mag_kb47", 6], ["mag_pm63", 6], ["mag_pw9", 8], ["przewody", 10], ["klucz_nastawny", 8], ["akumulator", 4], ["nic", 20]],
     "skrzynia_wojskowa": [["a_762", 20], ["a_762bp", 6], ["mag_kb47", 12], ["kb47", 3], ["pm63", 4], ["opatrunek", 10], ["apteczka", 10], ["helm_wz67", 5], ["kamizelka_kl2", 4], ["szyna", 8], ["nic", 12]],
     "apteczka_scienna": [["bandaz", 30], ["opatrunek", 12], ["bolostop", 18], ["apteczka", 10], ["szyna", 10], ["spirytus", 10], ["nic", 20]],
-    "regal": [["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["nic", 30]]
+    "regal": [["latarka", 5], ["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["nic", 30]]
   },
 
   "frakcje": {

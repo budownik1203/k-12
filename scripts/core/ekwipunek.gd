@@ -168,6 +168,38 @@ func znajdz_med(efekty: Array) -> Dictionary:
 	return {}
 
 
+func znajdz_id(id: String) -> Dictionary:
+	for s in siatki():
+		for e in (s as Siatka).items:
+			var p: Przedmiot = e["p"]
+			if p.id == id:
+				return {"p": p, "siatka": s, "szybki": czy_szybka(s)}
+	return {}
+
+
+## Pasek szybkiego dostępu (klawisze 4-9): środki medyczne z kamizelki i kieszeni,
+## jeden wpis na rodzaj, w stałej kolejności. Zmienia się razem z ekwipunkiem.
+func pasek() -> Array:
+	var kolejnosc := ["bandaz", "opatrunek", "apteczka", "szyna", "bolostop"]
+	var znalezione := {}
+	for s in siatki(true):
+		for e in (s as Siatka).items:
+			var p: Przedmiot = e["p"]
+			if p.typ() != "med":
+				continue
+			if not znalezione.has(p.id):
+				znalezione[p.id] = {"id": p.id, "p": p, "ilosc": 0}
+			znalezione[p.id]["ilosc"] += 1
+	var out := []
+	for id in kolejnosc:
+		if znalezione.has(id):
+			out.append(znalezione[id])
+			znalezione.erase(id)
+	for id in znalezione:
+		out.append(znalezione[id])
+	return out.slice(0, 6)
+
+
 func znajdz_klucz(otwiera: String) -> Dictionary:
 	for s in siatki():
 		for e in (s as Siatka).items:

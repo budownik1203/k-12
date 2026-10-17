@@ -14,8 +14,10 @@ var _bron: Label
 var _wytrz: ProgressBar
 var _waga: Label
 var _interakcja: Label
-var _akcja: ProgressBar
-var _akcja_txt: Label
+var _kolko: KolkoPostepu
+var _pasek: Control
+var _znacznik := 0.0          # znacznik trafienia przy celowniku
+var _znacznik_zabity := false
 var _komunikaty: VBoxContainer
 var _napisy: VBoxContainer
 var _wyjscia: Label
@@ -48,7 +50,8 @@ func _ready() -> void:
 	_cialo.offset_top = -150
 	_cialo.offset_left = 24
 	_root.add_child(_cialo)
-	_stan = _lbl(Vector2(92, -150), 13, Motyw.CZERWIEN, Control.PRESET_BOTTOM_LEFT)
+	_stan = _lbl(Vector2(92, -150), 14, Motyw.CZERWIEN, Control.PRESET_BOTTOM_LEFT)
+	_stan.add_theme_font_override("font", Motyw.mono_b())
 	_wytrz = ProgressBar.new()
 	_wytrz.show_percentage = false
 	_wytrz.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -62,8 +65,8 @@ func _ready() -> void:
 	# prawy dół: broń
 	_bron = Label.new()
 	_bron.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_bron.offset_left = -360
-	_bron.offset_top = -58
+	_bron.offset_left = -380
+	_bron.offset_top = -78
 	_bron.offset_right = -24
 	_bron.offset_bottom = -20
 	_bron.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -71,18 +74,33 @@ func _ready() -> void:
 	_bron.add_theme_font_size_override("font_size", 14)
 	_bron.add_theme_color_override("font_color", Motyw.TEKST)
 	_root.add_child(_bron)
-	# środek dół: interakcja i postęp
-	_interakcja = _lbl_srodek(-130, 16, Motyw.TEKST)
-	_akcja_txt = _lbl_srodek(-100, 13, Motyw.ZOLC)
-	_akcja = ProgressBar.new()
-	_akcja.show_percentage = false
-	_akcja.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_akcja.offset_left = -110
-	_akcja.offset_right = 110
-	_akcja.offset_top = -80
-	_akcja.offset_bottom = -72
-	_akcja.visible = false
-	_root.add_child(_akcja)
+	# środek: interakcja pod celownikiem, kółko postępu akcji, pasek szybkiego dostępu na dole
+	_interakcja = Label.new()
+	_interakcja.set_anchors_preset(Control.PRESET_CENTER)
+	_interakcja.offset_left = -300
+	_interakcja.offset_right = 300
+	_interakcja.offset_top = 34
+	_interakcja.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interakcja.add_theme_font_override("font", Motyw.cond())
+	_interakcja.add_theme_font_size_override("font_size", 16)
+	_interakcja.add_theme_color_override("font_color", Motyw.TEKST)
+	_interakcja.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_interakcja.add_theme_constant_override("shadow_offset_x", 1)
+	_interakcja.add_theme_constant_override("shadow_offset_y", 1)
+	_root.add_child(_interakcja)
+	_kolko = KolkoPostepu.new()
+	_kolko.set_anchors_preset(Control.PRESET_CENTER)
+	_kolko.offset_top = 80
+	_kolko.visible = false
+	_root.add_child(_kolko)
+	_pasek = Pasek.new()
+	_pasek.hud = self
+	_pasek.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_pasek.offset_left = -240
+	_pasek.offset_right = 240
+	_pasek.offset_top = -64
+	_pasek.offset_bottom = -12
+	_root.add_child(_pasek)
 	# komunikaty (lewa góra)
 	_komunikaty = VBoxContainer.new()
 	_komunikaty.position = Vector2(24, 20)
@@ -93,8 +111,8 @@ func _ready() -> void:
 	_napisy.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_napisy.offset_left = -300
 	_napisy.offset_right = 300
-	_napisy.offset_top = -230
-	_napisy.offset_bottom = -150
+	_napisy.offset_top = -250
+	_napisy.offset_bottom = -170
 	_napisy.alignment = BoxContainer.ALIGNMENT_END
 	_napisy.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_napisy)
@@ -164,13 +182,15 @@ func _process(delta: float) -> void:
 	var st := []
 	var k := c.krwawi()
 	if k == 2:
-		st.append("CIĘŻKIE KRWAWIENIE [5]")
+		st.append("CIĘŻKIE KRWAWIENIE")
 	elif k == 1:
-		st.append("KRWAWIENIE [4]")
+		st.append("KRWAWIENIE")
 	if c.zlamanie["nogi"] or c.zlamanie["rece"]:
-		st.append("ZŁAMANIE [7]")
+		st.append("ZŁAMANIE")
 	if c.bol():
-		st.append("BÓL [8]")
+		st.append("BÓL")
+	if c.przeciwbol > 0.0:
+		st.append("bólostop %ds" % int(c.przeciwbol))
 	_stan.text = "\n".join(st)
 	_wytrz.value = gracz.wytrzymalosc
 	_wytrz.visible = gracz.wytrzymalosc < 99.0
@@ -178,25 +198,39 @@ func _process(delta: float) -> void:
 	_waga.text = "%.1f kg%s" % [gracz.waga(), ["", " · obciążony", " · PRZECIĄŻONY", " · KRYTYCZNE OBCIĄŻENIE"][prog]]
 	# broń
 	var b := gracz.bron
+	var linie_b := []
 	if b.przedmiot:
 		var tryb := ""
 		var tryby: Array = b.bd["tryby"]
 		if tryby.size() > 1:
 			tryb = "  [%s]" % ("CIĄGŁY" if tryby[b.przedmiot.dane["tryb"]] == "auto" else "POJ.")
-		_bron.text = b.przedmiot.nazwa() + tryb + ("\nprzeładowanie..." if b.stan == "przeladowanie" else "")
+		linie_b.append(b.przedmiot.nazwa() + tryb)
+		if b.bd.has("magazynki"):
+			var pod_reka := 0
+			for s in gracz.ekw.siatki(true):
+				for e in (s as Siatka).items:
+					var m: Przedmiot = e["p"]
+					if m.id in b.bd["magazynki"] and m.dane["naboje"] > 0:
+						pod_reka += 1
+			linie_b.append("zapas: %d mag. pod ręką" % pod_reka)
+		if b.stan == "przeladowanie":
+			linie_b.append("przeładowanie...")
+		elif b.stan == "ladowanie_wewn":
+			linie_b.append("ładowanie...")
 	else:
-		_bron.text = "bez broni"
+		linie_b.append("latarka w ręce" if gracz.latarka_w_rece else "bez broni")
+	if gracz.latarka_w_rece:
+		linie_b.append("latarka: " + ("WŁ" if gracz.latarka_wlaczona else "wył") + "  [L]")
+	_bron.text = "\n".join(linie_b)
 	# interakcja
-	_interakcja.text = ("[F] " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
-	# akcja
-	if not gracz.akcja.is_empty():
-		_akcja.visible = true
-		_akcja.max_value = gracz.akcja["czas"]
-		_akcja.value = gracz.akcja["t"]
-		_akcja_txt.text = gracz.akcja["nazwa"]
+	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
+	# akcja: kółko pod celownikiem (w ekwipunku kółko jest przy kursorze)
+	if not Sterowanie.blokada:
+		_kolko.ustaw_z_gracza(gracz)
 	else:
-		_akcja.visible = false
-		_akcja_txt.text = ""
+		_kolko.visible = false
+	_znacznik = maxf(0.0, _znacznik - delta * (2.5 if _znacznik_zabity else 5.0))
+	_pasek.queue_redraw()
 	# czas rajdu
 	if rajd:
 		var t: float = rajd.czas
@@ -289,6 +323,13 @@ func napis_wroga(kto: String, tekst: String, pos: Vector3) -> void:
 	tw.tween_callback(l.queue_free)
 
 
+## Znacznik trafienia przy celowniku (wołany przez broń gracza).
+func znacznik_trafienia(zabity: bool, glowa := false) -> void:
+	_znacznik = 1.0
+	_znacznik_zabity = zabity
+	Dzwiek.graj("klik", -6.0 if zabity else -12.0, 2.2 if not glowa else 2.8)
+
+
 func _trafiony(kier: Vector3, _czesc: String) -> void:
 	_trafienie = 1.0
 	var lok := gracz.global_basis.inverse() * kier
@@ -308,13 +349,67 @@ class Kropka:
 		if g == null or g.cialo.martwy or Sterowanie.blokada:
 			return
 		var c := size * 0.5
-		if g.bron.ads < 0.5:
+		if g.bron.ads < 0.5 and g.bron.przedmiot != null:
 			draw_rect(Rect2(c - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.85, 0.82, 0.7, 0.7))
+		if hud._znacznik > 0.0:
+			var kz := Color(0.9, 0.15, 0.1, hud._znacznik) if hud._znacznik_zabity else Color(0.95, 0.92, 0.85, hud._znacznik)
+			var r1 := 6.0
+			var r2 := 13.0 if hud._znacznik_zabity else 10.0
+			for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				draw_line(c + d * r1, c + d * r2, kz, 2.0)
 		if hud._trafienie > 0.0:
 			var a: float = hud._trafienie_kier
 			var p := c + Vector2(sin(a), -cos(a)) * 110.0
 			var kol := Color(0.8, 0.1, 0.05, hud._trafienie)
 			draw_line(p - Vector2(cos(a), sin(a)) * 26, p + Vector2(cos(a), sin(a)) * 26, kol, 4.0)
+
+
+## Pasek szybkiego dostępu: [1] broń główna, [2] pistolet, [3] latarka, [4-9] leki z kamizelki i kieszeni.
+class Pasek:
+	extends Control
+	var hud
+	const S := 46.0
+	const ODST := 6.0
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var g: Gracz = hud.gracz
+		if g == null or g.cialo.martwy:
+			return
+		var wpisy := []
+		wpisy.append([1, g.ekw.sloty["glowna"].id if g.ekw.sloty["glowna"] else "", 0, g.bron.przedmiot != null and g.bron.przedmiot == g.ekw.sloty["glowna"]])
+		wpisy.append([2, g.ekw.sloty["pistolet"].id if g.ekw.sloty["pistolet"] else "", 0, g.bron.przedmiot != null and g.bron.przedmiot == g.ekw.sloty["pistolet"]])
+		wpisy.append([3, "latarka" if not g.ekw.znajdz_id("latarka").is_empty() else "", 0, g.latarka_w_rece])
+		var pasek: Array = g.ekw.pasek()
+		for i in 6:
+			if i < pasek.size():
+				wpisy.append([i + 4, pasek[i]["id"], pasek[i]["ilosc"], false])
+			else:
+				wpisy.append([i + 4, "", 0, false])
+		var szer := wpisy.size() * S + (wpisy.size() - 1) * ODST + 10.0
+		var x := (size.x - szer) * 0.5
+		var f := Motyw.mono_b()
+		for i in wpisy.size():
+			var w: Array = wpisy[i]
+			if i == 3:
+				x += 10.0   # przerwa między bronią a lekami
+			var r := Rect2(x, 0, S, S)
+			var pusty: bool = w[1] == ""
+			draw_rect(r, Color(0.05, 0.05, 0.045, 0.55 if pusty else 0.78))
+			draw_rect(r, Color(0.86, 0.72, 0.36) if w[3] else Color(0.35, 0.33, 0.28, 0.8), false, 2.0 if w[3] else 1.0)
+			if not pusty:
+				var tex: Texture2D = Dane.ikona(w[1])
+				if tex:
+					var ts := tex.get_size()
+					var sk := minf((S - 8.0) / ts.x, (S - 8.0) / ts.y)
+					var rozm := ts * sk
+					draw_texture_rect(tex, Rect2(r.position + (r.size - rozm) * 0.5, rozm), false)
+				if int(w[2]) > 1:
+					draw_string(f, r.position + Vector2(S - 16, S - 4), "x%d" % int(w[2]), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.95, 0.92, 0.8))
+			draw_string(f, r.position + Vector2(3, 12), str(w[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.86, 0.72, 0.36) if not pusty else Color(0.4, 0.38, 0.33))
+			x += S + ODST
 
 
 class Sylwetka:

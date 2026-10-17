@@ -116,7 +116,7 @@ func _halas(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 		return
 	if stan != "wedrowka" or global_position.distance_to(pos) > zasieg:
 		return
-	if Balistyka.odleglosc_dzwieku(get_world_3d(), pos, global_position) < zasieg * 0.8:
+	if Balistyka.odleglosc_dzwieku(get_world_3d(), pos, global_position) < zasieg * 0.55:
 		gracz = zrodlo
 		cel = pos
 		_decyzja_t = 6.0

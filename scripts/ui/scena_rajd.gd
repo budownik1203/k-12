@@ -111,7 +111,7 @@ func _process(delta: float) -> void:
 		var mapa := swiat.get_world_3d().navigation_map
 		var ok := 0
 		for k in info["komorki"]:
-			var c := Vector3(k.x * GeneratorBiomu.C + 3.0, 0.0, k.y * GeneratorBiomu.C + 3.0)
+			var c := gen._srodek(k)
 			var cel := NavigationServer3D.map_get_closest_point(mapa, c)
 			var q := NavigationPathQueryParameters3D.new()
 			q.map = mapa
@@ -123,7 +123,7 @@ func _process(delta: float) -> void:
 			NavigationServer3D.query_path(q, wynik)
 			var sciezka := wynik.path
 			var kon: Vector3 = sciezka[sciezka.size() - 1] if sciezka.size() > 0 else Vector3(-99, 0, -99)
-			if int(kon.x / GeneratorBiomu.C) == k.x and int(kon.z / GeneratorBiomu.C) == k.y:
+			if (info["komorki"][k]["rect"] as Rect2).grow(0.4).has_point(Vector2(kon.x, kon.z)):
 				ok += 1
 			else:
 				print("  nieosiągalne: %s typ=%s cel=%s koniec=%s" % [k, info["komorki"][k]["typ"], cel, sciezka[sciezka.size() - 1] if sciezka.size() > 0 else "brak"])
@@ -137,21 +137,8 @@ func _process(delta: float) -> void:
 		if aa.has("--drzwi"):
 			for kk in gen.krawedzie:
 				var e: Dictionary = gen.krawedzie[kk]
-				var a: Vector2i = e["a"]
-				var b: Vector2i = e["b"]
-				var srodek: float = (GeneratorBiomu.C * 0.5) if e["otwarte"] else (e["drzwi"] + GeneratorBiomu.DRZWI_W * 0.5)
-				var p1: Vector3
-				var p2: Vector3
-				if a.x != b.x:
-					var x := maxi(a.x, b.x) * GeneratorBiomu.C
-					var z := a.y * GeneratorBiomu.C + srodek
-					p1 = Vector3(x - 1.0, 0, z)
-					p2 = Vector3(x + 1.0, 0, z)
-				else:
-					var z2 := maxi(a.y, b.y) * GeneratorBiomu.C
-					var x2 := a.x * GeneratorBiomu.C + srodek
-					p1 = Vector3(x2, 0, z2 - 1.0)
-					p2 = Vector3(x2, 0, z2 + 1.0)
+				var p1: Vector3 = e["pa"]
+				var p2: Vector3 = e["pb"]
 				var q1 := NavigationServer3D.map_get_closest_point(mapa, p1)
 				var q2 := NavigationServer3D.map_get_closest_point(mapa, p2)
 				var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
@@ -160,20 +147,7 @@ func _process(delta: float) -> void:
 					print("  DRZWI ZABLOKOWANE %s p1=%s->%s p2=%s->%s" % [kk, p1, q1, p2, q2])
 		if aa.has("--pokoje"):
 			for k in info["komorki"]:
-				var pts := []
-				for d in GeneratorBiomu.DIRS:
-					var n: Vector2i = k + d
-					var kk2 := gen._k(k, n)
-					if not gen.krawedzie.has(kk2):
-						continue
-					var e: Dictionary = gen.krawedzie[kk2]
-					var srodek: float = (GeneratorBiomu.C * 0.5) if e["otwarte"] else (e["drzwi"] + GeneratorBiomu.DRZWI_W * 0.5)
-					var c := Vector3(k.x * GeneratorBiomu.C, 0, k.y * GeneratorBiomu.C)
-					match d:
-						Vector2i(1, 0): pts.append(c + Vector3(GeneratorBiomu.C - 1.0, 0, srodek))
-						Vector2i(-1, 0): pts.append(c + Vector3(1.0, 0, srodek))
-						Vector2i(0, 1): pts.append(c + Vector3(srodek, 0, GeneratorBiomu.C - 1.0))
-						Vector2i(0, -1): pts.append(c + Vector3(srodek, 0, 1.0))
+				var pts: Array = gen.punkty_drzwi(k)
 				for i in range(1, pts.size()):
 					var q1 := NavigationServer3D.map_get_closest_point(mapa, pts[0])
 					var q2 := NavigationServer3D.map_get_closest_point(mapa, pts[i])
@@ -194,7 +168,7 @@ func _process(delta: float) -> void:
 		if aa.has("--krawedzie"):
 			for kk in gen.krawedzie:
 				var e: Dictionary = gen.krawedzie[kk]
-				print("  krawedz %s drzwi=%.2f otwarte=%s" % [kk, e["drzwi"], e["otwarte"]])
+				print("  krawedz %s c=%.2f otwarte=%s" % [kk, e["c"], e["otwarte"]])
 		if aa.has("--blizej"):
 			var pp := Vector3(float(aa[aa.find("--blizej") + 1]), 0, float(aa[aa.find("--blizej") + 2]))
 			for n in swiat.get_children():
@@ -276,19 +250,25 @@ func otworz_pojemnik(p: Node) -> void:
 func _zrzuty(katalog: String) -> void:
 	DirAccess.make_dir_recursive_absolute(katalog)
 	gracz.sterowanie = false
+	for f in 5:
+		await get_tree().process_frame
+	# zrzuty bez walki: przeciwnicy zamrożeni
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
 	var kam := gracz.kamera
 	var klucze: Array = info["komorki"].keys()
 	klucze.sort_custom(func(a, b): return info["komorki"][a]["glebokosc"] < info["komorki"][b]["glebokosc"])
 	var n := 0
 	for k in klucze.slice(0, 8):
-		var c := Vector3(k.x * GeneratorBiomu.C + 0.9, 0.05, k.y * GeneratorBiomu.C + 0.9)
+		var rr: Rect2 = info["komorki"][k]["rect"]
+		var c := Vector3(rr.position.x + 0.9, 0.05, rr.position.y + 0.9)
 		gracz.global_position = c
 		gracz.rotation.y = -PI * 0.75
 		if info["komorki"][k]["typ"] == "korytarz":
 			# w korytarzu: z wejścia jednego ramienia wzdłuż korytarza
 			var ram: Array = gen._ramiona(k)
 			var d: Vector2i = ram[n % ram.size()]
-			gracz.global_position = Vector3(k.x * GeneratorBiomu.C + 3.0 - d.x * 2.6, 0.05, k.y * GeneratorBiomu.C + 3.0 - d.y * 2.6)
+			gracz.global_position = gen._srodek(k) + Vector3(-d.x * 1.2, 0.05, -d.y * 1.2)
 			gracz.rotation.y = atan2(-float(d.x), -float(d.y))
 		gracz.latarka.visible = n % 3 == 2
 		if n == 3:
@@ -306,7 +286,11 @@ func _zrzuty(katalog: String) -> void:
 	# postacie: pies i szabrownik w oświetlonym pomieszczeniu startowym
 	gracz.global_position = info["start"]
 	gracz.rotation.y = info["start_rot"]
-	gracz.latarka.visible = true
+	if Gra.ekw.znajdz_id("latarka").is_empty():
+		Gra.ekw.dodaj(Przedmiot.nowy("latarka"))
+	if Gra.ekw.sloty["pistolet"] == null:
+		Gra.ekw.sloty["pistolet"] = Gra.nowy_naladowany("pw9", "a_9x18")
+	gracz.wez_latarke()
 	var przod := -gracz.global_basis.z
 	var pies := Fauna.new()
 	swiat.add_child(pies)
@@ -329,6 +313,38 @@ func _zrzuty(katalog: String) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("postacie.png"))
+	# akcje: napełnianie magazynka (kółko) i bandażowanie (animacja rąk)
+	if pies:
+		pies.queue_free()
+	gracz.zacznij_akcje("Magazynek PW-9", 3.0, func(): pass, "magazynek", 8, func(): pass)
+	for f in 40:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("akcja_magazynek.png"))
+	gracz.przerwij_akcje()
+	gracz.zacznij_akcje("Bandaż → nogi", 3.0, func(): pass, "leczenie")
+	for f in 40:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("akcja_leczenie.png"))
+	gracz.przerwij_akcje()
+	# latarka w ciemności: gasimy lampy
+	for l in info["lampy"]:
+		(l as Node).set_process(false)
+		(l as Light3D).light_energy = 0.0
+	if wr:
+		wr.queue_free()
+	for f in 20:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("latarka_pistolet.png"))
+	gracz.wez_latarke(true)
+	for f in 30:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("latarka_sama.png"))
+	gracz.cialo.obrazenia("nogi", 30.0)
+	gracz.cialo.krwawienie["rece"] = 1
 	# ekran ekwipunku z pojemnikiem
 	var pojemniki := swiat.get_children().filter(func(x): return x is Pojemnik)
 	if not pojemniki.is_empty() and ekran_ekw:

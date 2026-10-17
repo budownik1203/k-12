@@ -3,10 +3,10 @@ extends RefCounted
 ## Buduje widok 3D w niskiej rozdzielczości (SubViewport skalowany bez wygładzania) z post-processem PS1.
 ## Interfejs (HUD, ekwipunek) rysuje się poza nim w pełnej rozdzielczości.
 
-const POMNIEJSZENIE := 3
+const POMNIEJSZENIE := 2   # 1/2 rozdzielczości: wciąż PS1, ale cel widać na kilkanaście metrów
 
 
-static func zbuduj(rodzic: Node, mgla := 0.2, ambient := 0.045) -> Dictionary:
+static func zbuduj(rodzic: Node, mgla := 0.1, ambient := 0.045) -> Dictionary:
 	var kont := SubViewportContainer.new()
 	kont.name = "Widok3D"
 	kont.stretch = true

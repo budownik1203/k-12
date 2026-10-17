@@ -7,9 +7,9 @@ signal komunikat(tekst: String)
 signal zginal(przyczyna: String)
 signal trafiony_sygnal(kierunek: Vector3, czesc: String)
 
-const PREDKOSC_CHOD := 2.7
-const PREDKOSC_BIEG := 4.9
-const PREDKOSC_KUC := 1.35
+const PREDKOSC_CHOD := 2.45
+const PREDKOSC_BIEG := 4.5
+const PREDKOSC_KUC := 1.2
 const WYS_STOJ := 1.62
 const WYS_KUC := 0.98
 const MASKA_INTERAKCJI := Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_INTERAKCJE
@@ -44,6 +44,13 @@ var _w_powietrzu := false
 var _bol_t := 0.0
 var _trafienie_shake := 0.0
 var _biegnie := false
+var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
+var latarka_wlaczona := true
+var _kop := 0.0                 # kopnięcie kamery po strzale
+var _bob_t := 0.0
+var _bob_amp := 0.0
+var _ladowanie := 0.0        # ugięcie kamery po wylądowaniu
+var _przechyl := 0.0
 
 
 func _init() -> void:
@@ -89,7 +96,7 @@ func _ready() -> void:
 	kamera.current = true
 	glowa.add_child(kamera)
 	latarka = SpotLight3D.new()
-	latarka.position = Vector3(0.15, -0.15, 0)
+	latarka.position = Vector3(-0.08, -0.14, -0.15)
 	latarka.light_color = Color(1.0, 0.94, 0.8)
 	latarka.light_energy = 2.6
 	latarka.spot_range = 16.0
@@ -127,7 +134,41 @@ func _wybierz_bron(slot: String) -> void:
 		bron.ustaw(null)
 		return
 	aktywny_slot = slot
-	bron.ustaw(ekw.sloty[slot])
+	var p: Przedmiot = ekw.sloty.get(slot) if slot != "" else null
+	# latarka zostaje w ręce tylko z pistoletem (karabin trzyma się oburącz)
+	if p != null and p.defn()["bron"]["slot"] != "pistolet":
+		latarka_w_rece = false
+	if latarka_w_rece and ekw.znajdz_id("latarka").is_empty():
+		latarka_w_rece = false
+	bron.ustaw(p, latarka_w_rece)
+	_odswiez_latarke()
+	Dzwiek.graj("klik", -14.0, 0.7)
+
+
+func _odswiez_latarke() -> void:
+	latarka.visible = latarka_w_rece and latarka_wlaczona and not tryb_bazy
+	latarka.position = Vector3(-0.03, -0.17, -0.15) if bron.przedmiot != null else Vector3(-0.09, -0.14, -0.15)
+
+
+## Wyciąga latarkę: z pistoletem (gdy jest) albo samą. sama=true wymusza samą latarkę.
+func wez_latarke(sama := false) -> void:
+	if ekw.znajdz_id("latarka").is_empty():
+		komunikat.emit("Nie masz latarki")
+		return
+	latarka_w_rece = true
+	latarka_wlaczona = true
+	if not sama and ekw.sloty["pistolet"] != null:
+		_wybierz_bron("pistolet")
+	elif not sama and bron.przedmiot != null and bron.jest_pistolet():
+		_wybierz_bron(aktywny_slot)
+	else:
+		_wybierz_bron("")
+	Dzwiek.graj("klik", -8.0)
+
+
+## Kopnięcie kamery przy strzale (fov i drżenie), silniejsze dla mocniejszej broni.
+func kopniecie(sila: float) -> void:
+	_kop = minf(1.5, _kop + 0.35 + sila * 0.09)
 
 
 func waga() -> float:
@@ -163,8 +204,22 @@ func _physics_process(delta: float) -> void:
 	_interakcje(we_aktywne)
 	_bron(delta, we_aktywne)
 	if we_aktywne and Input.is_action_just_pressed("latarka"):
-		latarka.visible = not latarka.visible
-		Dzwiek.graj("klik", -10.0)
+		if latarka_w_rece:
+			latarka_wlaczona = not latarka_wlaczona
+			_odswiez_latarke()
+			Dzwiek.graj("klik", -10.0)
+		else:
+			wez_latarke()
+	# latarka w dłoni kołysze się razem z bronią
+	if latarka.visible:
+		latarka.rotation = Vector3(-bron._sway.y * 3.0, -bron._sway.x * 3.0, 0) + Vector3(bron._kick_rot.x * 0.3, 0, 0)
+	# przerwanie akcji: X, strzał, zmiana broni
+	if not akcja.is_empty():
+		var przerwij := Input.is_action_just_pressed("przerwij")
+		if we_aktywne and (Input.is_action_just_pressed("strzal") or Input.is_action_just_pressed("bron1") or Input.is_action_just_pressed("bron2") or Input.is_action_just_pressed("bron3")):
+			przerwij = true
+		if przerwij:
+			przerwij_akcje(true)
 
 
 func _rozgladanie(delta: float, aktywne: bool) -> void:
@@ -185,7 +240,8 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 		_bol_t += delta
 		drzenie = Vector2(sin(_bol_t * 1.7) * 0.4 + sin(_bol_t * 4.3) * 0.25, cos(_bol_t * 1.3) * 0.35) * deg_to_rad(1.2)
 	_trafienie_shake = maxf(0.0, _trafienie_shake - delta * 3.0)
-	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _trafienie_shake * deg_to_rad(2.0)
+	_kop = move_toward(_kop, 0.0, delta * 7.0)
+	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * (_trafienie_shake * deg_to_rad(2.0) + _kop * deg_to_rad(0.35))
 	glowa.rotation.x = _pitch + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
 	glowa.rotation.y = deg_to_rad(_odrzut.x) + drzenie.x + shake.x
 	# wychylenie
@@ -196,10 +252,21 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 		cel_w *= 0.3
 	wychylenie = move_toward(wychylenie, cel_w, delta * 4.0)
 	var wys: float = lerpf(WYS_STOJ, WYS_KUC, kucanie)
-	glowa.position = Vector3(wychylenie * 0.32, wys - absf(wychylenie) * 0.06, 0)
-	kamera.rotation.z = -wychylenie * deg_to_rad(11)
+	# kołysanie głowy w rytm kroków, przechył przy ruchu w bok, ugięcie po lądowaniu
+	var pozioma := Vector2(velocity.x, velocity.z).length()
+	var naziemi := is_on_floor()
+	_bob_amp = move_toward(_bob_amp, clampf(pozioma / PREDKOSC_BIEG, 0.0, 1.0) if naziemi else 0.0, delta * 3.0)
+	_bob_t += delta * (5.2 + pozioma * 1.25)
+	var waga_mn := 1.0 + prog_obciazenia() * 0.25
+	var bob_y := -absf(sin(_bob_t)) * 0.055 * _bob_amp * waga_mn * (1.0 - bron.ads * 0.7)
+	var bob_x := sin(_bob_t) * 0.03 * _bob_amp * (1.0 - bron.ads * 0.7)
+	var bok := (global_basis.inverse() * velocity).x
+	_przechyl = lerpf(_przechyl, -bok * 0.012, minf(1.0, delta * 5.0))
+	_ladowanie = move_toward(_ladowanie, 0.0, delta * 0.6)
+	glowa.position = Vector3(wychylenie * 0.32 + bob_x, wys - absf(wychylenie) * 0.06 + bob_y - _ladowanie, 0)
+	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp
 	var fov_baza := float(Gra.ustawienia.get("fov", 75.0))
-	kamera.fov = lerpf(fov_baza, fov_baza * 0.8, bron.ads)
+	kamera.fov = lerpf(fov_baza, fov_baza * 0.8, bron.ads) + _kop * 2.2
 
 
 func _sciana_przy_wychyleniu(strona: float) -> bool:
@@ -243,15 +310,25 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	else:
 		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0))
 	var cel := (global_basis * kier.normalized()) * v
-	# bezwładność zależna od wagi
-	var przysp: float = [11.0, 8.0, 5.5, 3.5][prog] if is_on_floor() else 1.5
-	velocity.x = move_toward(velocity.x, cel.x, przysp * v * delta * 1.6 + 0.01)
-	velocity.z = move_toward(velocity.z, cel.z, przysp * v * delta * 1.6 + 0.01)
+	# ciężki ruch: rozpędzanie i hamowanie w m/s², zależne od obciążenia; w powietrzu prawie bez kontroli
+	var teraz := Vector2(velocity.x, velocity.z)
+	var cel2 := Vector2(cel.x, cel.z)
+	var przysp: float
+	if not is_on_floor():
+		przysp = 1.2
+	elif cel2.length() > teraz.length() + 0.05:
+		przysp = [6.5, 5.2, 4.0, 2.8][prog]
+	else:
+		przysp = [8.5, 7.0, 5.5, 4.0][prog]
+	teraz = teraz.move_toward(cel2, przysp * delta)
+	velocity.x = teraz.x
+	velocity.z = teraz.y
 	if is_on_floor():
 		if _w_powietrzu:
 			_w_powietrzu = false
 			var wys := _y_spadania - global_position.y
 			cialo.upadek(wys)
+			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.graj_3d("krok", global_position, get_parent(), 0.0, 0.8)
 		if aktywne and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
 			velocity.y = 3.6
@@ -273,7 +350,7 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			_krok = 0.0
 			var gl := -14.0 if kucanie > 0.5 else (-4.0 if moze_biec else -9.0)
 			Dzwiek.graj_3d("krok", global_position, get_parent(), gl + prog * 1.5)
-			var zasieg := 3.0 if kucanie > 0.5 else (16.0 if moze_biec else 8.0)
+			var zasieg := 2.5 if kucanie > 0.5 else (11.0 if moze_biec else 6.0)
 			Gra.emituj_halas(global_position, zasieg * (1.0 + prog * 0.15), self)
 
 
@@ -291,10 +368,25 @@ func _bron(delta: float, aktywne: bool) -> void:
 		return
 	var moze := aktywne and akcja.is_empty() and bron.przedmiot != null
 	if aktywne and akcja.is_empty() and not bron.zajeta():
-		if Input.is_action_just_pressed("bron1") and ekw.sloty["glowna"] != null and aktywny_slot != "glowna":
+		if Input.is_action_just_pressed("bron1") and ekw.sloty["glowna"] != null and (aktywny_slot != "glowna" or latarka_w_rece):
+			latarka_w_rece = false
 			_wybierz_bron("glowna")
-		elif Input.is_action_just_pressed("bron2") and ekw.sloty["pistolet"] != null and aktywny_slot != "pistolet":
-			_wybierz_bron("pistolet")
+		elif Input.is_action_just_pressed("bron2") and ekw.sloty["pistolet"] != null:
+			# drugie wciśnięcie przy pistolecie: dobiera/odkłada latarkę
+			if aktywny_slot == "pistolet" and bron.przedmiot != null:
+				if latarka_w_rece:
+					latarka_w_rece = false
+					_wybierz_bron("pistolet")
+				else:
+					wez_latarke()
+			else:
+				_wybierz_bron("pistolet")
+		elif Input.is_action_just_pressed("bron3"):
+			if latarka_w_rece and bron.przedmiot == null:
+				latarka_w_rece = false
+				_wybierz_bron("glowna" if ekw.sloty["glowna"] != null else "pistolet")
+			else:
+				wez_latarke(true)
 	var ruch: float = clampf(Vector2(velocity.x, velocity.z).length() / PREDKOSC_BIEG, 0.0, 1.0)
 	bron.aktualizuj(delta, {
 		"strzal": aktywne and Input.is_action_pressed("strzal"),
@@ -307,10 +399,16 @@ func _bron(delta: float, aktywne: bool) -> void:
 	})
 	if not aktywne or not akcja.is_empty():
 		return
-	for para in [["lek_bandaz", ["krwawienie_lekkie"]], ["lek_opatrunek", ["krwawienie_ciezkie"]],
-			["lek_apteczka", ["leczenie"]], ["lek_szyna", ["zlamanie"]], ["lek_bolostop", ["bol"]]]:
-		if Input.is_action_just_pressed(para[0]):
-			uzyj_leku_efekt(para[1])
+	# pasek szybkiego dostępu 4-9
+	var pasek := ekw.pasek()
+	for i in 6:
+		if Input.is_action_just_pressed("pasek%d" % (i + 1)):
+			if i < pasek.size():
+				var z := ekw.znajdz_id(pasek[i]["id"])
+				if not z.is_empty():
+					uzyj_leku(z["p"], z["szybki"])
+			else:
+				komunikat.emit("Pusty slot paska [%d] – połóż leki w kamizelce lub kieszeniach" % (i + 4))
 
 
 func uzyj_leku_efekt(efekty: Array) -> void:
@@ -324,19 +422,21 @@ func uzyj_leku_efekt(efekty: Array) -> void:
 	uzyj_leku(z["p"], z["szybki"])
 
 
-func uzyj_leku(med: Przedmiot, szybki := true) -> void:
+## czesc: część ciała wybrana w panelu zdrowia ("" = najpilniejsza).
+func uzyj_leku(med: Przedmiot, szybki := true, czesc := "") -> void:
 	if tryb_bazy or not akcja.is_empty():
 		return
 	var md: Dictionary = med.defn()["med"]
 	var efekt: String = md["efekt"]
-	if not cialo.potrzebuje(efekt):
-		komunikat.emit("Nie ma czego leczyć")
+	if not cialo.potrzebuje(efekt, czesc):
+		komunikat.emit("Nie ma czego leczyć" + ((" (" + Cialo.NAZWY[czesc].to_lower() + ")") if czesc != "" else ""))
 		return
 	var czas := float(md["czas"]) * (1.0 if szybki else 1.5)
 	Dzwiek.graj("leczenie", -6.0)
-	Gra.emituj_halas(global_position, 6.0, self)
-	zacznij_akcje(med.nazwa(), czas, func():
-		var opis := cialo.lecz(efekt, md, med)
+	Gra.emituj_halas(global_position, 4.0, self)
+	var nazwa: String = med.nazwa() + ((" → " + Cialo.NAZWY[czesc].to_lower()) if czesc != "" else "")
+	zacznij_akcje(nazwa, czas, func():
+		var opis := cialo.lecz(efekt, md, med, czesc)
 		if efekt in ["krwawienie_lekkie", "krwawienie_ciezkie", "zlamanie"] and opis != "":
 			med.dane["uzycia"] -= 1
 		if med.dane["uzycia"] <= 0:
@@ -345,26 +445,56 @@ func uzyj_leku(med: Przedmiot, szybki := true) -> void:
 		if opis != "":
 			komunikat.emit(opis)
 		# apteczka leczy dalej, dopóki jest co leczyć i gracz nie przerwał
-		if efekt == "leczenie" and med.dane["uzycia"] > 0 and cialo.potrzebuje("leczenie"):
-			uzyj_leku(med, szybki)
-	)
+		if efekt == "leczenie" and med.dane["uzycia"] > 0 and cialo.potrzebuje("leczenie", czesc):
+			uzyj_leku(med, szybki, czesc)
+	, "leczenie")
 
 
-func zacznij_akcje(nazwa: String, czas: float, koniec: Callable) -> void:
-	akcja = {"nazwa": nazwa, "t": 0.0, "czas": czas, "koniec": koniec}
+## Akcja z czasem (leczenie, napełnianie). typ: animacja rąk. kroki > 0: akcja krokowa – na_krok
+## wołane co czas/kroki sekund (np. jeden nabój); przerwanie zostawia to, co już zrobione.
+func zacznij_akcje(nazwa: String, czas: float, koniec: Callable, typ := "leczenie", kroki := 0, na_krok := Callable()) -> void:
+	akcja = {"nazwa": nazwa, "t": 0.0, "czas": czas, "koniec": koniec, "typ": typ, "kroki": kroki, "zrobione": 0, "na_krok": na_krok}
+	bron.animacja_akcji(typ)
 
 
-func przerwij_akcje() -> void:
+func przerwij_akcje(z_komunikatem := false) -> void:
+	if akcja.is_empty():
+		return
+	if z_komunikatem:
+		komunikat.emit("Przerwano: " + String(akcja["nazwa"]))
+		Dzwiek.graj("klik", -10.0, 0.6)
 	akcja = {}
+	bron.animacja_akcji("")
+
+
+## Postęp bieżącego kroku akcji (0..1) – do kółka na HUD.
+func postep_kroku() -> float:
+	if akcja.is_empty():
+		return 0.0
+	if int(akcja["kroki"]) > 0:
+		var krok: float = float(akcja["czas"]) / int(akcja["kroki"])
+		return clampf((float(akcja["t"]) - int(akcja["zrobione"]) * krok) / krok, 0.0, 1.0)
+	return clampf(float(akcja["t"]) / float(akcja["czas"]), 0.0, 1.0)
 
 
 func _akcje(delta: float) -> void:
 	if akcja.is_empty():
 		return
 	akcja["t"] += delta
+	var kroki: int = akcja["kroki"]
+	if kroki > 0:
+		var krok: float = float(akcja["czas"]) / kroki
+		while int(akcja["zrobione"]) < kroki and float(akcja["t"]) >= (int(akcja["zrobione"]) + 1) * krok:
+			akcja["zrobione"] = int(akcja["zrobione"]) + 1
+			var nk: Callable = akcja["na_krok"]
+			if nk.is_valid():
+				nk.call()
+			if akcja.is_empty():
+				return
 	if akcja["t"] >= akcja["czas"]:
 		var k: Callable = akcja["koniec"]
 		akcja = {}
+		bron.animacja_akcji("")
 		k.call()
 
 
@@ -432,8 +562,7 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 		kier = (od_kogo as Node3D).global_position - global_position
 	trafiony_sygnal.emit(kier, czesc)
 	if akcja.size() > 0 and randf() < 0.5:
-		przerwij_akcje()
-		komunikat.emit("Leczenie przerwane")
+		przerwij_akcje(true)
 	ekw.zmieniony.emit()
 
 

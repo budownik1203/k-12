@@ -155,24 +155,26 @@ func mnoznik_celnosci() -> float:
 
 
 ## Leczenie przedmiotem. Zwraca opis lub "" jeśli nie było czego leczyć.
-func lecz(efekt: String, dane: Dictionary, med: Przedmiot) -> String:
+## czesc: leczona część ciała (panel zdrowia); "" = automatycznie najpilniejsza.
+func lecz(efekt: String, dane: Dictionary, med: Przedmiot, czesc := "") -> String:
+	var czesci: Array = MAX.keys() if czesc == "" else [czesc]
 	match efekt:
 		"krwawienie_lekkie":
-			for c in MAX:
+			for c in czesci:
 				if krwawienie[c] == 1:
 					krwawienie[c] = 0
 					zmiana.emit()
 					return "Zatamowano lekkie krwawienie (%s)" % NAZWY[c].to_lower()
 		"krwawienie_ciezkie":
 			for poziom in [2, 1]:
-				for c in MAX:
+				for c in czesci:
 					if krwawienie[c] == poziom:
 						krwawienie[c] = 0
 						zmiana.emit()
 						return "Zatamowano krwawienie (%s)" % NAZWY[c].to_lower()
 		"zlamanie":
 			for c in ["nogi", "rece"]:
-				if zlamanie[c]:
+				if zlamanie[c] and c in czesci:
 					zlamanie[c] = false
 					zmiana.emit()
 					return "Unieruchomiono złamanie (%s)" % NAZWY[c].to_lower()
@@ -183,7 +185,7 @@ func lecz(efekt: String, dane: Dictionary, med: Przedmiot) -> String:
 			return "Środek przeciwbólowy działa"
 		"leczenie":
 			# najpierw krwawienia lekkie, potem najbardziej uszkodzona część
-			for c in MAX:
+			for c in czesci:
 				if krwawienie[c] == 1 and med.dane["uzycia"] >= 5:
 					krwawienie[c] = 0
 					med.dane["uzycia"] -= 5
@@ -191,7 +193,7 @@ func lecz(efekt: String, dane: Dictionary, med: Przedmiot) -> String:
 					return "Opatrzono lekkie krwawienie"
 			var najgorsza := ""
 			var brak := 0.0
-			for c in MAX:
+			for c in czesci:
 				var b: float = MAX[c] - hp[c]
 				if hp[c] > 0.0 and b > brak:
 					brak = b
@@ -207,21 +209,27 @@ func lecz(efekt: String, dane: Dictionary, med: Przedmiot) -> String:
 
 
 ## Czy dany efekt ma teraz sens (żeby nie marnować leków).
-func potrzebuje(efekt: String) -> bool:
+func potrzebuje(efekt: String, czesc := "") -> bool:
+	var czesci: Array = MAX.keys() if czesc == "" else [czesc]
 	match efekt:
 		"krwawienie_lekkie":
-			for c in MAX:
+			for c in czesci:
 				if krwawienie[c] == 1:
 					return true
 		"krwawienie_ciezkie":
-			return krwawi() > 0
+			for c in czesci:
+				if krwawienie[c] > 0:
+					return true
 		"zlamanie":
-			return zlamanie["nogi"] or zlamanie["rece"]
+			for c in czesci:
+				if zlamanie[c]:
+					return true
 		"bol":
 			return bol() or przeciwbol < 20.0
 		"leczenie":
-			for c in MAX:
+			for c in czesci:
 				if hp[c] > 0.0 and hp[c] < MAX[c] - 1.0:
 					return true
-			return krwawi() == 1
+				if krwawienie[c] == 1:
+					return true
 	return false

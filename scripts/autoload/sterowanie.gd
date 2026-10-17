@@ -10,8 +10,9 @@ const AKCJE := {
 	"przod": [KEY_W], "tyl": [KEY_S], "lewo": [KEY_A], "prawo": [KEY_D],
 	"bieg": [KEY_SHIFT], "kucanie": [KEY_CTRL, KEY_C], "wychyl_l": [KEY_Q], "wychyl_p": [KEY_E],
 	"przeladuj": [KEY_R], "interakcja": [KEY_F], "latarka": [KEY_L], "ekwipunek": [KEY_TAB, KEY_I],
-	"bron1": [KEY_1], "bron2": [KEY_2], "tryb": [KEY_B], "sprawdz": [KEY_T], "skok": [KEY_SPACE],
-	"lek_bandaz": [KEY_4], "lek_opatrunek": [KEY_5], "lek_apteczka": [KEY_6], "lek_szyna": [KEY_7], "lek_bolostop": [KEY_8],
+	"bron1": [KEY_1], "bron2": [KEY_2], "bron3": [KEY_3], "tryb": [KEY_B], "sprawdz": [KEY_T], "skok": [KEY_SPACE],
+	"pasek1": [KEY_4], "pasek2": [KEY_5], "pasek3": [KEY_6], "pasek4": [KEY_7], "pasek5": [KEY_8], "pasek6": [KEY_9],
+	"przerwij": [KEY_X], "wyrzuc": [KEY_DELETE, KEY_BACKSPACE],
 	"pauza": [KEY_ESCAPE], "napelnij": [KEY_G], "wyjscia": [KEY_O],
 }
 

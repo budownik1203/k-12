@@ -1,18 +1,23 @@
 class_name GeneratorBiomu
 extends RefCounted
-## Generator rajdu w biomie 1 (blokowisko): losowy graf pomieszczeń na siatce, ściany z drzwiami i oknami,
-## meble i osłony, kontenery z łupem, lampy (część zepsuta), punkty spawnu i wyjścia.
+## Generator rajdu w biomie 1 (blokowisko). Siatka komórek 9x9 m: część to korytarze, część pomieszczenia.
+## Każde pomieszczenie jest prostokątem wewnątrz swojej komórki, między pomieszczeniami stoi lity mur.
+## Przejścia: korytarze (szerokie, pełnej wysokości) i drzwi w grubych ścianach. Meble ustawiane zestawami
+## (ciągi przy ścianach, stół z krzesłami, rzędy biurek, regały, skupiska skrzyń), lampy, spawny i wyjścia.
 
-const C := 6.0           # rozmiar komórki (pomieszczenia) w metrach
-const H := 2.8           # wysokość pomieszczeń
-const T := 0.2           # grubość ściany
+const C := 9.0           # rozmiar komórki w metrach
+const H := 3.0           # wysokość pomieszczeń
+const T := 0.3           # grubość brył kolizji za licem ściany
+const GRUB := 0.45       # grubość muru, w którym są drzwi z korytarza
 const DRZWI_W := 1.2
 const DRZWI_H := 2.1
-const GW := 7
-const GH := 6
-const KW := 2.4          # szerokość korytarza
+const KW := 3.2          # szerokość korytarza
+const MARGINES := 0.35   # minimalny odstęp pomieszczenia od granicy komórki
+const GW := 6
+const GH := 5
 
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+const ROT := {Vector2i(0, -1): 0.0, Vector2i(0, 1): PI, Vector2i(-1, 0): PI / 2.0, Vector2i(1, 0): -PI / 2.0}
 
 const MATERIALY := {
 	"klatka": ["sciana_lamperia", "lastryko", "tynk_bialy"],
@@ -28,35 +33,30 @@ const NAZWY_TYPOW := {
 	"klatka": "Klatka schodowa", "korytarz": "Korytarz", "pokoj": "Mieszkanie", "kuchnia": "Kuchnia",
 	"administracja": "Administracja", "piwnica": "Piwnica", "magazyn": "Magazyn", "warsztat": "Warsztat",
 }
-
-# szablony wyposażenia: [mebel, przy_scianie, min, max]
-const WYPOSAZENIE := {
-	"klatka": [["skrzynki_pocztowe", true, 1, 1], ["tablica_ogloszen", true, 0, 1], ["beczka", false, 0, 1], ["hydrant", true, 0, 1]],
-	"korytarz": [["beczka", false, 0, 2], ["skrzynia", false, 0, 2], ["szafka_metalowa", true, 0, 1], ["hydrant", true, 0, 1], ["tablica_ogloszen", true, 0, 1], ["worki_piasek", false, 0, 1]],
-	"pokoj": [["meblosciana", true, 0, 1], ["szafa", true, 0, 1], ["wersalka", true, 0, 1], ["lozko", true, 0, 1], ["stol", false, 0, 1], ["krzeslo", false, 0, 2], ["telewizor", true, 0, 1], ["dywan", false, 0, 1], ["kaloryfer", true, 0, 1]],
-	"kuchnia": [["kuchenka", true, 1, 1], ["lodowka", true, 0, 1], ["szafka_kuchenna", true, 1, 2], ["stol", false, 0, 1], ["krzeslo", false, 0, 2], ["apteczka_scienna", true, 0, 1]],
-	"administracja": [["biurko", false, 1, 2], ["krzeslo", false, 1, 2], ["szafa", true, 0, 1], ["szafka_metalowa", true, 0, 2], ["apteczka_scienna", true, 0, 1]],
-	"piwnica": [["regal_metalowy", true, 1, 2], ["skrzynia", false, 1, 3], ["beczka", false, 0, 2], ["worki_piasek", false, 0, 1]],
-	"magazyn": [["skrzynia_wojskowa", false, 1, 3], ["regal_metalowy", true, 1, 2], ["worki_piasek", false, 1, 2], ["skrzynia", false, 0, 2]],
-	"warsztat": [["stol_warsztatowy", true, 1, 1], ["regal_metalowy", true, 0, 2], ["szafka_metalowa", true, 0, 1], ["beczka", false, 0, 2], ["skrzynia", false, 0, 1]],
+# rozmiary pomieszczeń [min, max] boku
+const ROZMIARY := {
+	"klatka": [5.8, 6.6], "pokoj": [6.0, 8.2], "kuchnia": [5.6, 7.0], "administracja": [6.2, 8.3],
+	"piwnica": [5.8, 8.0], "magazyn": [7.0, 8.3], "warsztat": [6.4, 8.3],
 }
 const MONTOWANE_NA_SCIANIE := ["hydrant", "tablica_ogloszen", "apteczka_scienna", "skrzynki_pocztowe", "kaloryfer", "znak_wyjscie"]
 const BEZ_KOLIZJI := ["dywan", "zarowka", "hydrant", "tablica_ogloszen", "apteczka_scienna", "skrzynki_pocztowe", "znak_wyjscie", "kaloryfer"]
+const WYSOKOSC_MONTAZU := {"hydrant": 0.9, "tablica_ogloszen": 1.3, "apteczka_scienna": 1.3, "skrzynki_pocztowe": 1.1, "kaloryfer": 0.12}
 
 var rng := RandomNumberGenerator.new()
 var swiat: Node3D
 var meble := {}
-var komorki := {}        # Vector2i -> {"typ", "glebokosc", "zajete": Array[Rect2], "id"}
-var krawedzie := {}      # klucz "a|b" -> {"a", "b", "drzwi": float (offset), "otwarte": bool}
+var komorki := {}        # Vector2i -> {"typ", "glebokosc", "rect", "otwory", "okna", "strefy", "zajete", "meble", "mats"}
+var krawedzie := {}      # "a|b" -> {"a", "b", "otwarte", "c" (środek przejścia), "pa", "pb" (punkty po obu stronach)}
 var bud := Kit.Budowniczy.new()
 var cialo_scian: StaticBody3D
-var oslony: Array = []   # {"pos": Vector3, "niska": bool}
+var oslony: Array = []   # {"pos": Vector3, "niska": bool, "mebel": Vector3}
 var spawny: Array = []   # {"pos": Vector3, "komorka": Vector2i, "glebokosc": int}
 var wyjscia: Array = []
 var lampy: Array = []
 var start_pos := Vector3.ZERO
 var start_rot := 0.0
-var okna: Array = []     # [komorka, strona]
+var okna: Array = []     # [komorka, strona, punkt na licu (Vector3)]
+var _plan_wyjsc: Array = []
 
 
 func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
@@ -69,6 +69,10 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	swiat.add_child(cialo_scian)
 	_uklad()
 	_typy()
+	_prostokaty()
+	_przejscia()
+	_plan_okien()
+	_zaplanuj_wyjscia()
 	# geometria osobno dla każdego pomieszczenia: renderer Compatibility oświetla obiekt
 	# co najwyżej kilkoma światłami, więc jeden obiekt na cały poziom gasiłby dalsze lampy
 	for k in komorki:
@@ -81,8 +85,6 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 		mi.name = "Pomieszczenie_%d_%d" % [k.x, k.y]
 		mi.mesh = bud.zbuduj({"okno": 0.5})
 		swiat.add_child(mi)
-	_sciany_wspolne()
-	_podloga_kolizja()
 	for k in komorki:
 		_wyposaz(k)
 		_lampa(k)
@@ -92,7 +94,7 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy}
 
 
-# ------------------------------------------------------------------ układ
+# ------------------------------------------------------------------ układ (graf)
 
 func _k(a: Vector2i, b: Vector2i) -> String:
 	if a.x < b.x or (a.x == b.x and a.y < b.y):
@@ -110,7 +112,7 @@ func _nowa(k: Vector2i, typ: String) -> void:
 
 func _polacz(a: Vector2i, b: Vector2i) -> void:
 	if not krawedzie.has(_k(a, b)):
-		krawedzie[_k(a, b)] = {"a": a, "b": b, "drzwi": 0.0, "otwarte": false}
+		krawedzie[_k(a, b)] = {"a": a, "b": b, "otwarte": false}
 
 
 func _rozlacz(a: Vector2i, b: Vector2i) -> void:
@@ -130,14 +132,14 @@ func _ramiona(k: Vector2i) -> Array:
 	return out
 
 
-## Układ: sieć wąskich korytarzy (raz gęsta, raz skąpa), do niej doczepione pomieszczenia.
-## Część pomieszczeń prowadzi dalej do kolejnych (amfilada), czasem dwa sąsiednie pokoje łączą drzwi.
+## Sieć korytarzy (raz gęsta, raz skąpa), do niej doczepione pomieszczenia.
+## Część pomieszczeń prowadzi dalej do kolejnych, czasem dwa sąsiednie pokoje łączą drzwi.
 func _uklad() -> void:
 	var sy := rng.randi_range(1, GH - 2)
 	var start := Vector2i(0, sy)
 	_nowa(start, "klatka")
-	var lacznie := rng.randi_range(22, 28)
-	var udzial := rng.randf_range(0.3, 0.55)        # ile planszy to korytarze
+	var lacznie := rng.randi_range(17, 22)
+	var udzial := rng.randf_range(0.3, 0.5)
 	var cel_kor := int(round(lacznie * udzial))
 	var k0 := Vector2i(1, sy)
 	_nowa(k0, "korytarz")
@@ -153,7 +155,6 @@ func _uklad() -> void:
 		var n := z + d
 		if not _w_siatce(n) or komorki.has(n):
 			continue
-		# nowy odcinek dotyka tylko rodzica; inny sąsiedni korytarz = rzadka pętla (bez placów 2x2)
 		var inne := []
 		for dd in DIRS:
 			var m: Vector2i = n + dd
@@ -172,8 +173,7 @@ func _uklad() -> void:
 		kor.append(n)
 		ostatni = n
 		kier = d
-	# pomieszczenia przy korytarzach
-	var cel_pok := maxi(10, lacznie - kor.size())
+	var cel_pok := maxi(9, lacznie - kor.size())
 	var pokoje: Array = []
 	var kand: Array = []
 	for c in kor:
@@ -195,10 +195,9 @@ func _uklad() -> void:
 		_polacz(n, przy[0])
 		if przy.size() > 1 and rng.randf() < 0.2:
 			_polacz(n, przy[1])
-	# pomieszczenia w głębi, dostępne tylko przez inne pomieszczenie
-	var glebsze := rng.randi_range(1, 4)
+	var glebsze := rng.randi_range(1, 3)
 	for proba in 60:
-		if glebsze <= 0:
+		if glebsze <= 0 or pokoje.is_empty():
 			break
 		var r: Vector2i = pokoje[rng.randi() % pokoje.size()]
 		var n: Vector2i = r + DIRS[rng.randi() % 4]
@@ -208,13 +207,11 @@ func _uklad() -> void:
 		pokoje.append(n)
 		_polacz(r, n)
 		glebsze -= 1
-	# okazjonalne drzwi między sąsiednimi pomieszczeniami
 	for a in pokoje:
 		for d in [Vector2i(1, 0), Vector2i(0, 1)]:
 			var b: Vector2i = a + d
 			if komorki.has(b) and komorki[b]["typ"] == "" and not krawedzie.has(_k(a, b)) and rng.randf() < 0.18:
 				_polacz(a, b)
-	# ślepe korytarze bez pomieszczeń skracamy
 	var zmiana := true
 	while zmiana:
 		zmiana = false
@@ -227,20 +224,10 @@ func _uklad() -> void:
 					_rozlacz(c, c + d)
 				komorki.erase(c)
 				zmiana = true
-	# rodzaj przejść
 	for key in krawedzie:
 		var e: Dictionary = krawedzie[key]
-		var ka: bool = _korytarz_w(e["a"])
-		var kb: bool = _korytarz_w(e["b"])
-		if ka and kb:
-			e["otwarte"] = true
-			e["drzwi"] = (C - KW) * 0.5
-		elif ka or kb:
-			e["drzwi"] = (C - DRZWI_W) * 0.5        # drzwi na osi korytarza
-		else:
-			e["drzwi"] = rng.randf_range(1.0, C - DRZWI_W - 1.0)
+		if not _korytarz_w(e["a"]) and not _korytarz_w(e["b"]):
 			e["otwarte"] = rng.randf() < 0.12 and komorki[e["a"]]["typ"] != "klatka" and komorki[e["b"]]["typ"] != "klatka"
-	# głębokość (BFS)
 	var kol := [start]
 	var odw := {start: 0}
 	while not kol.is_empty():
@@ -252,8 +239,6 @@ func _uklad() -> void:
 				kol.append(b)
 	for a in komorki:
 		komorki[a]["glebokosc"] = odw.get(a, 0)
-	start_pos = _srodek(start) + Vector3(-1.8, 0.05, 0)
-	start_rot = -PI / 2.0
 
 
 func _tasuj(a: Array) -> void:
@@ -271,23 +256,150 @@ func _typy() -> void:
 	for a in komorki:
 		var f := float(komorki[a]["glebokosc"]) / maxg
 		if komorki[a]["typ"] == "korytarz":
-			# głębiej korytarze przechodzą w piwniczne
 			komorki[a]["mats"] = ["cegla", "beton", "beton"] if f > 0.6 else MATERIALY["korytarz"]
 			continue
-		if komorki[a]["typ"] != "":
-			komorki[a]["mats"] = MATERIALY[komorki[a]["typ"]]
-			continue
-		var tab: Array
-		if f < 0.45:
-			tab = [["pokoj", 34], ["kuchnia", 22], ["administracja", 14], ["warsztat", 8], ["magazyn", 4]]
-		else:
-			tab = [["pokoj", 14], ["piwnica", 30], ["magazyn", 22], ["warsztat", 16], ["administracja", 12]]
-		komorki[a]["typ"] = Dane.losuj(tab, rng)
+		if komorki[a]["typ"] == "":
+			var tab: Array
+			if f < 0.45:
+				tab = [["pokoj", 34], ["kuchnia", 22], ["administracja", 14], ["warsztat", 8], ["magazyn", 4]]
+			else:
+				tab = [["pokoj", 14], ["piwnica", 30], ["magazyn", 22], ["warsztat", 16], ["administracja", 12]]
+			komorki[a]["typ"] = Dane.losuj(tab, rng)
 		komorki[a]["mats"] = MATERIALY[komorki[a]["typ"]]
 
 
+## Prostokąty wnętrz: korytarz to kwadrat KW na środku komórki, pomieszczenie – losowy prostokąt,
+## który zawsze obejmuje oś komórki (żeby drzwi z korytarza trafiały w ścianę).
+func _prostokaty() -> void:
+	for k in komorki:
+		var ox: float = k.x * C
+		var oz: float = k.y * C
+		var r: Rect2
+		if komorki[k]["typ"] == "korytarz":
+			r = Rect2(ox + (C - KW) * 0.5, oz + (C - KW) * 0.5, KW, KW)
+		else:
+			var zakres: Array = ROZMIARY.get(komorki[k]["typ"], [6.0, 8.0])
+			var wx := rng.randf_range(zakres[0], zakres[1])
+			var wz := rng.randf_range(zakres[0], zakres[1])
+			var x0 := rng.randf_range(maxf(MARGINES, C * 0.5 + 1.6 - wx), minf(C * 0.5 - 1.6, C - MARGINES - wx))
+			var z0 := rng.randf_range(maxf(MARGINES, C * 0.5 + 1.6 - wz), minf(C * 0.5 - 1.6, C - MARGINES - wz))
+			r = Rect2(ox + x0, oz + z0, wx, wz)
+		komorki[k]["rect"] = r
+		komorki[k]["otwory"] = {Vector2i(1, 0): [], Vector2i(-1, 0): [], Vector2i(0, 1): [], Vector2i(0, -1): []}
+		komorki[k]["okna"] = []
+		komorki[k]["strefy"] = []
+		komorki[k]["ramiona"] = []
+	var start := Vector2i(0, 0)
+	for k in komorki:
+		if komorki[k]["typ"] == "klatka":
+			start = k
+	var rs: Rect2 = komorki[start]["rect"]
+	start_pos = Vector3(rs.position.x + 1.3, 0.05, rs.get_center().y)
+	start_rot = -PI / 2.0
+	komorki[start]["strefy"].append(Rect2(start_pos.x - 1.0, start_pos.z - 1.0, 2.0, 2.0))
+
+
 func _srodek(k: Vector2i) -> Vector3:
-	return Vector3(k.x * C + C * 0.5, 0, k.y * C + C * 0.5)
+	var r: Rect2 = komorki[k]["rect"] if komorki.has(k) and komorki[k].has("rect") else Rect2(k.x * C, k.y * C, C, C)
+	return Vector3(r.get_center().x, 0, r.get_center().y)
+
+
+# ------------------------------------------------------------------ przejścia
+
+## Dla każdej krawędzi grafu buduje przejście: odcinek korytarza i/lub otwór drzwiowy w grubym murze.
+func _przejscia() -> void:
+	for key in krawedzie:
+		var e: Dictionary = krawedzie[key]
+		var a: Vector2i = e["a"]
+		var b: Vector2i = e["b"]
+		if b.x < a.x or b.y < a.y:
+			var t := a
+			a = b
+			b = t
+		var poziomo := a.x != b.x
+		var d := Vector2i(1, 0) if poziomo else Vector2i(0, 1)
+		var ra: Rect2 = komorki[a]["rect"]
+		var rb: Rect2 = komorki[b]["rect"]
+		var fa := ra.end.x if poziomo else ra.end.y
+		var fb := rb.position.x if poziomo else rb.position.y
+		var lo_a := ra.position.y if poziomo else ra.position.x
+		var hi_a := ra.end.y if poziomo else ra.end.x
+		var lo_b := rb.position.y if poziomo else rb.position.x
+		var hi_b := rb.end.y if poziomo else rb.end.x
+		var ka := _korytarz_w(a)
+		var kb := _korytarz_w(b)
+		var c := (a.y * C if poziomo else a.x * C) + C * 0.5
+		var bp := Kit.Budowniczy.new()
+		var stary := bud
+		bud = bp
+		if ka and kb:
+			_pasaz(poziomo, fa, fb, c, KW, H, komorki[a]["mats"], a)
+			komorki[a]["otwory"][d].append([c - KW * 0.5, c + KW * 0.5, H, 0.0])
+			komorki[b]["otwory"][-d].append([c - KW * 0.5, c + KW * 0.5, H, 0.0])
+		elif ka or kb:
+			# korytarz dochodzi do muru pomieszczenia, w murze drzwi
+			var otw := [c - DRZWI_W * 0.5, c + DRZWI_W * 0.5, DRZWI_H, 0.0]
+			if ka:
+				_pasaz(poziomo, fa, fb - GRUB, c, KW, H, komorki[a]["mats"], a)
+				_pasaz(poziomo, fb - GRUB, fb, c, DRZWI_W, DRZWI_H, komorki[b]["mats"])
+				_sciana_osiowa(komorki[a]["mats"][0], not poziomo, fb - GRUB, c - KW * 0.5, c + KW * 0.5, -Vector2(d), [otw])
+				komorki[a]["otwory"][d].append([c - KW * 0.5, c + KW * 0.5, H, 0.0])
+				komorki[b]["otwory"][-d].append(otw)
+			else:
+				_pasaz(poziomo, fa, fa + GRUB, c, DRZWI_W, DRZWI_H, komorki[a]["mats"])
+				_pasaz(poziomo, fa + GRUB, fb, c, KW, H, komorki[b]["mats"], b)
+				_sciana_osiowa(komorki[b]["mats"][0], not poziomo, fa + GRUB, c - KW * 0.5, c + KW * 0.5, Vector2(d), [otw])
+				komorki[a]["otwory"][d].append(otw)
+				komorki[b]["otwory"][-d].append([c - KW * 0.5, c + KW * 0.5, H, 0.0])
+		else:
+			var w := DRZWI_W
+			var h := DRZWI_H
+			var lo := maxf(lo_a, lo_b) + 0.8
+			var hi := minf(hi_a, hi_b) - 0.8
+			if e["otwarte"] and hi - lo > 3.0:
+				w = 2.4
+				h = 2.5
+			c = rng.randf_range(lo + w * 0.5, hi - w * 0.5) if hi - lo > w else (lo + hi) * 0.5
+			_pasaz(poziomo, fa, fb, c, w, h, komorki[a]["mats"])
+			komorki[a]["otwory"][d].append([c - w * 0.5, c + w * 0.5, h, 0.0])
+			komorki[b]["otwory"][-d].append([c - w * 0.5, c + w * 0.5, h, 0.0])
+		bud = stary
+		var mi := MeshInstance3D.new()
+		mi.name = "Przejscie_%s" % key.replace("|", "_").replace(",", "_")
+		mi.mesh = bp.zbuduj({})
+		swiat.add_child(mi)
+		e["c"] = c
+		e["a_dol"] = a
+		e["pa"] = Vector3(fa - 0.8, 0, c) if poziomo else Vector3(c, 0, fa - 0.8)
+		e["pb"] = Vector3(fb + 0.8, 0, c) if poziomo else Vector3(c, 0, fb + 0.8)
+
+
+## Odcinek przejścia między f0 a f1 wzdłuż osi przejścia, środek c na osi poprzecznej.
+## Podłoga, strop na wysokości h, ściany boczne z kolizją. Odcinki korytarza zapamiętuje jako ramiona.
+func _pasaz(poziomo: bool, f0: float, f1: float, c: float, w: float, h: float, mats: Array, wlasciciel := Vector2i(-1, -1)) -> void:
+	if f1 - f0 < 0.01:
+		return
+	var r := Rect2(f0, c - w * 0.5, f1 - f0, w) if poziomo else Rect2(c - w * 0.5, f0, w, f1 - f0)
+	bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.2, 1.0)
+	bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, h, false, 1.2, 1.0)
+	if poziomo:
+		_scianka(mats[0], Vector2(f0, c - w * 0.5), Vector2(f1, c - w * 0.5), Vector2(0, 1), true, 0.0, h)
+		_scianka(mats[0], Vector2(f0, c + w * 0.5), Vector2(f1, c + w * 0.5), Vector2(0, -1), true, 0.0, h)
+	else:
+		_scianka(mats[0], Vector2(c - w * 0.5, f0), Vector2(c - w * 0.5, f1), Vector2(1, 0), true, 0.0, h)
+		_scianka(mats[0], Vector2(c + w * 0.5, f0), Vector2(c + w * 0.5, f1), Vector2(-1, 0), true, 0.0, h)
+	_podloga(r)
+	if wlasciciel.x >= 0:
+		komorki[wlasciciel]["ramiona"].append([Vector2i(1, 0) if poziomo else Vector2i(0, 1), r])
+
+
+func _podloga(r: Rect2) -> void:
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(r.size.x + 0.02, 0.4, r.size.y + 0.02)
+	cs.shape = bs
+	cs.position = Vector3(r.get_center().x, -0.2, r.get_center().y)
+	cialo_scian.add_child(cs)
 
 
 # ------------------------------------------------------------------ geometria
@@ -296,122 +408,10 @@ func _uv_sciany(u: float, y: float) -> Vector2:
 	return Vector2(u, 1.0 - y / H)
 
 
-func _pomieszczenie(k: Vector2i) -> void:
-	var typ: String = komorki[k]["typ"]
-	var mats: Array = MATERIALY[typ]
-	var x0 := k.x * C + T * 0.5
-	var z0 := k.y * C + T * 0.5
-	var x1 := (k.x + 1) * C - T * 0.5
-	var z1 := (k.y + 1) * C - T * 0.5
-	bud.plaszczyzna(mats[1], x0, z0, x1, z1, 0.0, true, 1.5, 1.0)
-	bud.plaszczyzna(mats[2], x0, z0, x1, z1, H, false, 1.5, 1.0)
-	# cztery ściany: [kierunek, punkt a, punkt b] tak, by przód patrzył do wnętrza
-	var strony := [
-		[Vector2i(0, -1), Vector3(x0, 0, z0), Vector3(x1, 0, z0)],
-		[Vector2i(0, 1), Vector3(x1, 0, z1), Vector3(x0, 0, z1)],
-		[Vector2i(-1, 0), Vector3(x0, 0, z1), Vector3(x0, 0, z0)],
-		[Vector2i(1, 0), Vector3(x1, 0, z0), Vector3(x1, 0, z1)],
-	]
-	for s in strony:
-		var d: Vector2i = s[0]
-		var n := k + d
-		var a: Vector3 = s[1]
-		var b: Vector3 = s[2]
-		var key := _k(k, n)
-		if komorki.has(n) and krawedzie.has(key):
-			var e: Dictionary = krawedzie[key]
-			if e["otwarte"]:
-				# szerokie przejście z filarami po bokach
-				_odcinek(mats[0], a, a.lerp(b, 0.12))
-				_odcinek(mats[0], a.lerp(b, 0.88), b)
-				_nadproze(mats[0], a.lerp(b, 0.12), a.lerp(b, 0.88), 2.45)
-			else:
-				var off: float = e["drzwi"]
-				var pa := _punkt_na_krawedzi(a, b, off)
-				var pb := _punkt_na_krawedzi(a, b, off + DRZWI_W)
-				var p_lo := pa if a.distance_to(pa) < a.distance_to(pb) else pb
-				var p_hi := pb if p_lo == pa else pa
-				_odcinek(mats[0], a, p_lo)
-				_odcinek(mats[0], p_hi, b)
-				_nadproze(mats[0], p_lo, p_hi, DRZWI_H)
-		else:
-			# ściana pełna – na zewnątrz czasem okno
-			var zewn := n.x < 0 or n.y < 0 or n.x >= GW or n.y >= GH or not komorki.has(n)
-			if zewn and typ != "klatka" and rng.randf() < (0.35 if typ != "piwnica" else 0.25):
-				var y0 := 0.95 if typ != "piwnica" else 1.7
-				var y1 := 2.2 if typ != "piwnica" else 2.35
-				var p1 := a.lerp(b, 0.4)
-				var p2 := a.lerp(b, 0.6)
-				_odcinek(mats[0], a, p1)
-				_odcinek(mats[0], p2, b)
-				_nadproze(mats[0], p1, p2, y1)
-				_parapet(mats[0], p1, p2, y0)
-				_okno(p1, p2, y0, y1, d, typ == "piwnica")
-				okna.append([k, d])
-			else:
-				_odcinek(mats[0], a, b)
-
-
-## Korytarz: pas szerokości KW przez środek komórki z ramionami w stronę przejść; reszta komórki to lity mur.
-func _korytarz(k: Vector2i) -> void:
-	var mats: Array = komorki[k]["mats"]
-	var ox := k.x * C
-	var oz := k.y * C
-	var a := (C - KW) * 0.5
-	var b := (C + KW) * 0.5
-	var ram := _ramiona(k)
-	var prost := [Rect2(ox + a, oz + a, KW, KW)]
-	for d in ram:
-		prost.append(_ramie(k, d))
-	for r in prost:
-		var rr := r as Rect2
-		bud.plaszczyzna(mats[1], rr.position.x, rr.position.y, rr.end.x, rr.end.y, 0.0, true, 1.2, 1.0)
-		bud.plaszczyzna(mats[2], rr.position.x, rr.position.y, rr.end.x, rr.end.y, H, false, 1.2, 1.0)
-	var c := Vector2(ox + C * 0.5, oz + C * 0.5)
-	for d in DIRS:
-		var dv := Vector2(d.x, d.y)
-		var poprz := Vector2(-d.y, d.x)       # oś poprzeczna
-		if d in ram:
-			var r := _ramie(k, d)
-			var dl := r.size.x if d.x != 0 else r.size.y
-			var p0 := c + dv * (KW * 0.5)
-			var p1 := p0 + dv * dl
-			# ściany boczne ramienia
-			for s in [-1.0, 1.0]:
-				var off: Vector2 = poprz * (KW * 0.5 * s)
-				_scianka(mats[0], p0 + off, p1 + off, -poprz * s, true)
-			if not _korytarz_w(k + d):
-				# czoło ramienia z drzwiami do pomieszczenia (kolizję daje granica komórek)
-				var lw := p1 - poprz * (KW * 0.5)
-				var pw := p1 + poprz * (KW * 0.5)
-				var dlo := p1 - poprz * (DRZWI_W * 0.5)
-				var dhi := p1 + poprz * (DRZWI_W * 0.5)
-				_scianka(mats[0], lw, dlo, -dv, false)
-				_scianka(mats[0], dhi, pw, -dv, false)
-				_scianka(mats[0], dlo, dhi, -dv, false, DRZWI_H, H)
-		else:
-			var q := c + dv * (KW * 0.5)
-			_scianka(mats[0], q - poprz * (KW * 0.5), q + poprz * (KW * 0.5), -dv, true)
-
-
-## Prostokąt (xz) ramienia korytarza w kierunku d: od kwadratu środkowego do granicy komórki.
-func _ramie(k: Vector2i, d: Vector2i, pelne := false) -> Rect2:
-	var ox := k.x * C
-	var oz := k.y * C
-	var a := (C - KW) * 0.5
-	var b := (C + KW) * 0.5
-	var kon := C if (pelne or _korytarz_w(k + d)) else C - T * 0.5
-	match d:
-		Vector2i(1, 0): return Rect2(ox + b, oz + a, kon - b, KW)
-		Vector2i(-1, 0): return Rect2(ox + C - kon, oz + a, kon - b, KW)
-		Vector2i(0, 1): return Rect2(ox + a, oz + b, KW, kon - b)
-		_: return Rect2(ox + a, oz + C - kon, KW, kon - b)
-
-
 ## Ściana z punktu p do q (xz) zwrócona licem w stronę nrm; opcjonalnie z bryłą kolizji za licem.
 func _scianka(mat: String, p: Vector2, q: Vector2, nrm: Vector2, kolizja: bool, y0 := 0.0, y1 := H) -> void:
 	var dir := q - p
-	if dir.length() < 0.02:
+	if dir.length() < 0.02 or y1 - y0 < 0.01:
 		return
 	if Vector2(-dir.y, dir.x).dot(nrm) < 0.0:
 		var t := p
@@ -419,183 +419,183 @@ func _scianka(mat: String, p: Vector2, q: Vector2, nrm: Vector2, kolizja: bool, 
 		q = t
 	bud.sciana(mat, Vector3(p.x, 0, p.y), Vector3(q.x, 0, q.y), y0, y1, 0.75, _uv_sciany)
 	if kolizja:
-		var cs := CollisionShape3D.new()
-		var bs := BoxShape3D.new()
-		var sr := (p + q) * 0.5 - nrm * (T * 0.5)
-		var dl := p.distance_to(q)
-		bs.size = Vector3(dl if absf(dir.x) > 0.01 else T, H, T if absf(dir.x) > 0.01 else dl)
-		cs.shape = bs
-		cs.position = Vector3(sr.x, H * 0.5, sr.y)
-		cialo_scian.add_child(cs)
+		_bryla(p, q, nrm, y0, y1)
 
 
-func _koord(a: Vector3, b: Vector3) -> float:
-	return a.x if absf(a.x - b.x) > 0.01 else a.z
+func _bryla(p: Vector2, q: Vector2, nrm: Vector2, y0: float, y1: float) -> void:
+	var dir := q - p
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	var sr := (p + q) * 0.5 - nrm * (T * 0.5)
+	var dl := p.distance_to(q) + 0.02
+	bs.size = Vector3(dl if absf(dir.x) > 0.01 else T, y1 - y0, T if absf(dir.x) > 0.01 else dl)
+	cs.shape = bs
+	cs.position = Vector3(sr.x, (y0 + y1) * 0.5, sr.y)
+	cialo_scian.add_child(cs)
 
 
-func _lo_wzdluz(a: Vector3, b: Vector3) -> float:
-	return minf(a.x, b.x) if absf(a.x - b.x) > 0.01 else minf(a.z, b.z)
+## Ściana osiowa z otworami. wzdluz_x: ściana biegnie wzdłuż osi x (stala = z).
+## otwory: [od, do, góra otworu, dół otworu] we współrzędnych wzdłuż ściany; dół > 0 = okno (zablokowane kolizją).
+func _sciana_osiowa(mat: String, wzdluz_x: bool, stala: float, lo: float, hi: float, nrm: Vector2, otwory: Array) -> void:
+	var lista := otwory.duplicate()
+	lista.sort_custom(func(a, b): return a[0] < b[0])
+	var cur := lo
+	for o in lista:
+		var o0: float = clampf(o[0], lo, hi)
+		var o1: float = clampf(o[1], lo, hi)
+		_scianka(mat, _pkt(wzdluz_x, stala, cur), _pkt(wzdluz_x, stala, o0), nrm, true)
+		_scianka(mat, _pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, true, o[2], H)
+		if o[3] > 0.0:
+			_scianka(mat, _pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, true, 0.0, o[3])
+			_bryla(_pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, o[3], o[2])
+		cur = maxf(cur, o1)
+	_scianka(mat, _pkt(wzdluz_x, stala, cur), _pkt(wzdluz_x, stala, hi), nrm, true)
 
 
-## Punkt na krawędzi w odległości "off" od początku komórki (niezależnie od kierunku a->b).
-func _punkt_na_krawedzi(a: Vector3, b: Vector3, off: float) -> Vector3:
-	if absf(a.x - b.x) > 0.01:
-		var base: float = floor(minf(a.x, b.x) / C) * C
-		return Vector3(base + off, 0, a.z)
-	var base_z: float = floor(minf(a.z, b.z) / C) * C
-	return Vector3(a.x, 0, base_z + off)
+func _pkt(wzdluz_x: bool, stala: float, u: float) -> Vector2:
+	return Vector2(u, stala) if wzdluz_x else Vector2(stala, u)
 
 
-func _odcinek(mat: String, a: Vector3, b: Vector3) -> void:
-	if a.distance_to(b) < 0.02:
-		return
-	bud.sciana(mat, a, b, 0.0, H, 0.75, _uv_sciany)
+## Parametry boku prostokąta: [wzdluz_x, stala, lo, hi, normalna do wnętrza].
+func _bok(r: Rect2, d: Vector2i) -> Array:
+	match d:
+		Vector2i(0, -1): return [true, r.position.y, r.position.x, r.end.x, Vector2(0, 1)]
+		Vector2i(0, 1): return [true, r.end.y, r.position.x, r.end.x, Vector2(0, -1)]
+		Vector2i(-1, 0): return [false, r.position.x, r.position.y, r.end.y, Vector2(1, 0)]
+		_: return [false, r.end.x, r.position.y, r.end.y, Vector2(-1, 0)]
 
 
-func _nadproze(mat: String, a: Vector3, b: Vector3, y0: float) -> void:
-	bud.sciana(mat, a, b, y0, H, 0.75, _uv_sciany)
+## Punkt na licu ściany d pomieszczenia k w miejscu u (współrzędna wzdłuż ściany).
+func _punkt_sciany(k: Vector2i, d: Vector2i, u: float) -> Vector3:
+	var b := _bok(komorki[k]["rect"], d)
+	var p := _pkt(b[0], b[1], u)
+	return Vector3(p.x, 0, p.y)
 
 
-func _parapet(mat: String, a: Vector3, b: Vector3, y1: float) -> void:
-	bud.sciana(mat, a, b, 0.0, y1, 0.75, _uv_sciany)
+func _pomieszczenie(k: Vector2i) -> void:
+	var mats: Array = komorki[k]["mats"]
+	var r: Rect2 = komorki[k]["rect"]
+	bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.5, 1.0)
+	bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, H, false, 1.5, 1.0)
+	_podloga(r)
+	for d in DIRS:
+		var b := _bok(r, d)
+		var otw: Array = komorki[k]["otwory"][d].duplicate()
+		for o in komorki[k]["okna"]:
+			if o["d"] == d:
+				otw.append([o["c"] - o["w"] * 0.5, o["c"] + o["w"] * 0.5, o["y1"], o["y0"]])
+		_sciana_osiowa(mats[0], b[0], b[1], b[2], b[3], b[4], otw)
+	for o in komorki[k]["okna"]:
+		var a := _punkt_sciany(k, o["d"], o["c"] - o["w"] * 0.5)
+		var bb := _punkt_sciany(k, o["d"], o["c"] + o["w"] * 0.5)
+		_okno(a, bb, o["y0"], o["y1"], o["d"], komorki[k]["typ"] == "piwnica")
+		okna.append([k, o["d"], (a + bb) * 0.5])
+
+
+func _korytarz(k: Vector2i) -> void:
+	var mats: Array = komorki[k]["mats"]
+	var r: Rect2 = komorki[k]["rect"]
+	bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.2, 1.0)
+	bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, H, false, 1.2, 1.0)
+	_podloga(r)
+	for d in DIRS:
+		if not komorki[k]["otwory"][d].is_empty():
+			continue
+		var b := _bok(r, d)
+		_sciana_osiowa(mats[0], b[0], b[1], b[2], b[3], b[4], [])
+
+
+## Okna na zewnętrznych ścianach pomieszczeń (nie w klatce).
+func _plan_okien() -> void:
+	for k in komorki:
+		var typ: String = komorki[k]["typ"]
+		if typ in ["korytarz", "klatka"]:
+			continue
+		var ile := 0
+		var strony := DIRS.duplicate()
+		_tasuj(strony)
+		for d in strony:
+			var n: Vector2i = k + d
+			if ile >= 2 or not komorki[k]["otwory"][d].is_empty():
+				continue
+			var zewn := not _w_siatce(n) or not komorki.has(n)
+			if not zewn or rng.randf() > (0.45 if typ != "piwnica" else 0.3):
+				continue
+			var b := _bok(komorki[k]["rect"], d)
+			var w := 1.4 if typ != "piwnica" else 1.1
+			var c := rng.randf_range(b[2] + 1.2, b[3] - 1.2)
+			var y0 := 0.95 if typ != "piwnica" else 1.75
+			var y1 := 2.25 if typ != "piwnica" else 2.45
+			komorki[k]["okna"].append({"d": d, "c": c, "w": w, "y0": y0, "y1": y1})
+			ile += 1
 
 
 func _okno(a: Vector3, b: Vector3, y0: float, y1: float, d: Vector2i, krata: bool) -> void:
 	var naz := Vector3(d.x, 0, d.y)
-	var gl := naz * (T * 0.5 + 0.05)
-	# szyba (lekko świecąca: noc za oknem)
+	var gl := naz * 0.35
 	var pa := a + gl
 	var pb := b + gl
 	bud.quad("okno", [Vector3(pa.x, y0, pa.z), Vector3(pb.x, y0, pb.z), Vector3(pb.x, y1, pb.z), Vector3(pa.x, y1, pa.z)],
 		[Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)])
-	# ościeża
 	for pair in [[a, a + gl], [b + gl, b]]:
 		var p: Vector3 = pair[0]
 		var q: Vector3 = pair[1]
 		bud.quad("tynk_bialy", [Vector3(p.x, y0, p.z), Vector3(q.x, y0, q.z), Vector3(q.x, y1, q.z), Vector3(p.x, y1, p.z)],
-			[Vector2(0, 1), Vector2(0.2, 1), Vector2(0.2, 0), Vector2(0, 0)])
+			[Vector2(0, 1), Vector2(0.3, 1), Vector2(0.3, 0), Vector2(0, 0)])
 	bud.quad("lastryko", [Vector3(a.x, y0, a.z), Vector3(b.x, y0, b.z), Vector3(b.x + gl.x, y0, b.z + gl.z), Vector3(a.x + gl.x, y0, a.z + gl.z)],
-		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.2), Vector2(0, 0.2)])
+		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.3), Vector2(0, 0.3)])
 	bud.quad("tynk_bialy", [Vector3(a.x + gl.x, y1, a.z + gl.z), Vector3(b.x + gl.x, y1, b.z + gl.z), Vector3(b.x, y1, b.z), Vector3(a.x, y1, a.z)],
-		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.2), Vector2(0, 0.2)])
+		[Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.3), Vector2(0, 0.3)])
 	var srodek := (a + b) * 0.5
 	if krata:
 		_mebel("krata", srodek + gl * 0.3 + Vector3.UP * y0, atan2(-naz.x, -naz.z), false)
-	# zimne światło księżyca
 	var l := OmniLight3D.new()
 	l.light_color = Color(0.45, 0.52, 0.8)
-	l.light_energy = 0.25
-	l.omni_range = 3.5
+	l.light_energy = 0.3
+	l.omni_range = 4.0
 	swiat.add_child(l)
 	l.global_position = srodek - naz * 0.8 + Vector3.UP * (y0 + y1) * 0.5
 
 
-## Kolizje ścian: dla każdej granicy komórek jeden zestaw brył (z otworami na drzwi).
-func _sciany_wspolne() -> void:
-	var granice := {}
-	for k in komorki:
-		for d in DIRS:
-			var n: Vector2i = k + d
-			var key := _k(k, n)
-			if granice.has(key):
-				continue
-			granice[key] = true
-			var pionowa: bool = d.x != 0   # granica wzdłuż osi z
-			var stala: float = (k.x + (1 if d.x > 0 else 0)) * C if pionowa else (k.y + (1 if d.y > 0 else 0)) * C
-			var base: float = (k.y * C) if pionowa else (k.x * C)
-			var otwory := []
-			if komorki.has(n) and krawedzie.has(key):
-				var e: Dictionary = krawedzie[key]
-				if e["otwarte"] and _korytarz_w(k) and _korytarz_w(n):
-					otwory.append([(C - KW) * 0.5, (C + KW) * 0.5, H])
-				elif e["otwarte"]:
-					otwory.append([0.12 * C, 0.88 * C, 2.45])
-				else:
-					otwory.append([e["drzwi"], e["drzwi"] + DRZWI_W, DRZWI_H])
-			_bryly_granicy(pionowa, stala, base, otwory)
+# ------------------------------------------------------------------ strefy i wolne miejsce
 
-
-func _bryly_granicy(pionowa: bool, stala: float, base: float, otwory: Array) -> void:
-	var odcinki := []  # [od, do, y0]
-	var pos := 0.0
-	for o in otwory:
-		odcinki.append([pos, o[0], 0.0])
-		odcinki.append([o[0], o[1], o[2]])
-		pos = o[1]
-	odcinki.append([pos, C, 0.0])
-	for od in odcinki:
-		var dl: float = od[1] - od[0]
-		if dl < 0.01:
-			continue
-		var y0: float = od[2]
-		var cs := CollisionShape3D.new()
-		var bs := BoxShape3D.new()
-		var srodek_wzdl: float = base + (od[0] + od[1]) * 0.5
-		if pionowa:
-			bs.size = Vector3(T, H - y0, dl)
-			cs.position = Vector3(stala, y0 + (H - y0) * 0.5, srodek_wzdl)
-		else:
-			bs.size = Vector3(dl, H - y0, T)
-			cs.position = Vector3(srodek_wzdl, y0 + (H - y0) * 0.5, stala)
-		cs.shape = bs
-		cialo_scian.add_child(cs)
-
-
-func _podloga_kolizja() -> void:
-	for k in komorki:
-		if komorki[k]["typ"] == "korytarz":
-			var prost := [Rect2(k.x * C + (C - KW) * 0.5, k.y * C + (C - KW) * 0.5, KW, KW)]
-			for d in _ramiona(k):
-				prost.append(_ramie(k, d, true))
-			for r in prost:
-				var cs2 := CollisionShape3D.new()
-				var bs2 := BoxShape3D.new()
-				var rr := r as Rect2
-				bs2.size = Vector3(rr.size.x, 0.4, rr.size.y)
-				cs2.shape = bs2
-				cs2.position = Vector3(rr.get_center().x, -0.2, rr.get_center().y)
-				cialo_scian.add_child(cs2)
-			continue
-		var cs := CollisionShape3D.new()
-		var bs := BoxShape3D.new()
-		bs.size = Vector3(C, 0.4, C)
-		cs.shape = bs
-		cs.position = _srodek(k) + Vector3(0, -0.2, 0)
-		cialo_scian.add_child(cs)
-
-
-# ------------------------------------------------------------------ wyposażenie
-
-func _drzwi_w_komorce(k: Vector2i) -> Array:
-	## Prostokąty (xz) przed drzwiami/przejściami, które muszą zostać puste.
+## Prostokąty przed drzwiami/przejściami pomieszczenia, które muszą zostać puste.
+func _strefy_drzwi(k: Vector2i) -> Array:
 	var out := []
+	var r: Rect2 = komorki[k]["rect"]
 	for d in DIRS:
-		var n: Vector2i = k + d
-		var key := _k(k, n)
-		if not (komorki.has(n) and krawedzie.has(key)):
-			continue
-		var e: Dictionary = krawedzie[key]
-		var a: float = e["drzwi"] - 0.4
-		var b: float = e["drzwi"] + DRZWI_W + 0.4
-		if e["otwarte"]:
-			a = 0.0
-			b = C
-		var x0 := k.x * C
-		var z0 := k.y * C
-		match d:
-			Vector2i(1, 0): out.append(Rect2(x0 + C - 1.7, z0 + a, 1.7, b - a))
-			Vector2i(-1, 0): out.append(Rect2(x0, z0 + a, 1.7, b - a))
-			Vector2i(0, 1): out.append(Rect2(x0 + a, z0 + C - 1.7, b - a, 1.7))
-			Vector2i(0, -1): out.append(Rect2(x0 + a, z0, b - a, 1.7))
+		for o in komorki[k]["otwory"][d]:
+			var a: float = o[0] - 0.4
+			var b: float = o[1] + 0.4
+			match d:
+				Vector2i(1, 0): out.append(Rect2(r.end.x - 1.4, a, 1.4, b - a))
+				Vector2i(-1, 0): out.append(Rect2(r.position.x, a, 1.4, b - a))
+				Vector2i(0, 1): out.append(Rect2(a, r.end.y - 1.4, b - a, 1.4))
+				Vector2i(0, -1): out.append(Rect2(a, r.position.y, b - a, 1.4))
+	return out
+
+
+## Strefy przed oknami: zakaz tylko dla wysokich mebli.
+func _strefy_okien(k: Vector2i) -> Array:
+	var out := []
+	var r: Rect2 = komorki[k]["rect"]
+	for o in komorki[k]["okna"]:
+		var a: float = o["c"] - o["w"] * 0.5 - 0.1
+		var b: float = o["c"] + o["w"] * 0.5 + 0.1
+		match o["d"]:
+			Vector2i(1, 0): out.append(Rect2(r.end.x - 0.8, a, 0.8, b - a))
+			Vector2i(-1, 0): out.append(Rect2(r.position.x, a, 0.8, b - a))
+			Vector2i(0, 1): out.append(Rect2(a, r.end.y - 0.8, b - a, 0.8))
+			Vector2i(0, -1): out.append(Rect2(a, r.position.y, b - a, 0.8))
 	return out
 
 
 func _wolne(k: Vector2i, r: Rect2, dodatkowe: Array) -> bool:
-	var inner := Rect2(k.x * C + T, k.y * C + T, C - 2 * T, C - 2 * T)
+	var inner: Rect2 = (komorki[k]["rect"] as Rect2).grow(-0.02)
 	if not inner.encloses(r):
 		return false
 	for z in komorki[k]["zajete"]:
-		if (z as Rect2).grow(0.12).intersects(r):
+		if (z as Rect2).grow(0.06).intersects(r):
 			return false
 	for z in dodatkowe:
 		if (z as Rect2).intersects(r):
@@ -603,56 +603,282 @@ func _wolne(k: Vector2i, r: Rect2, dodatkowe: Array) -> bool:
 	return true
 
 
+func _rozmiar(id: String) -> Vector2:
+	var roz: Array = meble[id]["rozmiar"]
+	return Vector2(float(roz[0]), float(roz[2]))
+
+
+func _slad(id: String, p: Vector2, rot: float) -> Rect2:
+	var s := _rozmiar(id)
+	if absf(sin(rot)) > 0.7:
+		s = Vector2(s.y, s.x)
+	return Rect2(p - s * 0.5, s)
+
+
+## Stawia mebel, jeśli ślad jest wolny (drzwi, okna dla wysokich, inne meble). Zwraca powodzenie.
+func _postaw(k: Vector2i, id: String, p: Vector2, rot: float, przy_scianie: bool) -> bool:
+	if not meble.has(id):
+		return false
+	var r := _slad(id, p, rot)
+	var strefy: Array = _strefy_drzwi(k) + komorki[k]["strefy"]
+	var wysoki := float(meble[id]["rozmiar"][1]) > 1.0 or (id in MONTOWANE_NA_SCIANIE and id != "kaloryfer")
+	if wysoki:
+		strefy += _strefy_okien(k)
+	if not _wolne(k, r, strefy):
+		return false
+	var montowany := id in MONTOWANE_NA_SCIANIE
+	if id != "dywan":
+		komorki[k]["zajete"].append(r)
+	var y: float = WYSOKOSC_MONTAZU.get(id, 0.0)
+	var node := _mebel(id, Vector3(p.x, y, p.y), rot, true, k)
+	if id != "dywan" and not montowany:
+		komorki[k]["meble"].append({"rect": r, "node": node, "przy_scianie": przy_scianie, "pos": Vector3(p.x, y, p.y)})
+	return true
+
+
+## Pozycja mebla dosuniętego tyłem do ściany d w miejscu u.
+func _pozycja_przy_scianie(k: Vector2i, id: String, d: Vector2i, u: float) -> Vector2:
+	var r: Rect2 = komorki[k]["rect"]
+	var gl := _rozmiar(id).y * 0.5 + 0.03
+	match d:
+		Vector2i(0, -1): return Vector2(u, r.position.y + gl)
+		Vector2i(0, 1): return Vector2(u, r.end.y - gl)
+		Vector2i(-1, 0): return Vector2(r.position.x + gl, u)
+		_: return Vector2(r.end.x - gl, u)
+
+
+func _na_scianie(k: Vector2i, id: String, d: Vector2i, u: float) -> bool:
+	return _postaw(k, id, _pozycja_przy_scianie(k, id, d, u), ROT[d], true)
+
+
+## Próbuje postawić mebel gdziekolwiek przy ścianie d (albo dowolnej, gdy d = zero).
+func _gdzies_przy_scianie(k: Vector2i, id: String, d := Vector2i.ZERO, proby := 16) -> bool:
+	for i in proby:
+		var dd: Vector2i = d if d != Vector2i.ZERO else DIRS[rng.randi() % 4]
+		var b := _bok(komorki[k]["rect"], dd)
+		var w := _rozmiar(id).x
+		var u := rng.randf_range(b[2] + w * 0.5 + 0.05, b[3] - w * 0.5 - 0.05)
+		if _na_scianie(k, id, dd, u):
+			return true
+	return false
+
+
+## Ciąg mebli dosuniętych do siebie wzdłuż ściany d, od jednego narożnika. Omija drzwi.
+func _ciag(k: Vector2i, ids: Array, d: Vector2i, od_konca: bool) -> int:
+	var b := _bok(komorki[k]["rect"], d)
+	var lo: float = b[2] + 0.04
+	var hi: float = b[3] - 0.04
+	var cur := hi if od_konca else lo
+	var ile := 0
+	for id in ids:
+		if not meble.has(id):
+			continue
+		var w := _rozmiar(id).x
+		while (cur - w >= lo) if od_konca else (cur + w <= hi):
+			var u := cur - w * 0.5 if od_konca else cur + w * 0.5
+			if _na_scianie(k, id, d, u):
+				cur = cur - w - 0.02 if od_konca else cur + w + 0.02
+				ile += 1
+				break
+			cur = cur - 0.2 if od_konca else cur + 0.2
+	return ile
+
+
+## Stół z krzesłami (i czasem dywanem) w wolnym miejscu pomieszczenia.
+func _stol_z_krzeslami(k: Vector2i, krzesla: int, dywan: bool) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	var c := r.get_center()
+	var strefy: Array = _strefy_drzwi(k)
+	for proba in 30:
+		var rot := 0.0 if rng.randf() < 0.5 else PI / 2.0
+		var p := c + Vector2(rng.randf_range(-1, 1) * maxf(0.0, r.size.x * 0.5 - 1.8), rng.randf_range(-1, 1) * maxf(0.0, r.size.y * 0.5 - 1.8))
+		var slad := _slad("stol", p, rot)
+		if not _wolne(k, slad.grow(0.75), strefy):
+			continue
+		if dywan:
+			_mebel("dywan", Vector3(p.x, 0, p.y), rot, false, k)
+		_postaw(k, "stol", p, rot, false)
+		# miejsca na krzesła: dłuższe boki, potem szczyty
+		var dl := Vector2(1, 0) if rot == 0.0 else Vector2(0, 1)
+		var pop := Vector2(0, 1) if rot == 0.0 else Vector2(1, 0)
+		var miejsca := [
+			[p - pop * 0.68 + dl * 0.28, pop], [p + pop * 0.68 - dl * 0.28, -pop],
+			[p - pop * 0.68 - dl * 0.3, pop], [p - dl * 0.92, dl], [p + dl * 0.92, -dl],
+		]
+		var n := 0
+		for m in miejsca:
+			if n >= krzesla:
+				break
+			var kier: Vector2 = m[1]
+			# krzesło przodem do stołu: obrót mapuje lokalne +z na kierunek kier
+			var kr := atan2(kier.x, kier.y) + rng.randf_range(-0.3, 0.3)
+			if _postaw(k, "krzeslo", m[0], kr, false):
+				n += 1
+		return
+
+
+## Skupisko (skrzynie, beczki) w narożniku.
+func _skupisko(k: Vector2i, ids: Array) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	var sx := -1 if rng.randf() < 0.5 else 1
+	var sz := -1 if rng.randf() < 0.5 else 1
+	var rog := Vector2(r.position.x if sx < 0 else r.end.x, r.position.y if sz < 0 else r.end.y)
+	for id in ids:
+		for proba in 14:
+			var p := rog + Vector2(-sx * rng.randf_range(0.4, 1.9), -sz * rng.randf_range(0.4, 1.9))
+			if _postaw(k, id, p, rng.randf_range(-0.25, 0.25) + (PI / 2.0 if rng.randf() < 0.3 else 0.0), false):
+				break
+
+
+## Wyspa: kilka mebli obok siebie w środkowej części pomieszczenia (osłona).
+func _wyspa(k: Vector2i, ids: Array) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	for proba in 20:
+		var rot := 0.0 if rng.randf() < 0.5 else PI / 2.0
+		var dl := Vector2(1, 0) if rot == 0.0 else Vector2(0, 1)
+		var p := r.get_center() + Vector2(rng.randf_range(-1, 1) * maxf(0.0, r.size.x * 0.5 - 2.2), rng.randf_range(-1, 1) * maxf(0.0, r.size.y * 0.5 - 2.2))
+		var szer := 0.0
+		for id in ids:
+			szer += _rozmiar(id).x + 0.05
+		var cur := p - dl * szer * 0.5
+		var ok := true
+		for id in ids:
+			var w := _rozmiar(id).x
+			if not _wolne(k, _slad(id, cur + dl * w * 0.5, rot).grow(0.6), _strefy_drzwi(k)):
+				ok = false
+				break
+			cur += dl * (w + 0.05)
+		if not ok:
+			continue
+		cur = p - dl * szer * 0.5
+		for id in ids:
+			var w := _rozmiar(id).x
+			_postaw(k, id, cur + dl * w * 0.5, rot + rng.randf_range(-0.06, 0.06), false)
+			cur += dl * (w + 0.05)
+		return
+
+
+# ------------------------------------------------------------------ wyposażenie
+
 func _wyposaz(k: Vector2i) -> void:
 	var typ: String = komorki[k]["typ"]
 	if typ == "korytarz":
 		_wyposaz_korytarz(k)
 		return
-	var drzwi := _drzwi_w_komorce(k)
-	if k == _komorka_startu():
-		drzwi.append(Rect2(start_pos.x - 1.0, start_pos.z - 1.0, 2.0, 2.0))
-	for szablon in WYPOSAZENIE.get(typ, []):
-		var ile := rng.randi_range(szablon[2], szablon[3])
-		for i in ile:
-			_umiesc(k, szablon[0], szablon[1], drzwi)
-	_zapewnij_przejscie(k, drzwi)
-	# dekoracyjne drzwi do zamkniętych mieszkań na ścianach korytarzy
-	if typ in ["klatka", "korytarz"]:
-		for d in DIRS:
-			var n: Vector2i = k + d
-			if komorki.has(n) and krawedzie.has(_k(k, n)):
-				continue
+	var sciany := DIRS.duplicate()
+	_tasuj(sciany)
+	match typ:
+		"pokoj":
+			# strefa dzienna: wersalka i telewizor naprzeciw, meblościanka, łóżko, stół
+			if _gdzies_przy_scianie(k, "wersalka", sciany[0]):
+				_gdzies_przy_scianie(k, "telewizor", -sciany[0])
+			if rng.randf() < 0.7:
+				_ciag(k, ["meblosciana"] if rng.randf() < 0.6 else ["szafa", "szafa"], sciany[1], rng.randf() < 0.5)
+			if rng.randf() < 0.55:
+				_gdzies_przy_scianie(k, "lozko", sciany[2])
 			if rng.randf() < 0.6:
-				_drzwi_dekoracyjne(k, d, drzwi)
+				_stol_z_krzeslami(k, rng.randi_range(2, 3), rng.randf() < 0.6)
+			elif rng.randf() < 0.5:
+				_mebel("dywan", Vector3(_srodek(k).x, 0, _srodek(k).z), 0.0, false, k)
+		"kuchnia":
+			var ciag := ["lodowka", "szafka_kuchenna", "kuchenka", "szafka_kuchenna"]
+			if rng.randf() < 0.4:
+				ciag.pop_back()
+			_ciag(k, ciag, sciany[0], rng.randf() < 0.5)
+			if rng.randf() < 0.45:
+				_ciag(k, ["szafka_kuchenna"], sciany[1], rng.randf() < 0.5)
+			_stol_z_krzeslami(k, rng.randi_range(2, 4), false)
+			if rng.randf() < 0.5:
+				_gdzies_przy_scianie(k, "apteczka_scienna")
+		"administracja":
+			_ciag(k, ["szafka_metalowa", "szafka_metalowa", "szafa"], sciany[0], rng.randf() < 0.5)
+			_biurka(k, rng.randi_range(1, 3))
+			if rng.randf() < 0.5:
+				_gdzies_przy_scianie(k, "tablica_ogloszen")
+			if rng.randf() < 0.4:
+				_gdzies_przy_scianie(k, "apteczka_scienna")
+		"piwnica":
+			_ciag(k, ["regal_metalowy", "regal_metalowy"], sciany[0], rng.randf() < 0.5)
+			if rng.randf() < 0.5:
+				_ciag(k, ["regal_metalowy"], sciany[1], rng.randf() < 0.5)
+			_skupisko(k, ["skrzynia", "skrzynia", "beczka"].slice(0, rng.randi_range(1, 3)))
+			if rng.randf() < 0.45:
+				_wyspa(k, ["worki_piasek"])
+		"magazyn":
+			_ciag(k, ["regal_metalowy", "regal_metalowy", "regal_metalowy"], sciany[0], rng.randf() < 0.5)
+			_ciag(k, ["regal_metalowy", "regal_metalowy"], sciany[1], rng.randf() < 0.5)
+			_wyspa(k, ["skrzynia_wojskowa", "skrzynia_wojskowa"])
+			if rng.randf() < 0.6:
+				_wyspa(k, ["worki_piasek"])
+			_skupisko(k, ["beczka", "beczka", "skrzynia"])
+		"warsztat":
+			_ciag(k, ["regal_metalowy", "stol_warsztatowy", "szafka_metalowa"], sciany[0], rng.randf() < 0.5)
+			if rng.randf() < 0.5:
+				_ciag(k, ["regal_metalowy"], sciany[1], rng.randf() < 0.5)
+			_skupisko(k, ["beczka", "beczka"])
+			if rng.randf() < 0.6:
+				_wyspa(k, ["skrzynia"])
+		"klatka":
+			_gdzies_przy_scianie(k, "skrzynki_pocztowe")
+			if rng.randf() < 0.6:
+				_gdzies_przy_scianie(k, "tablica_ogloszen")
+			if rng.randf() < 0.5:
+				_gdzies_przy_scianie(k, "hydrant")
+			for d in sciany:
+				if komorki[k]["otwory"][d].is_empty() and rng.randf() < 0.7:
+					_drzwi_dekoracyjne(k, d)
+	# kaloryfery pod oknami
+	for o in komorki[k]["okna"]:
+		if typ != "piwnica" and rng.randf() < 0.8:
+			_na_scianie(k, "kaloryfer", o["d"], o["c"])
+	_zapewnij_przejscie(k)
 	# punkty spawnu przeciwników
 	if komorki[k]["glebokosc"] >= 2:
+		var r: Rect2 = komorki[k]["rect"]
 		for i in 3:
 			for proba in 20:
-				var p := Vector2(k.x * C + rng.randf_range(1.0, C - 1.0), k.y * C + rng.randf_range(1.0, C - 1.0))
+				var p := Vector2(rng.randf_range(r.position.x + 0.8, r.end.x - 0.8), rng.randf_range(r.position.y + 0.8, r.end.y - 0.8))
 				if _wolne(k, Rect2(p - Vector2(0.4, 0.4), Vector2(0.8, 0.8)), []):
 					spawny.append({"pos": Vector3(p.x, 0.05, p.y), "komorka": k, "glebokosc": komorki[k]["glebokosc"]})
 					break
 
 
-func _wyposaz_korytarz(k: Vector2i) -> void:
-	var ram := _ramiona(k)
-	var c := _srodek(k)
-	var rot_dla := {Vector2i(0, -1): 0.0, Vector2i(0, 1): PI, Vector2i(-1, 0): PI / 2.0, Vector2i(1, 0): -PI / 2.0}
-	var modele := ["drzwi_skaj_12", "drzwi_skaj_13", "drzwi_skaj_14"]
-	var sciany := []   # [pozycja przy ścianie, kierunek ściany]
-	for d in DIRS:
-		if d in ram:
-			# boczne ściany ramienia (ok. 1,9 m) – miejsce na drzwi do zamkniętych mieszkań
-			var r := _ramie(k, d)
-			if r.size.x < 1.5 and r.size.y < 1.5:
-				continue
-			var sr := Vector3(r.get_center().x, 0, r.get_center().y)
-			var poprz := Vector3(-d.y, 0, d.x)
-			for s in [-1.0, 1.0]:
-				var dw := Vector2i(int(poprz.x * s), int(poprz.z * s))
-				sciany.append([sr + poprz * s * (KW * 0.5 - 0.1), dw])
+## Rząd biurek z krzesłami (biuro administracji).
+func _biurka(k: Vector2i, ile: int) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	var rot := 0.0 if rng.randf() < 0.5 else PI
+	var z := r.get_center().y + rng.randf_range(-0.8, 0.8)
+	var x := r.position.x + 1.4
+	var zrobione := 0
+	while x < r.end.x - 1.0 and zrobione < ile:
+		if _postaw(k, "biurko", Vector2(x, z), rot + rng.randf_range(-0.05, 0.05), false):
+			var za := -0.68 if rot == 0.0 else 0.68
+			_postaw(k, "krzeslo", Vector2(x + rng.randf_range(-0.2, 0.2), z + za), rot + rng.randf_range(-0.4, 0.4), false)
+			zrobione += 1
+			x += 2.2
 		else:
-			sciany.append([c + Vector3(d.x, 0, d.y) * (KW * 0.5 - 0.1), d])
+			x += 0.4
+
+
+func _wyposaz_korytarz(k: Vector2i) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	var modele := ["drzwi_skaj_12", "drzwi_skaj_13", "drzwi_skaj_14"]
+	var sciany := []   # [pozycja przy licu, kierunek ściany]
+	for d in DIRS:
+		if komorki[k]["otwory"][d].is_empty():
+			var b := _bok(r, d)
+			var p := _pkt(b[0], b[1], (b[2] + b[3]) * 0.5)
+			sciany.append([Vector3(p.x, 0, p.y) - Vector3(d.x, 0, d.y) * 0.1, d])
+	for ram in komorki[k]["ramiona"]:
+		var ar: Rect2 = ram[1]
+		var wzdl: Vector2i = ram[0]
+		if maxf(ar.size.x, ar.size.y) < 1.8:
+			continue
+		var sr := ar.get_center()
+		var poprz := Vector2i(wzdl.y, wzdl.x)
+		for s in [-1, 1]:
+			var d: Vector2i = poprz * s
+			sciany.append([Vector3(sr.x + d.x * (KW * 0.5 - 0.1), 0, sr.y + d.y * (KW * 0.5 - 0.1)), d])
 	_tasuj(sciany)
 	var drzwi_n := 0
 	for sc in sciany:
@@ -660,114 +886,109 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 			var inst: Node3D = load("res://assets/models/%s.glb" % modele[rng.randi() % 3]).instantiate()
 			swiat.add_child(inst)
 			inst.position = sc[0]
-			inst.rotation.y = rot_dla[sc[1]]
+			inst.rotation.y = ROT[sc[1]]
 			drzwi_n += 1
 		elif rng.randf() < 0.25:
 			var id: String = ["hydrant", "tablica_ogloszen", "kaloryfer"][rng.randi() % 3]
-			var y := {"hydrant": 0.9, "tablica_ogloszen": 1.25, "kaloryfer": 0.12}[id] as float
-			_mebel(id, sc[0] + Vector3.UP * y, rot_dla[sc[1]], true, k)
-	# osłona w narożniku kwadratu, tylko między dwiema ślepymi ścianami (nie blokuje przejścia)
+			_mebel(id, sc[0] + Vector3.UP * float(WYSOKOSC_MONTAZU[id]), ROT[sc[1]], true, k)
+	# osłona w narożniku kwadratu, tylko między dwiema ślepymi ścianami
+	var c := _srodek(k)
 	for dx in [-1, 1]:
 		for dz in [-1, 1]:
-			if Vector2i(dx, 0) in ram or Vector2i(0, dz) in ram or rng.randf() > 0.35:
+			if not komorki[k]["otwory"][Vector2i(dx, 0)].is_empty() or not komorki[k]["otwory"][Vector2i(0, dz)].is_empty() or rng.randf() > 0.4:
 				continue
-			var id2: String = ["beczka", "skrzynia", "worki_piasek"][rng.randi() % 3]
-			var p := c + Vector3(dx, 0, dz) * (KW * 0.5 - 0.42)
-			var node := _mebel(id2, p, rng.randf_range(-0.2, 0.2), true, k)
-			var r2 := Rect2(Vector2(p.x, p.z) - Vector2(0.35, 0.35), Vector2(0.7, 0.7))
-			komorki[k]["zajete"].append(r2)
-			komorki[k]["meble"].append({"rect": r2, "node": node, "przy_scianie": false, "pos": p})
+			var id2: String = ["beczka", "skrzynia", "beczka"][rng.randi() % 3]
+			_postaw(k, id2, Vector2(c.x + dx * (KW * 0.5 - 0.4), c.z + dz * (KW * 0.5 - 0.4)), rng.randf_range(-0.2, 0.2), false)
 	if komorki[k]["glebokosc"] >= 2 and rng.randf() < 0.5:
 		spawny.append({"pos": c + Vector3(0, 0.05, 0), "komorka": k, "glebokosc": komorki[k]["glebokosc"]})
 
 
+func _drzwi_dekoracyjne(k: Vector2i, d: Vector2i) -> void:
+	var modele := ["drzwi_skaj_12", "drzwi_skaj_13", "drzwi_skaj_14"]
+	var b := _bok(komorki[k]["rect"], d)
+	for proba in 10:
+		var u := rng.randf_range(b[2] + 0.9, b[3] - 0.9)
+		var p := _pozycja_przy_scianie(k, "skrzynia", d, u)   # ślad ok. 0,6 m od ściany
+		var slad := Rect2(p - Vector2(0.65, 0.65), Vector2(1.3, 1.3))
+		if not _wolne(k, slad, _strefy_drzwi(k)):
+			continue
+		komorki[k]["zajete"].append(Rect2(p - Vector2(0.6, 0.3), Vector2(1.2, 0.6)) if d.y != 0 else Rect2(p - Vector2(0.3, 0.6), Vector2(0.6, 1.2)))
+		var lico := _punkt_sciany(k, d, u)
+		var inst: Node3D = load("res://assets/models/%s.glb" % modele[rng.randi() % 3]).instantiate()
+		swiat.add_child(inst)
+		inst.position = lico - Vector3(d.x, 0, d.y) * 0.1
+		inst.rotation.y = ROT[d]
+		return
+
+
 ## Usuwa meble, jeśli dzielą pomieszczenie tak, że nie da się przejść między drzwiami.
-func _zapewnij_przejscie(k: Vector2i, drzwi: Array) -> void:
+func _zapewnij_przejscie(k: Vector2i) -> void:
+	var drzwi := _strefy_drzwi(k)
+	if k == _komorka_startu():
+		drzwi.append(Rect2(start_pos.x - 0.5, start_pos.z - 0.5, 1.0, 1.0))
 	for proba in 8:
 		if _spojne(k, drzwi):
 			return
-		var lista: Array = komorki[k]["meble"]
-		if lista.is_empty():
+		if not usun_srodkowy_mebel(k):
 			return
-		# najpierw usuwane meble stojące na środku
-		var idx := -1
-		for i in range(lista.size() - 1, -1, -1):
-			if not lista[i]["przy_scianie"]:
-				idx = i
-				break
-		if idx < 0:
-			idx = lista.size() - 1
-		var m: Dictionary = lista[idx]
-		lista.remove_at(idx)
-		komorki[k]["zajete"].erase(m["rect"])
-		if is_instance_valid(m["node"]):
-			# usunięcie z drzewa od razu: siatka nawigacji jest wypiekana jeszcze w tej klatce
-			var nd: Node = m["node"]
-			nd.get_parent().remove_child(nd)
-			nd.queue_free()
-		oslony = oslony.filter(func(o): return o["mebel"].distance_to(m["pos"]) > 0.01)
 
 
 func _spojne(k: Vector2i, drzwi: Array) -> bool:
 	var krok := 0.25
-	var x0 := k.x * C + T
-	var z0 := k.y * C + T
-	var n := int((C - 2 * T) / krok)
+	var r: Rect2 = komorki[k]["rect"]
+	var x0 := r.position.x
+	var z0 := r.position.y
+	var nx := int(r.size.x / krok)
+	var nz := int(r.size.y / krok)
 	var zablok := PackedByteArray()
-	zablok.resize(n * n)
-	for ix in n:
-		for iz in n:
+	zablok.resize(nx * nz)
+	for ix in nx:
+		for iz in nz:
 			var p := Vector2(x0 + (ix + 0.5) * krok, z0 + (iz + 0.5) * krok)
-			for r in komorki[k]["zajete"]:
-				if (r as Rect2).grow(0.5).has_point(p):
-					zablok[iz * n + ix] = 1
+			for z in komorki[k]["zajete"]:
+				if (z as Rect2).grow(0.45).has_point(p):
+					zablok[iz * nx + ix] = 1
 					break
-	# punkty wejść: środki stref przed drzwiami
 	var punkty := []
 	for d in drzwi:
 		var c: Vector2 = (d as Rect2).get_center()
-		var ix := clampi(int((c.x - x0) / krok), 0, n - 1)
-		var iz := clampi(int((c.y - z0) / krok), 0, n - 1)
-		punkty.append(Vector2i(ix, iz))
+		punkty.append(Vector2i(clampi(int((c.x - x0) / krok), 0, nx - 1), clampi(int((c.y - z0) / krok), 0, nz - 1)))
 	if punkty.size() < 2:
 		return true
 	var odw := PackedByteArray()
-	odw.resize(n * n)
+	odw.resize(nx * nz)
 	var kol: Array = [punkty[0]]
-	odw[punkty[0].y * n + punkty[0].x] = 1
+	odw[punkty[0].y * nx + punkty[0].x] = 1
 	while not kol.is_empty():
 		var c2: Vector2i = kol.pop_back()
 		for dd in DIRS:
 			var nb: Vector2i = c2 + dd
-			if nb.x < 0 or nb.y < 0 or nb.x >= n or nb.y >= n:
+			if nb.x < 0 or nb.y < 0 or nb.x >= nx or nb.y >= nz:
 				continue
-			var i := nb.y * n + nb.x
+			var i := nb.y * nx + nb.x
 			if odw[i] == 1 or zablok[i] == 1:
 				continue
 			odw[i] = 1
 			kol.append(nb)
 	for p in punkty:
-		if odw[p.y * n + p.x] == 0:
+		if odw[p.y * nx + p.x] == 0:
 			return false
 	return true
 
 
-## Punkty 1 m za każdymi drzwiami w głąb pomieszczenia (do sprawdzania spójności na siatce nawigacji).
+## Punkty w głąb pomieszczenia przy każdym przejściu (do sprawdzania spójności na siatce nawigacji).
 func punkty_drzwi(k: Vector2i) -> Array:
 	var pts := []
-	for d in DIRS:
-		var n: Vector2i = k + d
-		var key := _k(k, n)
-		if not krawedzie.has(key):
-			continue
+	for key in krawedzie:
 		var e: Dictionary = krawedzie[key]
-		var srodek: float = (C * 0.5) if e["otwarte"] else (e["drzwi"] + DRZWI_W * 0.5)
-		var c := Vector3(k.x * C, 0, k.y * C)
-		match d:
-			Vector2i(1, 0): pts.append(c + Vector3(C - 1.0, 0, srodek))
-			Vector2i(-1, 0): pts.append(c + Vector3(1.0, 0, srodek))
-			Vector2i(0, 1): pts.append(c + Vector3(srodek, 0, C - 1.0))
-			Vector2i(0, -1): pts.append(c + Vector3(srodek, 0, 1.0))
+		if not e.has("pa"):
+			continue
+		var a: Vector2i = e["a_dol"]
+		var inny: Vector2i = e["b"] if e["a"] == a else e["a"]
+		if a == k:
+			pts.append(e["pa"])
+		elif inny == k:
+			pts.append(e["pb"])
 	if k == _komorka_startu():
 		pts.append(start_pos)
 	return pts
@@ -791,6 +1012,7 @@ func usun_srodkowy_mebel(k: Vector2i) -> bool:
 	komorki[k]["zajete"].erase(m["rect"])
 	oslony = oslony.filter(func(o): return o["mebel"].distance_to(m["pos"]) > 0.01)
 	if is_instance_valid(m["node"]):
+		# usunięcie z drzewa od razu: siatka nawigacji jest wypiekana jeszcze w tej klatce
 		var nd: Node = m["node"]
 		nd.get_parent().remove_child(nd)
 		nd.queue_free()
@@ -799,68 +1021,6 @@ func usun_srodkowy_mebel(k: Vector2i) -> bool:
 
 func _komorka_startu() -> Vector2i:
 	return Vector2i(int(start_pos.x / C), int(start_pos.z / C))
-
-
-func _umiesc(k: Vector2i, id: String, przy_scianie: bool, drzwi: Array) -> void:
-	if not meble.has(id):
-		return
-	var roz: Array = meble[id]["rozmiar"]
-	var w := float(roz[0])
-	var dgl := float(roz[2])
-	for proba in 30:
-		var rot := 0.0
-		var pos := Vector2.ZERO
-		var fw := w
-		var fd := dgl
-		if przy_scianie:
-			var d: Vector2i = DIRS[rng.randi() % 4]
-			var wzdl := rng.randf_range(T + w * 0.5 + 0.1, C - T - w * 0.5 - 0.1)
-			var odsc := T + dgl * 0.5 + 0.02
-			match d:
-				Vector2i(0, -1):
-					pos = Vector2(k.x * C + wzdl, k.y * C + odsc); rot = 0.0
-				Vector2i(0, 1):
-					pos = Vector2(k.x * C + wzdl, (k.y + 1) * C - odsc); rot = PI
-				Vector2i(-1, 0):
-					pos = Vector2(k.x * C + odsc, k.y * C + wzdl); rot = PI / 2.0
-				Vector2i(1, 0):
-					pos = Vector2((k.x + 1) * C - odsc, k.y * C + wzdl); rot = -PI / 2.0
-			if d.x != 0:
-				fw = dgl
-				fd = w
-		else:
-			pos = Vector2(k.x * C + rng.randf_range(1.2, C - 1.2), k.y * C + rng.randf_range(1.2, C - 1.2))
-			if rng.randf() < 0.5:
-				rot = PI / 2.0
-				fw = dgl
-				fd = w
-			rot += rng.randf_range(-0.12, 0.12) if id in ["skrzynia", "beczka", "krzeslo", "worki_piasek"] else 0.0
-		var r := Rect2(pos - Vector2(fw, fd) * 0.5, Vector2(fw, fd))
-		var montowany := id in MONTOWANE_NA_SCIANIE
-		if not _wolne(k, r, [] if montowany else drzwi):
-			continue
-		if montowany and _koliduje_z_otworem(k, r):
-			continue
-		if id != "dywan":
-			komorki[k]["zajete"].append(r)
-		var y := 0.0
-		match id:
-			"hydrant": y = 0.9
-			"tablica_ogloszen": y = 1.25
-			"apteczka_scienna": y = 1.3
-			"skrzynki_pocztowe": y = 1.1
-			"kaloryfer": y = 0.12
-		var node := _mebel(id, Vector3(pos.x, y, pos.y), rot, true, k)
-		if id != "dywan" and not montowany:
-			komorki[k]["meble"].append({"rect": r, "node": node, "przy_scianie": przy_scianie, "pos": Vector3(pos.x, y, pos.y)})
-		return
-
-
-func _koliduje_z_otworem(k: Vector2i, r: Rect2) -> bool:
-	for z in _drzwi_w_komorce(k):
-		if (z as Rect2).grow(0.15).intersects(r):
-			return true
-	return false
 
 
 func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector2i(-1, -1)) -> Node3D:
@@ -916,36 +1076,6 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 	return korzen
 
 
-func _drzwi_dekoracyjne(k: Vector2i, d: Vector2i, drzwi: Array) -> void:
-	var modele := ["drzwi_skaj_12", "drzwi_skaj_13", "drzwi_skaj_14"]
-	for proba in 10:
-		var wzdl := rng.randf_range(0.9, C - 0.9)
-		var pos: Vector3
-		var rot := 0.0
-		var r: Rect2
-		match d:
-			Vector2i(0, -1):
-				pos = Vector3(k.x * C + wzdl, 0, k.y * C + T * 0.5 + 0.1); rot = 0.0
-				r = Rect2(pos.x - 0.6, pos.z, 1.2, 0.5)
-			Vector2i(0, 1):
-				pos = Vector3(k.x * C + wzdl, 0, (k.y + 1) * C - T * 0.5 - 0.1); rot = PI
-				r = Rect2(pos.x - 0.6, pos.z - 0.5, 1.2, 0.5)
-			Vector2i(-1, 0):
-				pos = Vector3(k.x * C + T * 0.5 + 0.1, 0, k.y * C + wzdl); rot = PI / 2.0
-				r = Rect2(pos.x, pos.z - 0.6, 0.5, 1.2)
-			Vector2i(1, 0):
-				pos = Vector3((k.x + 1) * C - T * 0.5 - 0.1, 0, k.y * C + wzdl); rot = -PI / 2.0
-				r = Rect2(pos.x - 0.5, pos.z - 0.6, 0.5, 1.2)
-		if not _wolne(k, r, []):
-			continue
-		komorki[k]["zajete"].append(r)
-		var inst: Node3D = load("res://assets/models/%s.glb" % modele[rng.randi() % 3]).instantiate()
-		swiat.add_child(inst)
-		inst.position = pos
-		inst.rotation.y = rot
-		return
-
-
 func _lampa(k: Vector2i) -> void:
 	var typ: String = komorki[k]["typ"]
 	var start := k == _komorka_startu()
@@ -959,8 +1089,8 @@ func _lampa(k: Vector2i) -> void:
 	model.position = pos
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.78, 0.52) if not gola else Color(1.0, 0.72, 0.45)
-	l.light_energy = 1.5 if not gola else 1.3
-	l.omni_range = 7.0 if typ != "korytarz" else 5.0
+	l.light_energy = 1.6 if not gola else 1.4
+	l.omni_range = 8.5 if typ != "korytarz" else 6.0
 	l.omni_attenuation = 0.9
 	l.shadow_enabled = false
 	swiat.add_child(l)
@@ -982,22 +1112,58 @@ func _lampa(k: Vector2i) -> void:
 
 # ------------------------------------------------------------------ wyjścia
 
-func _wyjscia() -> void:
-	# komórki posortowane od najgłębszej
+## Wybór pomieszczeń i ścian z wyjściami przed ustawieniem mebli (strefa przed wyjściem zostaje pusta).
+func _zaplanuj_wyjscia() -> void:
 	var lista := komorki.keys().filter(func(k): return komorki[k]["typ"] not in ["korytarz", "klatka"])
 	lista.sort_custom(func(a, b): return komorki[a]["glebokosc"] > komorki[b]["glebokosc"])
+	if lista.is_empty():
+		return
 	var glowna: Vector2i = lista[0]
-	_wyjscie_drzwi(glowna, "glowne", "Brama na podwórze", 8.0)
-	# wyjście przez piwnicę na klucz
 	var piwnica := Vector2i(-1, -1)
 	for k in lista:
 		if k != glowna and komorki[k]["typ"] == "piwnica":
 			piwnica = k
 			break
-	if piwnica.x < 0:
-		piwnica = lista[mini(1, lista.size() - 1)]
+	if piwnica.x < 0 and lista.size() > 1:
+		piwnica = lista[1]
 		komorki[piwnica]["typ"] = "piwnica"
-	_wyjscie_drzwi(piwnica, "klucz", "Piwnica nr 7", 5.0)
+		komorki[piwnica]["mats"] = MATERIALY["piwnica"]
+		komorki[piwnica]["okna"] = []
+	_plan_wyjscia(glowna, "glowne", "Brama na podwórze", 8.0)
+	if piwnica.x >= 0:
+		_plan_wyjscia(piwnica, "klucz", "Piwnica nr 7", 5.0)
+
+
+func _plan_wyjscia(k: Vector2i, typ: String, nazwa: String, czas: float) -> void:
+	var strona := Vector2i.ZERO
+	var strony := DIRS.duplicate()
+	_tasuj(strony)
+	for d in strony:
+		if not komorki[k]["otwory"][d].is_empty():
+			continue
+		if komorki[k]["okna"].any(func(o): return o["d"] == d):
+			continue
+		strona = d
+		if not komorki.has(k + d):
+			break
+	if strona == Vector2i.ZERO:
+		# wszystkie ściany zajęte: wyjście zamiast okna
+		strona = komorki[k]["okna"][0]["d"] if not komorki[k]["okna"].is_empty() else Vector2i(1, 0)
+		komorki[k]["okna"] = komorki[k]["okna"].filter(func(o): return o["d"] != strona)
+	var b := _bok(komorki[k]["rect"], strona)
+	var u: float = (b[2] + b[3]) * 0.5
+	var lico := _punkt_sciany(k, strona, u)
+	var naz := Vector3(strona.x, 0, strona.y)
+	var w := lico - naz * 1.0
+	komorki[k]["strefy"].append(Rect2(w.x - 1.3, w.z - 1.3, 2.6, 2.6))
+	_plan_wyjsc.append([k, strona, u, typ, nazwa, czas])
+
+
+func _wyjscia() -> void:
+	for p in _plan_wyjsc:
+		_wyjscie_drzwi(p[0], p[1], p[2], p[3], p[4], p[5])
+	var glowna: Vector2i = _plan_wyjsc[0][0] if not _plan_wyjsc.is_empty() else Vector2i(-1, -1)
+	var piwnica: Vector2i = _plan_wyjsc[1][0] if _plan_wyjsc.size() > 1 else Vector2i(-1, -1)
 	# wyjście czasowe przez okno na rusztowanie
 	var kandydaci := okna.filter(func(o): return o[0] != glowna and o[0] != piwnica and komorki[o[0]]["glebokosc"] >= 2)
 	if not kandydaci.is_empty():
@@ -1008,32 +1174,20 @@ func _wyjscia() -> void:
 		ew.czas_odliczania = 6.0
 		ew.okno_od = rng.randf_range(240.0, 540.0)
 		ew.okno_do = ew.okno_od + 150.0
-		_strefa(ew, _srodek(o[0]) + Vector3(o[1].x, 0, o[1].y) * (C * 0.5 - 1.0), Vector3(2.2, 2.0, 2.2))
+		var d: Vector2i = o[1]
+		_strefa(ew, (o[2] as Vector3) - Vector3(d.x, 0, d.y) * 0.9, Vector3(2.2, 2.0, 2.2))
 		wyjscia.append(ew)
 
 
-func _wyjscie_drzwi(k: Vector2i, typ: String, nazwa: String, czas: float) -> void:
-	# ściana bez przejścia, najlepiej zewnętrzna
-	var strona := Vector2i.ZERO
-	for d in DIRS:
-		var n: Vector2i = k + d
-		if not (komorki.has(n) and krawedzie.has(_k(k, n))):
-			strona = d
-			if not komorki.has(n):
-				break
-	if strona == Vector2i.ZERO:
-		strona = Vector2i(1, 0)
-	var srodek := _srodek(k)
+func _wyjscie_drzwi(k: Vector2i, strona: Vector2i, u: float, typ: String, nazwa: String, czas: float) -> void:
 	var naz := Vector3(strona.x, 0, strona.y)
-	var poz_sciany := srodek + naz * (C * 0.5 - T * 0.5)
+	var poz_sciany := _punkt_sciany(k, strona, u)
 	var rot := atan2(-naz.x, -naz.z)
-	# drzwi (model) wysunięte ze ściany
-	var model := "drzwi_piwnica"
-	var inst: Node3D = load("res://assets/models/%s.glb" % model).instantiate()
+	var inst: Node3D = load("res://assets/models/drzwi_piwnica.glb").instantiate()
 	swiat.add_child(inst)
 	inst.position = poz_sciany - naz * 0.1
 	inst.rotation.y = rot
-	var znak := _mebel("znak_wyjscie", poz_sciany - naz * 0.06 + Vector3.UP * 2.25, rot, false)
+	var znak := _mebel("znak_wyjscie", poz_sciany - naz * 0.06 + Vector3.UP * 2.3, rot, false)
 	var zielone := OmniLight3D.new()
 	zielone.light_color = Color(0.3, 1.0, 0.45)
 	zielone.light_energy = 0.5
@@ -1062,7 +1216,6 @@ func _wyjscie_drzwi(k: Vector2i, typ: String, nazwa: String, czas: float) -> voi
 		dk.position = poz_sciany - naz * 0.3
 		dk.rotation.y = rot
 		inst.reparent(dk)
-		# wejście do strefy blokuje dopiero otwarcie: strefa za drzwiami
 		ew.position = poz_sciany - naz * 1.1
 
 

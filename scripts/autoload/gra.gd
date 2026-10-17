@@ -45,6 +45,7 @@ func nowa_gra() -> void:
 	ekw.dodaj(Przedmiot.nowy("a_9x18", 24))
 	ekw.dodaj(Przedmiot.nowy("bandaz"))
 	ekw.dodaj(Przedmiot.nowy("apteczka"))
+	ekw.dodaj(Przedmiot.nowy("latarka"))
 	# skrytka
 	for pid in ["obrzyn", "bandaz", "bandaz", "opatrunek", "bolostop", "konserwa", "papierosy", "wodka"]:
 		skrytka.dodaj(Przedmiot.nowy(pid))
@@ -106,6 +107,8 @@ func wydaj_zestaw_startowy() -> bool:
 	ekw.dodaj(_magazynek("mag_pw9", "a_9x18", 8))
 	ekw.dodaj(Przedmiot.nowy("a_9x18", 16))
 	ekw.dodaj(Przedmiot.nowy("bandaz"))
+	if ekw.znajdz_id("latarka").is_empty():
+		ekw.dodaj(Przedmiot.nowy("latarka"))
 	zapisz()
 	return true
 
@@ -178,6 +181,7 @@ func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
 		"zdrowie": zdrowie, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
+		"latarka_wydana": true,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -204,6 +208,10 @@ func wczytaj() -> bool:
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])
+		# zapisy sprzed latarki-przedmiotu: jedna latarka w skrytce
+		if not d.get("latarka_wydana", false):
+			if ekw.znajdz_id("latarka").is_empty() and not skrytka.wszystkie().any(func(p): return p.id == "latarka"):
+				skrytka.dodaj(Przedmiot.nowy("latarka"))
 		return true
 	return false
 

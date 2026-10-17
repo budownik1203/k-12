@@ -78,11 +78,31 @@ static func bron(id: String) -> Dictionary:
 
 
 ## Ręce do widoku pierwszoosobowego (prawa na chwycie, lewa w punkcie "przod").
-static func rece(przod: Vector3, pistolet: bool) -> Array:
+## Latarka (przód = -Z, początek w uchwycie dłoni).
+static func latarka() -> Array:
+	return [
+		[Vector3(0, 0, -0.03), Vector3(0.032, 0.032, 0.15), METAL_C],
+		[Vector3(0, 0, -0.12), Vector3(0.046, 0.046, 0.045), METAL],
+		[Vector3(0, 0, -0.145), Vector3(0.036, 0.036, 0.006), Color(1.0, 0.95, 0.72)],
+		[Vector3(0.018, 0.0, -0.01), Vector3(0.008, 0.012, 0.02), METAL],
+	]
+
+
+## Lewa dłoń zaciśnięta na latarce i rękaw.
+static func reka_z_latarka() -> Array:
+	return [
+		[Vector3(0, -0.004, 0.0), Vector3(0.05, 0.05, 0.075), RUKAWICA],
+		[Vector3(-0.035, -0.04, 0.13), Vector3(0.06, 0.06, 0.22), RUKAW, Vector3(15, 22, 0)],
+	]
+
+
+static func rece(przod: Vector3, pistolet: bool, tylko_prawa := false) -> Array:
 	var r := [
 		[Vector3(0.0, -0.035, 0.03), Vector3(0.045, 0.05, 0.07), RUKAWICA],
 		[Vector3(0.02, -0.07, 0.17), Vector3(0.06, 0.06, 0.22), RUKAW, Vector3(18, -8, 0)],
 	]
+	if tylko_prawa:
+		return r
 	if pistolet:
 		r.append([Vector3(-0.022, -0.045, 0.035), Vector3(0.042, 0.045, 0.06), RUKAWICA, Vector3(0, 20, 0)])
 		r.append([Vector3(-0.075, -0.085, 0.18), Vector3(0.06, 0.06, 0.22), RUKAW, Vector3(18, 25, 0)])

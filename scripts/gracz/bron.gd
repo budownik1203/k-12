@@ -29,6 +29,12 @@ var spust_puszczony := true
 var r_trzymany := 0.0
 var r_aktywny := false
 
+var latarka_w_rece := false
+var _lat_node: Node3D
+var _blysk: MeshInstance3D
+var _blysk_t := 0.0
+var _anim_akcji := ""          # "leczenie" | "magazynek" | "" – animacja rąk przy akcjach gracza
+var _anim_akcji_t := 0.0
 var _kick := Vector3.ZERO
 var _kick_rot := Vector3.ZERO
 var _sway := Vector2.ZERO
@@ -40,29 +46,64 @@ func _ready() -> void:
 	scale = Vector3.ONE * SKALA
 
 
-func ustaw(p: Przedmiot) -> void:
+## Ustawia broń w rękach. latarka: lewa ręka trzyma latarkę (z pistoletem albo sama, gdy p == null).
+func ustaw(p: Przedmiot, latarka := false) -> void:
 	przedmiot = p
 	if model:
 		model.queue_free()
 		model = null
 		mag_node = null
+		_lat_node = null
+		_blysk = null
 	stan = "gotowa"
 	job = {}
+	latarka_w_rece = latarka and (p == null or p.defn()["bron"]["slot"] == "pistolet")
 	if p == null:
 		bd = {}
-		zmiana.emit()
-		return
-	bd = p.defn()["bron"]
-	md = Modele.bron(p.id)
-	model = Node3D.new()
-	add_child(model)
-	model.add_child(Kit.instancja(md["cialo"]))
-	mag_node = Node3D.new()
-	model.add_child(mag_node)
-	if not md["mag"].is_empty():
-		mag_node.add_child(Kit.instancja(md["mag"]))
-	model.add_child(Kit.instancja(Modele.rece(md["przod"], bd["slot"] == "pistolet")))
+		if not latarka_w_rece:
+			zmiana.emit()
+			return
+		md = {"celownik": 0.0, "lufa": [0, 0, 0], "mag": []}
+		model = Node3D.new()
+		add_child(model)
+		_lat_node = _wezel_latarki()
+		model.add_child(_lat_node)
+	else:
+		bd = p.defn()["bron"]
+		md = Modele.bron(p.id)
+		model = Node3D.new()
+		add_child(model)
+		model.add_child(Kit.instancja(md["cialo"]))
+		mag_node = Node3D.new()
+		model.add_child(mag_node)
+		if not md["mag"].is_empty():
+			mag_node.add_child(Kit.instancja(md["mag"]))
+		model.add_child(Kit.instancja(Modele.rece(md["przod"], bd["slot"] == "pistolet", latarka_w_rece)))
+		if latarka_w_rece:
+			# chwyt Harriesa: latarka pod pistoletem, nadgarstki skrzyżowane
+			_lat_node = _wezel_latarki()
+			_lat_node.position = Vector3(-0.02, -0.075, 0.02)
+			_lat_node.rotation = Vector3(0.05, 0.08, 0)
+			model.add_child(_lat_node)
+		# płomień wylotowy: dwa skrzyżowane czworokąty widoczne przez ułamek sekundy
+		_blysk = MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(0.11, 0.11) if bd["slot"] == "pistolet" else Vector2(0.17, 0.17)
+		_blysk.mesh = q
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		mat.albedo_color = Color(1.0, 0.72, 0.32)
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		mat.no_depth_test = true
+		_blysk.material_override = mat
+		_blysk.position = Vector3(md["lufa"]) + Vector3(0, 0, -0.04)
+		_blysk.visible = false
+		_blysk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		model.add_child(_blysk)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		if mi == _blysk:
+			continue
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
 	_odswiez_mag()
@@ -70,6 +111,20 @@ func ustaw(p: Przedmiot) -> void:
 	stan_t = 0.0
 	stan_total = 0.45
 	zmiana.emit()
+
+
+func _wezel_latarki() -> Node3D:
+	var n := Node3D.new()
+	n.add_child(Kit.instancja(Modele.latarka() + Modele.reka_z_latarka()))
+	return n
+
+
+## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
+func animacja_akcji(nazwa: String) -> void:
+	if nazwa != "" and nazwa != _rece_typ:
+		_zbuduj_rece_akcji(nazwa)
+	_anim_akcji = nazwa
+	_anim_akcji_t = 0.0
 
 
 func _odswiez_mag() -> void:
@@ -191,17 +246,30 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
 	if _tryb() == "auto":
 		bloom = minf(bloom + 0.35, 3.0)
-	_kick += Vector3(randf_range(-0.004, 0.004), 0.01, 0.05 + sila * 0.012)
-	_kick_rot += Vector3(deg_to_rad(4.0 + sila * 1.5), randf_range(-0.02, 0.02), 0)
+	_kick += Vector3(randf_range(-0.006, 0.006), 0.012, 0.07 + sila * 0.016)
+	_kick_rot += Vector3(deg_to_rad(6.0 + sila * 2.0), randf_range(-0.04, 0.04), randf_range(-0.05, 0.05))
 	var wylot := model.global_transform * Vector3(md["lufa"])
-	Efekty.blysk(gracz.get_parent(), wylot, 3.0)
-	var halas := 32.0
+	Efekty.blysk(gracz.get_parent(), wylot, 3.0 if bd["slot"] == "pistolet" else 4.0)
+	if _blysk:
+		_blysk.visible = true
+		_blysk.rotation.z = randf() * TAU
+		_blysk.scale = Vector3.ONE * randf_range(0.8, 1.3)
+		_blysk_t = 0.045
+	if not bd.has("wewnetrzny"):
+		Efekty.luska(gracz.get_parent(), model.global_transform * Vector3(0.03, 0.05, -0.06), kamera.global_basis.x)
+	if gracz.has_method("kopniecie"):
+		gracz.kopniecie(sila)
+	var halas := 26.0
 	match bd["kaliber"]:
-		"7.62x39": halas = 46.0
-		"12/70": halas = 40.0
+		"7.62x39": halas = 36.0
+		"12/70": halas = 32.0
 	Gra.emituj_halas(gracz.global_position, halas, gracz)
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}
-	Dzwiek.graj(dzw.get(bd["kaliber"], "strzal_pistolet"), -2.0)
+	var nazwa_dzw: String = dzw.get(bd["kaliber"], "strzal_pistolet")
+	Dzwiek.graj(nazwa_dzw, -1.0)
+	# pogłos w ciasnych wnętrzach: przytłumione odbicie po ułamku sekundy
+	get_tree().create_timer(0.09).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -15.0, 0.78))
+	get_tree().create_timer(0.21).timeout.connect(func(): Dzwiek.graj(nazwa_dzw, -22.0, 0.7))
 	zmiana.emit()
 
 
@@ -216,10 +284,19 @@ func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr:
 		var wl = col.get_meta("wlasciciel")
 		if is_instance_valid(wl) and wl.has_method("trafiony"):
 			wl.trafiony(String(col.get_meta("czesc")), obr, pen, gracz, r["position"], kier)
+			var zabity: bool = wl.get("cialo") != null and wl.cialo.martwy
+			get_tree().call_group("hud", "znacznik_trafienia", zabity, String(col.get_meta("czesc")) == "glowa")
+			# krew na ścianie za celem
+			var q2 := PhysicsRayQueryParameters3D.create(r["position"], r["position"] + kier * 2.5, Balistyka.WARSTWA_SWIAT)
+			var r2 := space.intersect_ray(q2)
+			if not r2.is_empty() and randf() < 0.7:
+				Efekty.slad(gracz.get_parent(), r2["position"], r2["normal"], true)
 			return
 	var swiat := gracz.get_parent() as Node3D
 	Efekty.slad(swiat, r["position"], r["normal"])
-	Efekty.czastki(swiat, r["position"], r["normal"], Color(0.5, 0.48, 0.44), 7)
+	Efekty.czastki(swiat, r["position"], r["normal"], Color(0.5, 0.48, 0.44), 12, 3.0)
+	if randf() < 0.35:
+		Efekty.czastki(swiat, r["position"], r["normal"], Color(1.0, 0.8, 0.4), 3, 5.0)
 	Dzwiek.graj_3d("trafienie_beton", r["position"], swiat, -6.0)
 
 
@@ -329,10 +406,22 @@ func dodaj_sway(mysz: Vector2) -> void:
 
 
 func _process(delta: float) -> void:
+	_anim_akcji_t += delta
+	_opusc = move_toward(_opusc, 1.0 if _anim_akcji != "" else 0.0, delta * 4.0)
+	if _rece_akcji:
+		_rece_akcji.visible = _opusc > 0.05
+		if _rece_akcji.visible:
+			_animuj_rece_akcji(delta)
 	if model == null:
 		return
+	if _blysk and _blysk.visible:
+		_blysk_t -= delta
+		if _blysk_t <= 0.0:
+			_blysk.visible = false
 	var pistolet := jest_pistolet()
 	var hip := Vector3(0.16, -0.18, -0.42) if not pistolet else Vector3(0.13, -0.15, -0.4)
+	if przedmiot == null:
+		hip = Vector3(-0.07, -0.17, -0.36)
 	var celownik := float(md["celownik"])
 	var ads_poz := Vector3(0.0, -celownik, -0.24 if not pistolet else -0.3)
 	var t := ads * ads * (3.0 - 2.0 * ads)
@@ -376,5 +465,67 @@ func _process(delta: float) -> void:
 	if stan != "przeladowanie" and mag_node:
 		mag_node.position = Vector3.ZERO
 		_odswiez_mag()
+	# akcje gracza: broń opuszczona w bok, ręce pracują przy dole kadru
+	if _opusc > 0.0:
+		var e := _opusc * _opusc * (3.0 - 2.0 * _opusc)
+		rot += Vector3(-0.9, 0.5, 0.7) * e
+		poz += Vector3(0.05, -0.16, 0.06) * e
+		if _anim_akcji == "magazynek":
+			# rytm wciskania nabojów
+			poz.y += sin(_anim_akcji_t * 14.0) * 0.006 * e
 	model.position = poz
 	model.rotation = rot
+	model.visible = _opusc < 0.95
+
+
+var _opusc := 0.0
+var _rece_akcji: Node3D
+var _rece_typ := ""
+
+
+## Ręce (i trzymany przedmiot) przy akcji: bandażowanie, wciskanie nabojów do magazynka.
+func _animuj_rece_akcji(_delta: float) -> void:
+	var e := _opusc * _opusc * (3.0 - 2.0 * _opusc)
+	var t := _anim_akcji_t
+	_rece_akcji.position = Vector3(0.0, -0.24 + 0.08 * e, -0.44)
+	var lewa: Node3D = _rece_akcji.get_child(0)
+	var prawa: Node3D = _rece_akcji.get_child(1)
+	if _rece_typ == "magazynek":
+		# lewa trzyma magazynek pionowo, prawa wciska kolejne naboje (rytm kroku akcji)
+		lewa.position = Vector3(-0.03, sin(t * 2.0) * 0.003, 0)
+		lewa.rotation = Vector3(0.15, 0.25, 0.25)
+		var f := fmod(t / 0.36, 1.0)
+		var wcisk := sin(clampf(f / 0.5, 0.0, 1.0) * PI)
+		prawa.position = Vector3(0.035 - wcisk * 0.02, 0.075 - wcisk * 0.03, 0.0)
+		prawa.rotation = Vector3(0.3, -0.35, -0.5)
+	else:
+		# owijanie bandażem: prawa ręka krąży wokół lewego przedramienia
+		lewa.position = Vector3(-0.04, -0.01, 0.0)
+		lewa.rotation = Vector3(0.1, 0.5, 1.1)
+		prawa.position = Vector3(-0.03 + cos(t * 6.0) * 0.04, 0.01 + sin(t * 6.0) * 0.025, sin(t * 6.0) * 0.02)
+		prawa.rotation = Vector3(0.2, -0.4, -0.5 + sin(t * 6.0) * 0.3)
+
+
+func _zbuduj_rece_akcji(typ: String) -> void:
+	if _rece_akcji:
+		_rece_akcji.queue_free()
+	_rece_typ = typ
+	_rece_akcji = Node3D.new()
+	add_child(_rece_akcji)
+	var lewa := Node3D.new()
+	var prawa := Node3D.new()
+	_rece_akcji.add_child(lewa)
+	_rece_akcji.add_child(prawa)
+	var dlon := [Vector3(0, 0, 0), Vector3(0.045, 0.045, 0.065), Modele.RUKAWICA]
+	# rękawy opadają w dół i do tyłu, poza kadr
+	var rek_l := [Vector3(-0.015, -0.07, 0.09), Vector3(0.055, 0.055, 0.2), Modele.RUKAW, Vector3(48, 12, 0)]
+	var rek_p := [Vector3(0.015, -0.07, 0.09), Vector3(0.055, 0.055, 0.2), Modele.RUKAW, Vector3(48, -12, 0)]
+	if typ == "magazynek":
+		lewa.add_child(Kit.instancja([dlon, rek_l, [Vector3(0.0, 0.04, -0.005), Vector3(0.022, 0.075, 0.032), Modele.METAL_C]]))
+		prawa.add_child(Kit.instancja([dlon, rek_p, [Vector3(-0.012, 0.028, -0.02), Vector3(0.009, 0.009, 0.024), Color(0.8, 0.6, 0.22)]]))
+	else:
+		lewa.add_child(Kit.instancja([dlon, rek_l, [Vector3(0.0, 0.0, 0.05), Vector3(0.058, 0.058, 0.05), Color(0.86, 0.83, 0.75)]]))
+		prawa.add_child(Kit.instancja([dlon, rek_p, [Vector3(0.0, 0.025, -0.015), Vector3(0.028, 0.028, 0.045), Color(0.86, 0.83, 0.75)]]))
+	for mi in _rece_akcji.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()

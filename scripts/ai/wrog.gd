@@ -54,6 +54,8 @@ var _w_oslonie := false
 var _oslona := {}
 var _napis_t := 0.0
 var _czas_walki := 0.0
+var _drgniecie := 0.0         # odrzut ciała po trafieniu (0..1)
+var _ost_kier := Vector3.FORWARD
 var _nasluch := false         # czujny w miejscu: słyszał odległe strzały, nie idzie sprawdzać
 var _sluch_ms := -10000
 var _sluch_pos := Vector3.ZERO
@@ -198,6 +200,9 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 	if cialo.martwy:
 		return
 	var wynik := Balistyka.przez_pancerz({"pancerz": pancerz, "helm": helm}, czesc, obr, pen)
+	_ost_kier = kier
+	_drgniecie = minf(1.0, _drgniecie + 0.45 + wynik["obr"] * 0.012)
+	velocity *= 0.25
 	cialo.obrazenia(czesc, wynik["obr"], "pocisk")
 	var swiat := get_parent() as Node3D
 	if wynik["pancerz"] and not wynik["przebity"]:
@@ -245,8 +250,8 @@ func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 		gracz = zrodlo
 	if stan in ["patrol", "szukanie", "czujny"]:
 		var niepewnosc := clampf(d * 0.15, 0.5, 4.0)
-		var strzal := zasieg > 25.0
-		if strzal and d < zasieg * 0.5:
+		var strzal := zasieg > 20.0
+		if strzal and d < zasieg * 0.42:
 			# blisko – od razu w gotowości bojowej i alarm dla oddziału
 			ostatnia_pozycja = pos + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)) * niepewnosc
 			if stan != "szukanie":
@@ -431,7 +436,8 @@ func _czujny(delta: float) -> void:
 
 
 func _szukanie(delta: float) -> void:
-	biegnie = czas_bez_kontaktu < 4.0 and cecha != "ostrozny"
+	# podchodzi ostrożnie; biegną tylko zadziorni i tylko na początku
+	biegnie = czas_bez_kontaktu < 3.0 and cecha == "agresywny"
 	_kucanie_cel = 0.0
 	czas_bez_kontaktu += delta
 	if widzi and wykrycie > 0.6:
@@ -644,7 +650,7 @@ func _obroc_do(p: Vector3, delta: float, szybkosc: float) -> void:
 
 func _ruch(delta: float) -> void:
 	var v := Vector3.ZERO
-	var predkosc := (4.2 if biegnie else 1.8) * cialo.mnoznik_ruchu() * lerpf(1.0, 0.5, kucanie)
+	var predkosc := (3.7 if biegnie else 1.55) * cialo.mnoznik_ruchu() * lerpf(1.0, 0.5, kucanie)
 	if not _agent.is_navigation_finished() and cel_ruchu != Vector3.ZERO:
 		var nast := _agent.get_next_path_position()
 		var d := nast - global_position
@@ -652,15 +658,17 @@ func _ruch(delta: float) -> void:
 		if d.length() > 0.05:
 			v = d.normalized() * predkosc
 			if stan != "walka" or not widzi:
-				_obroc_do(global_position + d, delta, 6.0)
+				_obroc_do(global_position + d, delta, 3.2)
 	elif _w_oslonie == false and stan == "walka" and not _oslona.is_empty():
 		if global_position.distance_to(_oslona["pos"]) < 0.9:
 			_w_oslonie = true
 			_wychyl_t = 0.5
 	if not _oslona.is_empty() and global_position.distance_to(_oslona["pos"]) < 0.9:
 		_w_oslonie = true
-	velocity.x = move_toward(velocity.x, v.x, delta * 14.0)
-	velocity.z = move_toward(velocity.z, v.z, delta * 14.0)
+	# ciężki ruch: powolne rozpędzanie i hamowanie z wyposażeniem na plecach
+	var przysp := 3.2 if v.length() > Vector2(velocity.x, velocity.z).length() else 4.5
+	velocity.x = move_toward(velocity.x, v.x, delta * przysp)
+	velocity.z = move_toward(velocity.z, v.z, delta * przysp)
 	if not is_on_floor():
 		velocity.y -= 9.8 * delta
 	else:
@@ -681,10 +689,15 @@ func _animuj(delta: float) -> void:
 	var faza := sin(_anim_t)
 	var amp := clampf(pozioma / 4.0, 0.0, 1.0) * 0.7
 	var biodra: Node3D = _czesci["biodra"]
-	biodra.position.y = lerpf(0.95, 0.6, kucanie)
+	# przysiad przy każdym kroku i kołysanie tułowia: ciężar ciała przenoszony z nogi na nogę
+	biodra.position.y = lerpf(0.95, 0.6, kucanie) - absf(sin(_anim_t)) * amp * 0.06
+	biodra.rotation.z = sin(_anim_t) * amp * 0.08
 	(_czesci["noga_l"] as Node3D).rotation.x = faza * amp + kucanie * 1.2
 	(_czesci["noga_p"] as Node3D).rotation.x = -faza * amp + kucanie * 0.4
-	(_czesci["tulow"] as Node3D).rotation.x = -0.1 - kucanie * 0.25
+	_drgniecie = move_toward(_drgniecie, 0.0, delta * 3.5)
+	var lk := global_basis.inverse() * _ost_kier
+	(_czesci["tulow"] as Node3D).rotation.x = -0.1 - kucanie * 0.25 - amp * 0.12 + _drgniecie * 0.45 * signf(lk.z)
+	(_czesci["tulow"] as Node3D).rotation.z = -_drgniecie * 0.3 * signf(lk.x)
 	var celuje := stan == "walka" or stan == "szukanie"
 	var ram_cel := 1.3 if celuje else 0.35
 	(_czesci["ramie_p"] as Node3D).rotation.x = lerpf((_czesci["ramie_p"] as Node3D).rotation.x, ram_cel, delta * 8.0)
@@ -715,9 +728,12 @@ func _smierc(_przyczyna: String) -> void:
 		oddzial.strata(self)
 	if not _oslona.is_empty() and menedzer:
 		menedzer.zwolnij_oslone(self)
+	# upada w kierunku lotu pocisku: postrzelony z przodu – na plecy
+	var lk := global_basis.inverse() * _ost_kier
 	var t := create_tween()
-	t.tween_property(_model, "rotation:x", deg_to_rad(-88), 0.45).set_ease(Tween.EASE_IN)
-	t.parallel().tween_property(_model, "position:y", 0.15, 0.45)
+	t.tween_property(_model, "rotation:x", deg_to_rad(86.0 * (1.0 if lk.z >= 0.0 else -1.0)), 0.55).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	t.parallel().tween_property(_model, "rotation:z", randf_range(-0.35, 0.35), 0.55)
+	t.parallel().tween_property(_model, "position", _model.position + Vector3(lk.x, 0, lk.z).normalized() * 0.35 + Vector3(0, 0.12, 0), 0.55)
 	_zwloki.call_deferred()
 	zginal.emit(self)
 	get_tree().call_group("ui_rajdu", "zabity_wrog", self)

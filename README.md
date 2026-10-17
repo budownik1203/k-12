@@ -27,24 +27,26 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | LPM / PPM | strzał / celowanie przez przyrządy |
 | R | przeładowanie (przytrzymaj: szybkie, magazynek leci na ziemię) |
 | B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
-| 1 / 2 | broń główna / pistolet |
+| 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
 | Tab | ekwipunek |
 | G | napełnij magazynki z amunicji luzem |
-| L | latarka |
+| L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz |
 | O | lista wyjść z kierunkiem i odległością |
-| 4–8 | bandaż, opatrunek, apteczka, szyna, środek przeciwbólowy |
+| 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
+| X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej) |
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** szybko przenosi, **PPM** menu
-(użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić,
-a magazynek na broń, żeby go włożyć.
+(użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić
+(nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
+w panelu zdrowia leczy właśnie ją. Przedmiot upuszczony poza oknem albo **Del** na wskazanym – ląduje na ziemi.
 
 ## Pętla gry
 
 1. **Baza** (schron, chodzony w pierwszej osobie): Zbrojmistrz, Medyk i Pośrednik, skrytka w szafkach,
    leczenie, ubezpieczenie, darmowy zestaw startowy, gdy nie masz broni.
-2. **Rajd**: losowa sieć korytarzy z pomieszczeniami bloku (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
+2. **Rajd**: losowa sieć szerokich korytarzy z pomieszczeniami bloku oddzielonymi grubym murem (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
    szabrownicy i najemnicy z taktycznym AI, zdziczałe psy, łup w szafkach i na zwłokach.
 3. **Wyjścia**: brama (zawsze), piwnica nr 7 (na klucz z rajdu), okno na rusztowanie (tylko w oknie czasowym).
 4. **Raport urzędowy**: przeżycie albo zgon, z komunikatem zależnym od przyczyny i dopiskami z przebiegu rajdu.

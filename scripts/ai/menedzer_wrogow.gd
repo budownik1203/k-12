@@ -58,7 +58,7 @@ func rozstaw(r: Node) -> void:
 		po_komorce[k].append(s)
 	var komorki := po_komorce.keys()
 	komorki.shuffle()
-	var liczba := clampi(int(r.info["komorki"].size() / 4.0), 3, 5)
+	var liczba := clampi(int(r.info["komorki"].size() / 6.0), 2, 4)
 	var najemnicy := rng.randf() < 0.55
 	komorki.sort_custom(func(a, b): return po_komorce[a][0]["glebokosc"] > po_komorce[b][0]["glebokosc"])
 	var i := 0
@@ -134,7 +134,7 @@ func zwolnij_oslone(kto: Node) -> void:
 
 func _halas(_pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 	if zrodlo is Gracz:
-		zagrozenie += zasieg * 0.02
+		zagrozenie += zasieg * 0.004
 
 
 func _process(delta: float) -> void:

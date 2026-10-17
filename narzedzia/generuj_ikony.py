@@ -249,6 +249,12 @@ def draw(pid, d, W, H):
         d.rectangle([26, 15, 28, 19], fill=METAL_J)
         d.rectangle([3, 22, 14, 29], fill=(200, 196, 180))
         d.text((5, 21), "7", fill=CZERWIEN)
+    elif pid == "latarka":
+        shaded_rect(d, [8, 12, 44, 20], (52, 54, 50))
+        shaded_rect(d, [44, 9, 56, 23], (92, 94, 90))
+        d.rectangle([56, 11, 59, 21], fill=(250, 236, 170))
+        d.rectangle([24, 9, 28, 12], fill=(140, 40, 30))
+        d.rectangle([4, 13, 8, 19], fill=(40, 40, 38))
     else:
         d.rectangle([2, 2, W - 3, H - 3], outline=(200, 0, 200))
 
