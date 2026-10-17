@@ -14,7 +14,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 
 ## Uruchomienie
 
-**Gotowa gra:** pobierz build z zakładki Releases (Windows `.exe` lub Linux) i uruchom. Nie trzeba instalować Godota.
+**Gotowa gra:** `StrefaK12_demo_Windows.zip` (albo wersja Linux) – rozpakuj i uruchom `StrefaK12.exe`. Nie trzeba instalować Godota. Build można też zrobić samemu (sekcja Budowanie).
 
 **Ze źródeł:** Godot **4.6** (renderer Compatibility). Otwórz folder w menedżerze projektów, poczekaj na import, F5.
 
