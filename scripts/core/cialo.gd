@@ -17,6 +17,8 @@ var zlamanie := {}       # część -> bool
 var przeciwbol := 0.0    # sekundy działania środka przeciwbólowego
 var martwy := false
 var przyczyna := ""
+## Przeciwnik (NPC): częściej krwawi, pada od szoku przy dużej utracie krwi, zniszczony brzuch zabija.
+var npc := false
 
 
 func _init(stan := {}) -> void:
@@ -55,7 +57,12 @@ func obrazenia(czesc: String, ile: float, zrodlo := "pocisk") -> void:
 		hp[czesc] = maxf(0.0, hp[czesc] - ile)
 	# krwawienia
 	var r := randf()
-	if ile >= 28.0 and r < 0.22:
+	if npc:
+		if ile >= 20.0 and r < 0.45:
+			_krwawienie(czesc, 2)
+		elif ile >= 6.0 and r < 0.75:
+			_krwawienie(czesc, 1)
+	elif ile >= 28.0 and r < 0.22:
 		_krwawienie(czesc, 2)
 	elif ile >= 8.0 and r < 0.4:
 		_krwawienie(czesc, 1)
@@ -86,7 +93,8 @@ func _krwawienie(czesc: String, poziom: int) -> void:
 func _sprawdz_smierc(zrodlo: String) -> void:
 	if martwy:
 		return
-	if hp["glowa"] <= 0.0 or hp["klatka"] <= 0.0:
+	var szok: bool = npc and (procent() < 0.45 or hp["brzuch"] <= 0.0)
+	if hp["glowa"] <= 0.0 or hp["klatka"] <= 0.0 or szok:
 		martwy = true
 		przyczyna = zrodlo
 		smierc.emit(zrodlo)

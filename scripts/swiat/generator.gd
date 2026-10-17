@@ -57,6 +57,8 @@ var start_pos := Vector3.ZERO
 var start_rot := 0.0
 var okna: Array = []     # [komorka, strona, punkt na licu (Vector3)]
 var _plan_wyjsc: Array = []
+var posterunki: Array = []   # {"pos": Vector3, "kier": Vector3, "komorka": Vector2i, "miejsca": [Vector3, ...]}
+var _plan_posterunkow := {}  # komórka -> true
 
 
 func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
@@ -73,6 +75,7 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	_przejscia()
 	_plan_okien()
 	_zaplanuj_wyjscia()
+	_zaplanuj_posterunki()
 	# geometria osobno dla każdego pomieszczenia: renderer Compatibility oświetla obiekt
 	# co najwyżej kilkoma światłami, więc jeden obiekt na cały poziom gasiłby dalsze lampy
 	for k in komorki:
@@ -91,7 +94,7 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	_wyjscia()
 	_klucz_w_rajdzie()
 	return {"start": start_pos, "start_rot": start_rot, "oslony": oslony, "spawny": spawny,
-		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy}
+		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy, "posterunki": posterunki}
 
 
 # ------------------------------------------------------------------ układ (graf)
@@ -765,6 +768,8 @@ func _wyposaz(k: Vector2i) -> void:
 	if typ == "korytarz":
 		_wyposaz_korytarz(k)
 		return
+	if _plan_posterunkow.has(k):
+		_posterunek(k)
 	var sciany := DIRS.duplicate()
 	_tasuj(sciany)
 	match typ:
@@ -881,6 +886,7 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 			sciany.append([Vector3(sr.x + d.x * (KW * 0.5 - 0.1), 0, sr.y + d.y * (KW * 0.5 - 0.1)), d])
 	_tasuj(sciany)
 	var drzwi_n := 0
+	var drzwi_poz := []
 	for sc in sciany:
 		if drzwi_n < 2 and rng.randf() < 0.45:
 			var inst: Node3D = load("res://assets/models/%s.glb" % modele[rng.randi() % 3]).instantiate()
@@ -888,9 +894,11 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 			inst.position = sc[0]
 			inst.rotation.y = ROT[sc[1]]
 			drzwi_n += 1
+			drzwi_poz.append(sc[0])
 		elif rng.randf() < 0.25:
 			var id: String = ["hydrant", "tablica_ogloszen", "kaloryfer"][rng.randi() % 3]
 			_mebel(id, sc[0] + Vector3.UP * float(WYSOKOSC_MONTAZU[id]), ROT[sc[1]], true, k)
+	_rekwizyty_korytarza(k, drzwi_poz)
 	# osłona w narożniku kwadratu, tylko między dwiema ślepymi ścianami
 	var c := _srodek(k)
 	for dx in [-1, 1]:
@@ -901,6 +909,187 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 			_postaw(k, id2, Vector2(c.x + dx * (KW * 0.5 - 0.4), c.z + dz * (KW * 0.5 - 0.4)), rng.randf_range(-0.2, 0.2), false)
 	if komorki[k]["glebokosc"] >= 2 and rng.randf() < 0.5:
 		spawny.append({"pos": c + Vector3(0, 0.05, 0), "komorka": k, "glebokosc": komorki[k]["glebokosc"]})
+
+
+# ------------------------------------------------------------------ korytarze: rekwizyty i barykady
+
+## Rekwizyty w ramionach korytarza: beczki, skrzynie, przewrócona szafa, gruz, worki z piaskiem.
+## Zawsze przy jednej ścianie (przejście zostaje), z punktami osłon wzdłuż korytarza.
+func _rekwizyty_korytarza(k: Vector2i, drzwi_poz: Array) -> void:
+	for ram in komorki[k]["ramiona"]:
+		var r: Rect2 = ram[1]
+		var ax: Vector2i = ram[0]
+		var poziomo := ax.x != 0
+		var dl := r.size.x if poziomo else r.size.y
+		if dl < 2.4:
+			continue
+		# dłuższe ramiona dostają rekwizyty po obu stronach (z przesunięciem), krótsze po jednej
+		var strony := [-1, 1] if dl > 4.2 else [(-1 if rng.randf() < 0.5 else 1)]
+		for strona in strony:
+			if rng.randf() > 0.8:
+				continue
+			_rekwizyt_w_ramieniu(k, r, poziomo, strona, drzwi_poz, -1.0 if strona < 0 else 1.0)
+	# barykada w prostym korytarzu: worki w poprzek połowy przejścia
+	var ot: Dictionary = komorki[k]["otwory"]
+	var prosty_x: bool = not ot[Vector2i(1, 0)].is_empty() and not ot[Vector2i(-1, 0)].is_empty() and ot[Vector2i(0, 1)].is_empty() and ot[Vector2i(0, -1)].is_empty()
+	var prosty_z: bool = not ot[Vector2i(0, 1)].is_empty() and not ot[Vector2i(0, -1)].is_empty() and ot[Vector2i(1, 0)].is_empty() and ot[Vector2i(-1, 0)].is_empty()
+	if (prosty_x or prosty_z) and rng.randf() < 0.35:
+		var c := _srodek(k)
+		var s3 := -1.0 if rng.randf() < 0.5 else 1.0
+		var pop := Vector3(0, 0, 1) if prosty_x else Vector3(1, 0, 0)
+		var p := c + pop * s3 * (KW * 0.5 - 0.82)
+		_mebel("worki_piasek", p, PI / 2.0 if prosty_x else 0.0, true, Vector2i(-1, -1))
+		var wz := Vector3(1, 0, 0) if prosty_x else Vector3(0, 0, 1)
+		for s4 in [-1.0, 1.0]:
+			oslony.append({"pos": p + wz * s4 * 0.65 + Vector3(0, 0.05, 0), "niska": true, "mebel": p})
+
+
+func _rekwizyt_w_ramieniu(k: Vector2i, r: Rect2, poziomo: bool, strona: int, drzwi_poz: Array, polowa: float) -> void:
+	if true:
+		var dl := r.size.x if poziomo else r.size.y
+		var zestaw: String = ["beczki", "skrzynie", "szafa", "gruz", "worki", "beczki", "szafa", "gruz"][rng.randi() % 8]
+		var dlug := {"beczki": 1.3, "skrzynie": 1.3, "szafa": 1.9, "gruz": 1.4, "worki": 1.6}[zestaw] as float
+		var gl := {"beczki": 0.6, "skrzynie": 0.62, "szafa": 0.62, "gruz": 0.9, "worki": 0.5}[zestaw] as float
+		var lo := (r.position.x if poziomo else r.position.y) + 0.8
+		var hi := (r.end.x if poziomo else r.end.y) - 0.8 - dlug
+		if dl > 4.2:
+			# dwie strony: każda w innej połowie ramienia, żeby nie zwęzić przejścia w jednym miejscu
+			var sr := (lo + hi) * 0.5
+			if polowa < 0.0:
+				hi = minf(hi, sr - dlug * 0.5)
+			else:
+				lo = maxf(lo, sr + dlug * 0.5)
+		if hi < lo:
+			return
+		var u := rng.randf_range(lo, hi) + dlug * 0.5
+		var sciana := (r.position.y if poziomo else r.position.x) if strona < 0 else (r.end.y if poziomo else r.end.x)
+		var w_glab := sciana - strona * (gl * 0.5 + 0.03)
+		var pos := Vector3(u, 0, w_glab) if poziomo else Vector3(w_glab, 0, u)
+		if drzwi_poz.any(func(dp): return (dp as Vector3).distance_to(pos) < 1.6):
+			return
+		var d: Vector2i = (Vector2i(0, strona) if poziomo else Vector2i(strona, 0))
+		var rot: float = ROT[d]
+		var wzdl := Vector3(1, 0, 0) if poziomo else Vector3(0, 0, 1)
+		match zestaw:
+			"beczki":
+				_mebel("beczka", pos - wzdl * 0.32, rng.randf_range(0, TAU), true, Vector2i(-1, -1))
+				_mebel("beczka", pos + wzdl * 0.33, rng.randf_range(0, TAU), true, Vector2i(-1, -1))
+			"skrzynie":
+				_mebel("skrzynia", pos - wzdl * 0.33, rot + rng.randf_range(-0.15, 0.15), true, k)
+				_mebel("skrzynia", pos + wzdl * 0.33, rot + rng.randf_range(-0.15, 0.15), true, k)
+				if rng.randf() < 0.5:
+					_mebel("skrzynia", pos + Vector3(0, 0.6, 0), rot + rng.randf_range(-0.4, 0.4), true, Vector2i(-1, -1))
+			"szafa":
+				_szafa_lezaca(pos, rot)
+			"gruz":
+				_gruz(pos, rot)
+			"worki":
+				_mebel("worki_piasek", pos, rot, true, Vector2i(-1, -1))
+		# punkty osłony po obu końcach rekwizytu, przy ścianie
+		for s2 in [-1.0, 1.0]:
+			oslony.append({"pos": pos + wzdl * s2 * (dlug * 0.5 + 0.45) + Vector3(0, 0.05, 0), "niska": true, "mebel": pos})
+
+
+## Szafa przewrócona na bok: długa, niska osłona.
+func _szafa_lezaca(pos: Vector3, rot: float) -> void:
+	var sb := StaticBody3D.new()
+	sb.collision_layer = Balistyka.WARSTWA_SWIAT
+	sb.name = "SzafaLezaca"
+	var inst: Node3D = load("res://assets/models/meble/szafa.glb").instantiate()
+	var wezel := Node3D.new()
+	wezel.add_child(inst)
+	wezel.rotation.z = PI / 2.0
+	wezel.position = Vector3(0.95, 0.5, 0)
+	sb.add_child(wezel)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(1.9, 1.0, 0.6)
+	cs.shape = bs
+	cs.position = Vector3(0, 0.5, 0)
+	sb.add_child(cs)
+	swiat.add_child(sb)
+	sb.position = pos
+	sb.rotation.y = rot + rng.randf_range(-0.08, 0.08)
+
+
+## Kupa gruzu: kawałki betonu, cegły i deski.
+func _gruz(pos: Vector3, rot: float) -> void:
+	var bryly := []
+	var kolory := [Color(0.34, 0.33, 0.31), Color(0.42, 0.4, 0.37), Color(0.45, 0.22, 0.16), Color(0.3, 0.22, 0.14)]
+	for i in 11:
+		var r := rng.randf_range(0.12, 0.34)
+		var x := rng.randf_range(-0.6, 0.6)
+		var z := rng.randf_range(-0.35, 0.35)
+		var y := r * 0.4 + (0.25 - absf(x) * 0.3) * rng.randf()
+		var rozm := Vector3(r * rng.randf_range(0.8, 1.6), r * rng.randf_range(0.5, 1.0), r * rng.randf_range(0.8, 1.4))
+		bryly.append([Vector3(x, y, z), rozm, kolory[rng.randi() % 4], Vector3(rng.randf_range(-20, 20), rng.randf_range(0, 90), rng.randf_range(-20, 20))])
+	bryly.append([Vector3(0.1, 0.18, 0.05), Vector3(1.3, 0.04, 0.16), kolory[3], Vector3(0, 12, 14)])
+	var sb := StaticBody3D.new()
+	sb.collision_layer = Balistyka.WARSTWA_SWIAT
+	sb.name = "Gruz"
+	var mi := Kit.instancja(bryly)
+	sb.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(1.3, 0.45, 0.8)
+	cs.shape = bs
+	cs.position = Vector3(0, 0.22, 0)
+	sb.add_child(cs)
+	swiat.add_child(sb)
+	sb.position = pos
+	sb.rotation.y = rot
+
+
+# ------------------------------------------------------------------ posterunki wojska
+
+## Jedno-dwa gniazda z worków w głębszych, dużych pomieszczeniach (nie tam, gdzie wyjścia).
+func _zaplanuj_posterunki() -> void:
+	var z_wyjsciem := {}
+	for p in _plan_wyjsc:
+		z_wyjsciem[p[0]] = true
+	var kand := komorki.keys().filter(func(k): return komorki[k]["typ"] in ["magazyn", "administracja", "warsztat", "piwnica", "pokoj"] and komorki[k]["glebokosc"] >= 2 and not z_wyjsciem.has(k) and minf((komorki[k]["rect"] as Rect2).size.x, (komorki[k]["rect"] as Rect2).size.y) >= 6.6)
+	_tasuj(kand)
+	var ile := rng.randi_range(1, 2)
+	for k in kand.slice(0, ile):
+		_plan_posterunkow[k] = true
+
+
+## Gniazdo z worków w kształcie podkowy, ok. 2,6 m przed drzwiami, otwarte do tyłu.
+func _posterunek(k: Vector2i) -> void:
+	var drzwi := []
+	for d in DIRS:
+		for o in komorki[k]["otwory"][d]:
+			drzwi.append([d, (o[0] + o[1]) * 0.5])
+	if drzwi.is_empty():
+		return
+	var wybor: Array = drzwi[rng.randi() % drzwi.size()]
+	var d: Vector2i = wybor[0]
+	var lico := _punkt_sciany(k, d, wybor[1])
+	var naz := Vector3(d.x, 0, d.y)
+	var wzdl := Vector3(-d.y, 0, d.x)
+	var srodek := lico - naz * 2.7
+	var r: Rect2 = komorki[k]["rect"]
+	var slad := Rect2(Vector2(srodek.x, srodek.z) - Vector2(1.3, 1.3), Vector2(2.6, 2.6))
+	if not r.grow(-0.1).encloses(slad):
+		return
+	var rot_przod := atan2(naz.x, naz.z)   # długi bok worka w poprzek wejścia
+	var bryly := [
+		[srodek, rot_przod],
+		[srodek - naz * 0.6 + wzdl * 0.95, rot_przod + PI / 2.0],
+		[srodek - naz * 0.6 - wzdl * 0.95, rot_przod + PI / 2.0],
+	]
+	for b in bryly:
+		var p: Vector3 = b[0]
+		var node := _mebel("worki_piasek", p, b[1], true, Vector2i(-1, -1))
+		var rr := Rect2(Vector2(p.x, p.z) - Vector2(0.85, 0.85), Vector2(1.7, 1.7))
+		komorki[k]["zajete"].append(rr)
+		komorki[k]["meble"].append({"rect": rr, "node": node, "przy_scianie": true, "pos": p})
+	# drugi rząd worków na froncie: wyższa osłona
+	_mebel("worki_piasek", srodek + Vector3(0, 0.5, 0) - naz * 0.05, rot_przod + 0.04, true, Vector2i(-1, -1))
+	var miejsca := [srodek - naz * 0.75 + wzdl * 0.4, srodek - naz * 0.75 - wzdl * 0.4]
+	posterunki.append({"pos": srodek - naz * 0.75, "kier": naz, "komorka": k, "miejsca": miejsca})
+	# skrzynia z amunicją w gnieździe
+	_mebel("skrzynia_wojskowa", srodek - naz * 1.25 + wzdl * 0.6, rot_przod, true, k)
 
 
 func _drzwi_dekoracyjne(k: Vector2i, d: Vector2i) -> void:

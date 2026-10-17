@@ -156,7 +156,7 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
-	if nazwa != "" and nazwa != _rece_typ:
+	if nazwa != "" and nazwa != "schowaj" and nazwa != _rece_typ:
 		_zbuduj_rece_akcji(nazwa)
 	_anim_akcji = nazwa
 	_anim_akcji_t = 0.0
@@ -507,7 +507,7 @@ func _process(delta: float) -> void:
 	_anim_akcji_t += delta
 	_opusc = move_toward(_opusc, 1.0 if _anim_akcji != "" else 0.0, delta * 4.0)
 	if _rece_akcji:
-		_rece_akcji.visible = _opusc > 0.05
+		_rece_akcji.visible = _opusc > 0.05 and _anim_akcji != "schowaj"
 		if _rece_akcji.visible:
 			_animuj_rece_akcji(delta)
 	if model == null:

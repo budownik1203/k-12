@@ -69,6 +69,14 @@ var _sluch_ms := -10000
 var _sluch_pos := Vector3.ZERO
 var _sluch_d := 0.0
 var _przygwozdzenie := 0.0   # ostrzał gracza psuje celność
+var _zachwianie := 0.0        # chwila po trafieniu: nie strzela
+var _zachwianie_cd := 0.0
+var _trzymaj_t := 0.0         # po utracie kontaktu: trzyma kąt zamiast od razu szukać
+var _opatrunki := 0
+var _opatr_t := 0.0
+var _krew_t := 0.0
+var posterunek := {}          # {"pos", "kier"}: wojskowy w gnieździe z worków, nie opuszcza go
+var _cykl_t := 0.0
 
 
 func _init() -> void:
@@ -79,7 +87,8 @@ func _init() -> void:
 func przygotuj(frak: String, zestaw: Dictionary, rng: RandomNumberGenerator) -> void:
 	frakcja = frak
 	dane_frakcji = Dane.frakcje[frak]
-	nazwa_jednostki = {"szabrownik": "Szabrownik", "najemnik": "Najemnik"}.get(frak, frak)
+	nazwa_jednostki = {"szabrownik": "Szabrownik", "najemnik": "Najemnik", "wojskowy": "Wojskowy"}.get(frak, frak)
+	_opatrunki = rng.randi_range(0, 1) if frak == "szabrownik" else rng.randi_range(1, 3)
 	amunicja_id = zestaw["amunicja"]
 	bron = Gra.nowy_naladowany(zestaw["bron"], amunicja_id)
 	_w_magazynku = _pojemnosc()
@@ -107,6 +116,7 @@ func _pojemnosc() -> int:
 func _ready() -> void:
 	add_to_group("wrogowie")
 	cialo = Cialo.new()
+	cialo.npc = true
 	cialo.smierc.connect(_smierc)
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -136,7 +146,7 @@ func _buduj_model() -> void:
 	var gl := _kolor(kol.get("glowa", [0.2, 0.2, 0.2]))
 	var skora := Color(0.6, 0.46, 0.38)
 	var ciemny := Color(0.09, 0.085, 0.08)
-	var rek := ciemny if frakcja == "najemnik" else skora
+	var rek := ciemny if frakcja != "szabrownik" else skora
 	var ubr_c := ubr.darkened(0.25)
 	_model = Node3D.new()
 	add_child(_model)
@@ -156,7 +166,7 @@ func _buduj_model() -> void:
 		[Vector3(0, 0.03, -0.01), Vector3(0.38, 0.06, 0.24), ubr_c],
 	]
 	if pancerz != null:
-		var kp := Color(0.2, 0.24, 0.17) if frakcja == "najemnik" else Color(0.16, 0.18, 0.26)
+		var kp := Color(0.2, 0.24, 0.17) if frakcja != "szabrownik" else Color(0.16, 0.18, 0.26)
 		tul.append([Vector3(0, 0.35, 0), Vector3(0.41, 0.34, 0.3), kp])
 		for i in 3:
 			tul.append([Vector3(-0.1 + i * 0.1, 0.24, -0.16), Vector3(0.075, 0.12, 0.05), kp.darkened(0.2)])
@@ -181,6 +191,8 @@ func _buduj_model() -> void:
 	if frakcja == "szabrownik":
 		glowa_bryly.append([Vector3(0, 0.2, 0.025), Vector3(0.26, 0.3, 0.24), gl])           # kaptur
 		glowa_bryly.append([Vector3(0, 0.1, -0.112), Vector3(0.19, 0.1, 0.02), Color(0.14, 0.11, 0.1)])  # chusta
+	elif frakcja == "wojskowy":
+		glowa_bryly.append([Vector3(0, 0.07, 0.0), Vector3(0.215, 0.07, 0.235), gl])         # kołnierz
 	else:
 		glowa_bryly.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])         # kominiarka
 		glowa_bryly.append([Vector3(0, 0.19, -0.119), Vector3(0.15, 0.045, 0.01), skora.darkened(0.2)])
@@ -216,7 +228,7 @@ func _buduj_model() -> void:
 	_czesci["bron"].add_child(_mag_node)
 	_czesci["wylot"] = Vector3(md["lufa"])
 	# latarka na broni najemnika: włączana przy czujności i walce (zdradza pozycję)
-	if frakcja == "najemnik" and bron.defn()["bron"]["slot"] != "pistolet":
+	if frakcja != "szabrownik" and bron.defn()["bron"]["slot"] != "pistolet":
 		var lw := Vector3(md["lufa"]) + Vector3(0.0, -0.035, 0.12)
 		_czesci["bron"].add_child(Kit.instancja([[lw + Vector3(0, 0, 0.02), Vector3(0.03, 0.03, 0.07), Color(0.1, 0.1, 0.1)]]))
 		_latarka = SpotLight3D.new()
@@ -289,6 +301,15 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 		return
 	morale -= 8.0 + wynik["obr"] * 0.3
 	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.8)
+	# zachwianie po trafieniu, ale nie w kółko: po nim chwila odporności (inaczej seria = paraliż)
+	if _zachwianie_cd <= 0.0:
+		_zachwianie = minf(0.7, 0.35 + wynik["obr"] * 0.008)
+		_zachwianie_cd = 1.4
+	_napis_t = 0.0
+	if cialo.krwawi() == 2:
+		_napis(["Krwawię! Osłaniajcie!", "Trafili mnie! Krwawię!", "Medyka!"].pick_random())
+	else:
+		_napis(["Dostałem!", "Trafiony!", "Kurwa, boli!"].pick_random())
 	# reakcja: wie, skąd strzelano
 	if od_kogo is Gracz:
 		gracz = od_kogo
@@ -417,7 +438,31 @@ func _physics_process(delta: float) -> void:
 		_aktualizuj_wykrycie(0.15)
 	_napis_t = maxf(0.0, _napis_t - delta)
 	_przygwozdzenie = maxf(0.0, _przygwozdzenie - delta * 0.6)
+	_zachwianie = maxf(0.0, _zachwianie - delta)
+	_zachwianie_cd = maxf(0.0, _zachwianie_cd - delta)
+	# krwawienie: krople na podłodze (ślad do wytropienia)
+	var k := cialo.krwawi()
+	if k > 0:
+		_krew_t -= delta
+		if _krew_t <= 0.0:
+			_krew_t = 0.6 if k == 2 else 1.5
+			Efekty.slad(get_parent(), global_position + Vector3(randf_range(-0.2, 0.2), 0.02, randf_range(-0.2, 0.2)), Vector3.UP, true)
+		# opatruje się, gdy ma czym i nie jest pod bezpośrednim ostrzałem
+		if _opatrunki > 0 and stan in ["walka", "szukanie", "czujny"] and (not widzi or _w_oslonie) and _przygwozdzenie < 0.5 and randf() < delta * 0.8:
+			stan = "opatrywanie"
+			_opatr_t = randf_range(4.0, 6.0)
+			_napis(["Opatruję się!", "Osłaniaj, bandażuję!", "Chwila, krwawię!"].pick_random())
+	# wojskowi z posterunku nie opuszczają gniazda: zaalarmowani trzymają wejście
+	if not posterunek.is_empty() and stan in ["czujny", "szukanie", "patrol"]:
+		_posterunek_alarm(delta)
+		_ruch(delta)
+		_animuj(delta)
+		return
 	match stan:
+		"opatrywanie":
+			_opatrywanie(delta)
+		"posterunek":
+			_posterunek(delta)
 		"patrol":
 			_patrol(delta)
 		"czujny":
@@ -510,19 +555,37 @@ func _czujny(delta: float) -> void:
 
 
 func _szukanie(delta: float) -> void:
-	# podchodzi ostrożnie; biegną tylko zadziorni i tylko na początku
-	biegnie = czas_bez_kontaktu < 3.0 and cecha == "agresywny"
-	_kucanie_cel = 0.0
+	biegnie = false
 	czas_bez_kontaktu += delta
 	if widzi and wykrycie > 0.6:
 		_wejdz_w_walke()
+		return
+	# najpierw trzyma kąt: przykucnięty, broń na ostatnią pozycję gracza
+	if _trzymaj_t > 0.0:
+		_trzymaj_t -= delta
+		_kucanie_cel = 0.5 if _w_oslonie else 0.25
+		_idz(global_position)
+		_obroc_do(ostatnia_pozycja, delta, 3.0)
+		return
+	_kucanie_cel = 0.15
+	# w oddziale naprzód idzie jeden, reszta osłania z dystansu
+	var prow: Node = oddzial.prowadzacy() if oddzial else self
+	if prow != self and is_instance_valid(prow) and prow.global_position.distance_to(ostatnia_pozycja) > 2.0:
+		var za: Vector3 = prow.global_position + (global_position - prow.global_position).normalized() * 3.5
+		if global_position.distance_to(za) > 2.0:
+			_idz(_najblizszy_na_siatce(za))
+		else:
+			_idz(global_position)
+			_obroc_do(ostatnia_pozycja, delta, 3.0)
+		if czas_bez_kontaktu > 35.0:
+			stan = "patrol"
 		return
 	_idz(ostatnia_pozycja)
 	if _agent.is_navigation_finished():
 		biegnie = false
 		_obroc_do(ostatnia_pozycja + Vector3(sin(czas_bez_kontaktu * 0.7), 0, cos(czas_bez_kontaktu * 0.7)) * 4.0, delta, 2.0)
-	if czas_bez_kontaktu > 25.0:
-		stan = "patrol"
+	if czas_bez_kontaktu > 30.0:
+		stan = "patrol" if posterunek.is_empty() else "posterunek"
 		_napis(["Straciłem go.", "Uciekł.", "Wracamy."].pick_random())
 
 
@@ -555,16 +618,18 @@ func _walka(delta: float) -> void:
 		ostatnia_pozycja = gracz.global_position
 	else:
 		czas_bez_kontaktu += delta
-		if czas_bez_kontaktu > 4.0:
+		if czas_bez_kontaktu > 3.0:
+			# nie gna od razu za graczem: trzyma kąt, potem ostrożnie szuka
 			stan = "szukanie"
-			_napis(["Gdzie on jest?", "Straciłem kontakt!", "Szukać go!"].pick_random())
+			_trzymaj_t = randf_range(5.0, 11.0) if cecha != "agresywny" else randf_range(2.0, 4.0)
+			_napis(["Gdzie on jest?", "Straciłem kontakt!", "Trzymać kąty!"].pick_random())
 			return
-	if morale < 12.0 and cecha != "agresywny":
+	if morale < 12.0 and cecha != "agresywny" and posterunek.is_empty():
 		stan = "ucieczka"
 		czas_bez_kontaktu = 0.0
 		_napis(["Spadam stąd!", "Odwrót!", "Nie płacą mi za to!"].pick_random())
 		return
-	_obroc_do(ostatnia_pozycja, delta, 7.0)
+	_obroc_do(ostatnia_pozycja, delta, 4.5)
 	# przeładowanie za osłoną
 	if _przeladowanie > 0.0:
 		_przeladowanie -= delta
@@ -572,30 +637,119 @@ func _walka(delta: float) -> void:
 		if _przeladowanie <= 0.0:
 			_w_magazynku = _pojemnosc()
 		return
+	# na posterunku: zza worków, wstaje do strzału i chowa się
+	if not posterunek.is_empty():
+		_walka_z_posterunku(delta)
+		return
 	_decyzja_t -= delta
 	if _decyzja_t <= 0.0:
-		_decyzja_t = randf_range(2.5, 5.0) if not _w_oslonie else randf_range(4.0, 8.0)
-		_wybierz_pozycje()
+		_decyzja_t = randf_range(6.0, 11.0) if _w_oslonie else randf_range(3.0, 5.0)
+		if _potrzeba_zmiany_pozycji():
+			_wybierz_pozycje()
+	var idzie := not _agent.is_navigation_finished() and cel_ruchu.distance_to(global_position) > 0.6
 	if _w_oslonie and _oslona.get("niska", false):
 		# wychylanie się zza niskiej osłony
 		_wychyl_t -= delta
 		if _wychyl_t <= 0.0:
-			_wychyl_t = randf_range(1.0, 2.4)
+			_wychyl_t = randf_range(1.6, 3.2) if _kucanie_cel > 0.5 else randf_range(1.2, 2.4)
 			_kucanie_cel = 0.0 if _kucanie_cel > 0.5 else 1.0
+	elif idzie:
+		_kucanie_cel = 0.35
 	elif not _w_oslonie:
-		_kucanie_cel = 0.0
+		_kucanie_cel = 0.0 if _przygwozdzenie < 1.0 else 1.0
+	# pod silnym ostrzałem chowa głowę zamiast odpowiadać ogniem
+	if _przygwozdzenie > 1.3 and _w_oslonie:
+		_kucanie_cel = 1.0
+		return
+	if _zachwianie > 0.0:
+		return
 	if _reakcja > 0.0:
 		_reakcja -= delta
 		return
+	# szabrownicy strzelają z miejsca, wyszkoleni także w marszu
+	if idzie and frakcja == "szabrownik":
+		return
 	if widzi and _kucanie_cel < 0.5:
 		_strzelaj(delta)
+
+
+## Czy warto zmieniać pozycję: brak osłony, osłona już nie zasłania, ranny, albo flankujący.
+func _potrzeba_zmiany_pozycji() -> bool:
+	if _oslona.is_empty():
+		return true
+	var pg := gracz.global_position
+	var m: Vector3 = _oslona["mebel"]
+	if m.distance_to(pg) > (_oslona["pos"] as Vector3).distance_to(pg):
+		return true          # gracz obszedł osłonę
+	if cialo.procent() < 0.65 and pg.distance_to(global_position) < 8.0:
+		return true          # ranny: odskok dalej
+	if rola == "flanka" and randf() < 0.5:
+		return true
+	return randf() < 0.12
+
+
+func _walka_z_posterunku(delta: float) -> void:
+	_idz(posterunek["pos"])
+	_cykl_t -= delta
+	if _cykl_t <= 0.0:
+		_cykl_t = randf_range(2.0, 3.5) if _kucanie_cel < 0.7 else randf_range(1.2, 2.2)
+		_kucanie_cel = 1.0 if _kucanie_cel < 0.7 else 0.45
+	if _przygwozdzenie > 1.2:
+		_kucanie_cel = 1.0
+		return
+	if _zachwianie > 0.0 or _reakcja > 0.0:
+		_reakcja -= delta
+		return
+	if widzi and _kucanie_cel < 0.7:
+		_strzelaj(delta)
+
+
+func _posterunek(delta: float) -> void:
+	biegnie = false
+	_kucanie_cel = 0.55
+	_idz(posterunek["pos"])
+	var kier: Vector3 = posterunek["kier"]
+	_rozgl += delta * 0.4
+	_obroc_do(global_position + kier.rotated(Vector3.UP, sin(_rozgl) * 0.5), delta, 1.5)
+
+
+func _posterunek_alarm(delta: float) -> void:
+	biegnie = false
+	_kucanie_cel = 0.5
+	_idz(posterunek["pos"])
+	czas_bez_kontaktu += delta
+	if ostatnia_pozycja != Vector3.ZERO:
+		_obroc_do(ostatnia_pozycja, delta, 2.5)
+	if widzi and wykrycie > 0.6:
+		_wejdz_w_walke()
+	elif czas_bez_kontaktu > 25.0:
+		stan = "posterunek"
+
+
+func _opatrywanie(delta: float) -> void:
+	biegnie = false
+	_kucanie_cel = 1.0
+	_idz(global_position)
+	_opatr_t -= delta
+	if widzi and wykrycie >= 1.0 and _opatr_t > 1.5 and randf() < delta * 1.5:
+		_wejdz_w_walke()
+		return
+	if _opatr_t <= 0.0:
+		_opatrunki -= 1
+		cialo.lecz("krwawienie_ciezkie", {}, null)
+		if cialo.krwawi() > 0 and _opatrunki > 0:
+			_opatr_t = randf_range(3.0, 4.0)
+			return
+		stan = "walka" if widzi else "szukanie"
+		_trzymaj_t = randf_range(3.0, 6.0)
 
 
 func _wybierz_pozycje() -> void:
 	_w_oslonie = false
 	if menedzer == null or gracz == null:
 		return
-	var flanka := rola == "flanka" or (frakcja == "najemnik" and randf() < 0.45)
+	var flanka := rola == "flanka" or (frakcja != "szabrownik" and randf() < 0.35)
+	var ranny := cialo.procent() < 0.65
 	var najlepsza := {}
 	var best := -INF
 	var pg := gracz.global_position
@@ -603,37 +757,42 @@ func _wybierz_pozycje() -> void:
 		var p: Vector3 = o["pos"]
 		var d_ja := global_position.distance_to(p)
 		var d_g := pg.distance_to(p)
-		if d_ja > 14.0 or d_g < 3.5 or d_g > 22.0:
+		if d_ja > (16.0 if flanka else 10.0) or d_g < 3.5 or d_g > 24.0:
 			continue
 		if menedzer.zajeta_oslona(o, self):
 			continue
 		# osłona ma być między nami a graczem: mebel bliżej gracza niż punkt
 		var m: Vector3 = o["mebel"]
 		var ochrona := 1.0 if m.distance_to(pg) < p.distance_to(pg) else -1.0
-		var s := ochrona * 5.0 - d_ja * 0.35 - absf(d_g - 9.0) * 0.3
+		# blisko obecnej pozycji: krótkie, przemyślane skoki zamiast biegania po pół mapy
+		var s := ochrona * 6.0 - d_ja * 0.6 - absf(d_g - (13.0 if ranny else 9.0)) * 0.3
 		if flanka:
 			var a := (global_position - pg).normalized()
 			var b := (p - pg).normalized()
 			s += (1.0 - a.dot(b)) * 4.0
 		if cecha == "agresywny":
 			s -= d_g * 0.2
-		elif cecha == "ostrozny":
-			s += d_g * 0.1
+		elif cecha == "ostrozny" or ranny:
+			s += d_g * 0.15
 		if s > best:
 			best = s
 			najlepsza = o
 	if najlepsza.is_empty():
-		# brak osłony: krótki unik w bok
-		var bok := global_basis.x * (1.0 if randf() < 0.5 else -1.0) * randf_range(1.5, 3.0)
+		# brak osłony: krótki krok w bok, przykucnięty
+		var bok := global_basis.x * (1.0 if randf() < 0.5 else -1.0) * randf_range(1.0, 2.0)
 		_idz(_najblizszy_na_siatce(global_position + bok))
 		biegnie = false
 		return
 	_oslona = najlepsza
 	menedzer.zajmij_oslone(najlepsza, self)
-	biegnie = true
+	var dyst := global_position.distance_to(najlepsza["pos"])
+	# biegnie tylko przez otwartą przestrzeń pod ostrzałem; krótkie skoki marszem z bronią przy oku
+	biegnie = dyst > 4.5 and (_przygwozdzenie > 0.3 or flanka or ranny)
 	_idz(najlepsza["pos"])
 	if flanka and oddzial and randf() < 0.5:
 		_napis(["Obchodzę go!", "Flankuję!", "Idę lewą!"].pick_random())
+	elif biegnie and randf() < 0.4:
+		_napis(["Zmieniam pozycję!", "Osłaniaj!", "Przechodzę!"].pick_random())
 
 
 func _strzelaj(delta: float) -> void:
@@ -790,7 +949,7 @@ func _animuj(delta: float) -> void:
 	_drgniecie = move_toward(_drgniecie, 0.0, delta * 3.5)
 	_odrzut_anim = move_toward(_odrzut_anim, 0.0, delta * 9.0)
 	var lk := global_basis.inverse() * _ost_kier
-	var celuje := stan == "walka" or (stan == "szukanie" and frakcja == "najemnik") or (stan == "czujny" and not _nasluch)
+	var celuje := stan in ["walka", "posterunek"] or (stan == "szukanie" and frakcja != "szabrownik") or (stan == "czujny" and not _nasluch)
 	var pion := 0.0
 	if celuje and ostatnia_pozycja != Vector3.ZERO:
 		var oko := _oko()

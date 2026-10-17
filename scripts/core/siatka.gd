@@ -9,6 +9,48 @@ var w: int
 var h: int
 var redukcja := 0.0
 var items: Array = []
+var maska := PackedByteArray()   # 1 = komórka istnieje; puste = cała siatka (przegródki kieszeni)
+
+
+## Siatka pojemnika z definicji: rozmiar, redukcja wagi i układ przegródek ("uklad": ["##.##", ...]).
+static func z_definicji(pj: Dictionary) -> Siatka:
+	var s := Siatka.new(int(pj["sw"]), int(pj["sh"]), float(pj.get("redukcja", 0.0)))
+	s.ustaw_uklad(pj.get("uklad", []))
+	return s
+
+
+func ustaw_uklad(wiersze: Array) -> void:
+	maska = PackedByteArray()
+	if wiersze.is_empty():
+		return
+	maska.resize(w * h)
+	for y in mini(h, wiersze.size()):
+		var r: String = wiersze[y]
+		for x in mini(w, r.length()):
+			maska[y * w + x] = 1 if r[x] == "#" else 0
+
+
+func dostepna(x: int, y: int) -> bool:
+	if x < 0 or y < 0 or x >= w or y >= h:
+		return false
+	return maska.is_empty() or maska[y * w + x] == 1
+
+
+## Ile z "ile" sztuk da się dołożyć do stosu q, żeby po urośnięciu nadal mieścił się w siatce.
+func ile_zmiesci(q: Przedmiot, ile: int) -> int:
+	var poz := pozycja(q)
+	if poz.x < 0:
+		return ile
+	var n := q.ilosc
+	var k := ile
+	while k > 0:
+		q.ilosc = n + k
+		var ok := moze(q, poz.x, poz.y, q.obrot, q)
+		q.ilosc = n
+		if ok:
+			return k
+		k -= 1
+	return 0
 
 
 func _init(sw := 4, sh := 4, red := 0.0) -> void:
@@ -33,14 +75,15 @@ func _zajete(ignore: Przedmiot = null) -> PackedByteArray:
 
 
 func moze(p: Przedmiot, x: int, y: int, rot: bool, ignore: Przedmiot = null) -> bool:
-	var pw := int(p.defn().get("h", 1)) if rot else int(p.defn().get("w", 1))
-	var ph := int(p.defn().get("w", 1)) if rot else int(p.defn().get("h", 1))
+	var r := p.rozmiar()
+	var pw := r.y if rot else r.x
+	var ph := r.x if rot else r.y
 	if x < 0 or y < 0 or x + pw > w or y + ph > h:
 		return false
 	var occ := _zajete(ignore)
 	for yy in ph:
 		for xx in pw:
-			if occ[(y + yy) * w + x + xx] == 1:
+			if occ[(y + yy) * w + x + xx] == 1 or not dostepna(x + xx, y + yy):
 				return false
 	return true
 
@@ -101,7 +144,9 @@ func dodaj(p: Przedmiot) -> bool:
 		for e in items:
 			var q: Przedmiot = e["p"]
 			if q.id == p.id and q.ilosc < q.stos_max():
-				var ile: int = min(p.ilosc, q.stos_max() - q.ilosc)
+				var ile: int = ile_zmiesci(q, min(p.ilosc, q.stos_max() - q.ilosc))
+				if ile <= 0:
+					continue
 				q.ilosc += ile
 				p.ilosc -= ile
 				if p.ilosc <= 0:
@@ -178,6 +223,15 @@ func to_dict() -> Dictionary:
 
 static func from_dict(d: Dictionary) -> Siatka:
 	var s := Siatka.new(int(d["w"]), int(d["h"]), float(d.get("r", 0.0)))
+	var reszta := []
 	for e in d.get("i", []):
-		s.items.append({"p": Przedmiot.from_dict(e["p"]), "x": int(e["x"]), "y": int(e["y"])})
+		var p := Przedmiot.from_dict(e["p"])
+		# stosy mogły zmienić rozmiar między wersjami: co nie pasuje, układamy na nowo
+		if s.moze(p, int(e["x"]), int(e["y"]), p.obrot):
+			s.items.append({"p": p, "x": int(e["x"]), "y": int(e["y"])})
+		else:
+			reszta.append(p)
+	for p in reszta:
+		if not s.dodaj(p):
+			Przedmiot.przepelnienie.append(p)
 	return s

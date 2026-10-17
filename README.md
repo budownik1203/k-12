@@ -29,7 +29,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
-| Tab | ekwipunek |
+| Tab | wybór: [1] kamizelka (spojrzenie w dół), [2] plecak (zdjęcie i rozpięcie), [3] całe oporządzenie; w sklepie Tab zamyka |
 | G | napełnij magazynki z amunicji luzem |
 | L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz |
 | O | lista wyjść z kierunkiem i odległością |
@@ -37,6 +37,10 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej) |
 | F1 | plansza ze sterowaniem |
+
+Latarka, mapa i kompas działają tylko na slotach wyposażenia (pas + 0–2 z kamizelki). Mapa daje odległości
+do wyjść w liście [O], kompas – pasek kierunków u góry ekranu. Amunicja luzem to garść (1x1), większy stos robi się
+pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kieszenie).
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** szybko przenosi, **PPM** menu
 (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić
@@ -84,6 +88,7 @@ godot --headless --path . res://scenes/rajd.tscn -- --walka   # starcie z oddzia
 godot --headless --path . res://scenes/rajd.tscn -- --test --sluch   # kto reaguje na strzał ze środka mapy
 godot --path . res://scenes/rajd.tscn -- --zrzuty <katalog>   # zrzuty ekranu
 godot --headless --path . res://scenes/rajd.tscn -- --test_bron   # klawisze broni i latarki
+godot --path . res://scenes/rajd.tscn -- --posterunek <katalog>  # posterunki wojska i korytarze
 godot --path . res://scenes/rajd.tscn -- --postacie <plik.png>   # przeciwnicy w pozach
 godot --path . res://scenes/rajd.tscn -- --vm <katalog>          # fazy przeładowania
 ```

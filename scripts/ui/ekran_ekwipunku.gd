@@ -30,6 +30,20 @@ var _opis_ciala: Label
 var _panele: Array[Control] = []
 var _hover_p: Przedmiot = null
 var _seria_mag := false        # napełnianie wszystkich magazynków po kolei
+var tryb := "pelny"            # pelny | kamizelka (spojrzenie w dół) | plecak (zdjęty i rozpięty)
+var wybor_otwarty := false
+var _animuje := false
+var _wybor: PanelContainer
+var _tlo: TextureRect
+var _lp: PanelContainer
+var _sp: PanelContainer
+var _pp: PanelContainer
+var _ss: ScrollContainer
+var _rzad: HBoxContainer
+var _gora: HBoxContainer
+var _dol: HBoxContainer
+var _odstep_g: Control
+var _odstep_d: Control
 var _siatki: Array[SiatkaUI] = []
 var _sloty: Array[SlotUI] = []
 
@@ -55,6 +69,7 @@ func _buduj() -> void:
 	add_child(_root)
 	# wnętrze rozpiętego oporządzenia: płótno na całym ekranie, przyciemnione brzegi
 	var tlo := TextureRect.new()
+	_tlo = tlo
 	tlo.texture = Motyw.tekstura("plotno")
 	tlo.stretch_mode = TextureRect.STRETCH_TILE
 	tlo.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -85,7 +100,13 @@ func _buduj() -> void:
 	_info_bony = Motyw.etykieta("", 16, Motyw.ZOLC, Motyw.mono_b())
 	gora.add_child(_info_bony)
 	kol.add_child(gora)
+	_gora = gora
+	_odstep_g = Control.new()
+	_odstep_g.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	kol.add_child(_odstep_g)
 	var rzad := HBoxContainer.new()
+	_rzad = rzad
+	rzad.alignment = BoxContainer.ALIGNMENT_CENTER
 	rzad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rzad.add_theme_constant_override("separation", 18)
 	kol.add_child(rzad)
@@ -94,6 +115,7 @@ func _buduj() -> void:
 	lp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
 	lp.custom_minimum_size = Vector2(350, 0)
 	rzad.add_child(lp)
+	_lp = lp
 	_panele.append(lp)
 	_lewy = VBoxContainer.new()
 	_lewy.add_theme_constant_override("separation", 6)
@@ -103,10 +125,12 @@ func _buduj() -> void:
 	sp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni())
 	sp.custom_minimum_size = Vector2(300, 0)
 	rzad.add_child(sp)
+	_sp = sp
 	_panele.append(sp)
 	var ss := ScrollContainer.new()
 	ss.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sp.add_child(ss)
+	_ss = ss
 	_srodek = VBoxContainer.new()
 	_srodek.add_theme_constant_override("separation", 6)
 	ss.add_child(_srodek)
@@ -115,6 +139,7 @@ func _buduj() -> void:
 	pp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
 	pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rzad.add_child(pp)
+	_pp = pp
 	_panele.append(pp)
 	_prawy = VBoxContainer.new()
 	pp.add_child(_prawy)
@@ -126,7 +151,11 @@ func _buduj() -> void:
 	_prawy_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_prawy.add_child(_prawy_scroll)
 	# dół: podpowiedzi i pasek postępu
+	_odstep_d = Control.new()
+	_odstep_d.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	kol.add_child(_odstep_d)
 	var dol := HBoxContainer.new()
+	_dol = dol
 	dol.add_child(Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono()))
 	kol.add_child(dol)
 	# tooltip i menu
@@ -154,11 +183,91 @@ func _buduj() -> void:
 	_kolko = KolkoPostepu.new()
 	_kolko.visible = false
 	_root.add_child(_kolko)
+	_buduj_wybor()
 
 
 # ------------------------------------------------------------------ otwieranie
 
+## Wybór pod Tabem: kamizelka (spojrzenie w dół), plecak (zdjęcie i rozpięcie), całe oporządzenie.
+func _buduj_wybor() -> void:
+	_wybor = PanelContainer.new()
+	_wybor.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
+	_wybor.set_anchors_preset(Control.PRESET_CENTER)
+	_wybor.offset_left = -330
+	_wybor.offset_right = 330
+	_wybor.offset_top = -90
+	_wybor.offset_bottom = 90
+	var v := VBoxContainer.new()
+	_wybor.add_child(v)
+	v.add_child(Motyw.naszywka("Sięgnij do..."))
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	v.add_child(h)
+	for o in [["kamizelka", "1", "Kamizelka", "spojrzenie w dół", "napiersnik"],
+			["plecak", "2", "Plecak", "zdejmij i rozepnij", "plecak_wojskowy"],
+			["pelny", "3", "Całe oporządzenie", "pełna karta", "kamizelka_lbv"]]:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(196, 116)
+		b.text = "[%s] %s\n%s" % [o[1], o[2], o[3]]
+		b.icon = Dane.ikona(o[4])
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		var t: String = o[0]
+		b.pressed.connect(func(): _wybierz(t))
+		h.add_child(b)
+	_wybor.visible = false
+	add_child(_wybor)
+	_wybor.theme = Motyw.motyw()
+
+
+func _otworz_wybor() -> void:
+	wybor_otwarty = true
+	_wybor.visible = true
+	Sterowanie.blokada = true
+	Sterowanie.przechwyc(false)
+	Dzwiek.graj("klik", -12.0)
+
+
+func _zamknij_wybor(przywroc := true) -> void:
+	wybor_otwarty = false
+	_wybor.visible = false
+	if przywroc:
+		Sterowanie.blokada = false
+		Sterowanie.przechwyc(true)
+
+
+func _wybierz(t: String) -> void:
+	_zamknij_wybor(false)
+	if t == "plecak" and ekw.sloty["plecak"] == null:
+		_komunikat("Nie masz plecaka")
+		t = "kamizelka"
+	if t == "pelny" or gracz == null:
+		tryb = "pelny"
+		_pojemnik = null
+		_prawa_siatka = null
+		_pokaz()
+		return
+	tryb = t
+	_animuje = true
+	Sterowanie.przechwyc(true)
+	var czas := gracz.widok_ekwipunku(t)
+	if t == "plecak":
+		Dzwiek.graj("plecak", -6.0, 0.8)
+		Gra.emituj_halas(gracz.global_position, 4.0, gracz)
+	await get_tree().create_timer(czas).timeout
+	_animuje = false
+	if t == "plecak":
+		Dzwiek.graj("plecak", -8.0, 1.3)
+	_pojemnik = null
+	_prawa_siatka = null
+	_pokaz()
+
+
 func otworz(pojemnik: Pojemnik = null) -> void:
+	if tryb != "pelny" and otwarty:
+		zamknij()
+	tryb = "pelny"
 	_pojemnik = pojemnik
 	_prawa_siatka = pojemnik.siatka if pojemnik else null
 	_szukanie_t = 0.0
@@ -197,6 +306,11 @@ func zamknij() -> void:
 	Sterowanie.blokada = false
 	Sterowanie.przechwyc(true)
 	_pojemnik = null
+	if tryb != "pelny" and gracz:
+		gracz.widok_ekwipunku("")
+		if tryb == "plecak":
+			Dzwiek.graj("plecak", -8.0, 1.1)
+	tryb = "pelny"
 	zamkniety.emit()
 	if tryb_bazy:
 		Gra.zapisz()
@@ -211,6 +325,7 @@ func _przebuduj() -> void:
 		c.queue_free()
 	_siatki.clear()
 	_sloty.clear()
+	_uklad_trybu()
 	# lewy panel
 	_lewy.add_child(Motyw.naszywka("Operator"))
 	# sylwetka w środku, wyposażenie po bokach – jak na rozłożonym oporządzeniu
@@ -237,6 +352,8 @@ func _przebuduj() -> void:
 	_lewy.add_child(bronie)
 	bronie.add_child(_slot("glowna", Vector2i(6, 2)))
 	bronie.add_child(_slot("pistolet", Vector2i(3, 2)))
+	if tryb == "pelny":
+		_lewy.add_child(_rzad_utility())
 	_opis_ciala = Motyw.etykieta("", 12, Motyw.TEKST, Motyw.cond())
 	_opis_ciala.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_opis_ciala.custom_minimum_size = Vector2(320, 34)
@@ -244,16 +361,28 @@ func _przebuduj() -> void:
 	_info_waga = Motyw.etykieta("", 14, Motyw.TEKST, Motyw.mono())
 	_lewy.add_child(_info_waga)
 	# środek
+	if tryb != "pelny":
+		_srodek.add_child(_rzad_utility())
 	_srodek.add_child(Motyw.naszywka("Kieszenie"))
 	_srodek.add_child(_siatka_ui(ekw.kieszenie, "kieszenie"))
-	_srodek.add_child(Motyw.naszywka("Kamizelka" + _opis_red(ekw.sloty["kamizelka"])))
+	var nk: String = ekw.sloty["kamizelka"].nazwa() if ekw.sloty["kamizelka"] else "Kamizelka"
+	_srodek.add_child(Motyw.naszywka(nk + _opis_red(ekw.sloty["kamizelka"])))
 	_srodek.add_child(_siatka_ui(ekw.siatka_kamizelki(), "kamizelka"))
-	_srodek.add_child(Motyw.naszywka("Plecak" + _opis_red(ekw.sloty["plecak"])))
-	_srodek.add_child(_siatka_ui(ekw.siatka_plecaka(), "plecak"))
-	_srodek.add_child(Motyw.naszywka("Kontener bezpieczny"))
-	_srodek.add_child(_siatka_ui(ekw.bezpieczny, "bezpieczny"))
+	if tryb == "pelny":
+		_srodek.add_child(Motyw.naszywka("Plecak" + _opis_red(ekw.sloty["plecak"])))
+		_srodek.add_child(_siatka_ui(ekw.siatka_plecaka(), "plecak"))
+	if tryb != "plecak":
+		_srodek.add_child(Motyw.naszywka("Kontener bezpieczny"))
+		_srodek.add_child(_siatka_ui(ekw.bezpieczny, "bezpieczny"))
 	# prawy
-	if _prawa_siatka != null:
+	if tryb == "plecak" and ekw.sloty["plecak"] != null:
+		_prawy_tytul.text = (ekw.sloty["plecak"].nazwa() + " · rozpięty").to_upper()
+		var pv := VBoxContainer.new()
+		pv.add_child(Zamek.new())
+		pv.add_child(_siatka_ui(ekw.siatka_plecaka(), "plecak"))
+		_prawy_scroll.add_child(pv)
+		_prawa_ui = null
+	elif _prawa_siatka != null:
 		var naz := "Skrytka" if _pojemnik == null else _pojemnik.nazwa
 		_prawy_tytul.text = naz.to_upper()
 		_prawa_ui = _siatka_ui(_prawa_siatka, "prawy")
@@ -268,6 +397,34 @@ func _przebuduj() -> void:
 		l.custom_minimum_size = Vector2(300, 0)
 		_prawy_scroll.add_child(l)
 	_odswiez()
+
+
+## Sloty wyposażenia dodatkowego (latarka, mapa, kompas): pas + tyle, ile daje kamizelka.
+func _rzad_utility() -> Control:
+	var v := VBoxContainer.new()
+	v.add_child(Motyw.naszywka("Wyposażenie · %d/%d" % [ekw.liczba_utility(), Ekwipunek.MAX_UTILITY]))
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	v.add_child(h)
+	for i in Ekwipunek.MAX_UTILITY:
+		h.add_child(_slot("util%d" % i, Vector2i(2, 1)))
+	return v
+
+
+## Układ ekranu zależny od trybu: pełna karta, ładownice na dole ekranu (świat widoczny), rozpięty plecak.
+func _uklad_trybu() -> void:
+	_lp.visible = tryb == "pelny"
+	_pp.visible = tryb != "kamizelka"
+	_gora.visible = tryb == "pelny"
+	_tlo.modulate.a = {"pelny": 0.97, "kamizelka": 0.0, "plecak": 0.6}[tryb]
+	_rzad.size_flags_vertical = Control.SIZE_EXPAND_FILL if tryb == "pelny" else Control.SIZE_SHRINK_CENTER
+	# kamizelka: ładownice przy dolnej krawędzi (patrzysz w dół), plecak: na środku
+	_odstep_g.visible = tryb != "pelny"
+	_odstep_d.visible = tryb == "plecak"
+	_pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL if tryb == "pelny" else Control.SIZE_SHRINK_CENTER
+	_ss.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if tryb == "pelny" else ScrollContainer.SCROLL_MODE_DISABLED
+	_prawy_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if tryb == "pelny" else ScrollContainer.SCROLL_MODE_DISABLED
+	_prawy_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 
 
 func _opis_red(p: Przedmiot) -> String:
@@ -315,14 +472,25 @@ func _odswiez() -> void:
 # ------------------------------------------------------------------ pętla
 
 func _process(delta: float) -> void:
-	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu():
-		if otwarty:
+	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu() and Engine.get_process_frames() > Sterowanie.blokuj_tab_do:
+		if _animuje:
+			pass
+		elif otwarty:
 			zamknij()
+		elif wybor_otwarty:
+			_zamknij_wybor()
 		elif gracz == null or not gracz.cialo.martwy:
-			if tryb_bazy:
+			if tryb_bazy or gracz == null:
 				otworz_skrytke()
 			else:
-				otworz(null)
+				_otworz_wybor()
+	if wybor_otwarty:
+		for i in 3:
+			if Input.is_action_just_pressed("bron%d" % (i + 1)):
+				_wybierz(["kamizelka", "plecak", "pelny"][i])
+				break
+		if Input.is_action_just_pressed("pauza"):
+			_zamknij_wybor()
 	if not otwarty:
 		return
 	# przeszukiwanie: stopniowe odkrywanie zawartości
@@ -504,6 +672,14 @@ func _usun_ze_zrodla(p: Przedmiot, z: Dictionary) -> void:
 
 
 func _na_slot(p: Przedmiot, z: Dictionary, slot: String) -> void:
+	if slot == "util":
+		slot = ekw.wolny_util()
+		if slot == "":
+			_komunikat("Brak wolnego slotu wyposażenia – kamizelka daje więcej")
+			return
+	if slot.begins_with("util") and not ekw.util_aktywny(slot):
+		_komunikat("Ten slot daje dopiero lepsza kamizelka")
+		return
 	if not Ekwipunek.pasuje(slot, p):
 		_komunikat("To nie pasuje do: " + Ekwipunek.NAZWY_SLOTOW[slot])
 		return
@@ -536,7 +712,11 @@ func _na_slot(p: Przedmiot, z: Dictionary, slot: String) -> void:
 ## Interakcje przedmiot-na-przedmiot: stos amunicji, amunicja do magazynka, magazynek do broni, przedmiot do pojemnika.
 func _polacz(p: Przedmiot, z: Dictionary, q: Przedmiot, ui: SiatkaUI) -> bool:
 	if p.id == q.id and p.stos_max() > 1 and q.ilosc < q.stos_max():
-		var ile: int = mini(p.ilosc, q.stos_max() - q.ilosc)
+		# stos rośnie (garść -> pudełko): dokładamy tyle, ile się zmieści
+		var ile: int = ui.siatka.ile_zmiesci(q, mini(p.ilosc, q.stos_max() - q.ilosc))
+		if ile <= 0:
+			_komunikat("Pudełko się tu nie zmieści")
+			return false
 		q.ilosc += ile
 		p.ilosc -= ile
 		if p.ilosc <= 0:
@@ -868,6 +1048,21 @@ func _komunikat(t: String) -> void:
 
 
 # ------------------------------------------------------------------ duch przeciąganego przedmiotu
+
+## Rozpięty zamek plecaka nad komorą główną.
+class Zamek:
+	extends Control
+	func _ready() -> void:
+		custom_minimum_size = Vector2(0, 14)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var w := size.x
+		for i in int(w / 6.0):
+			var x := i * 6.0
+			var y := 2.0 + (4.0 if i % 2 == 0 else 0.0) + sin(i * 0.4) * 1.5
+			draw_rect(Rect2(x, y, 4, 4), Color(0.55, 0.53, 0.45))
+		draw_rect(Rect2(w * 0.5 - 6, 0, 12, 12), Color(0.7, 0.68, 0.6))
+
 
 class Duch:
 	extends Control

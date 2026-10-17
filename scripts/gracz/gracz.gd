@@ -47,6 +47,10 @@ var _biegnie := false
 var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
 var latarka_wlaczona := true
 var _kop := 0.0                 # kopnięcie kamery po strzale
+var ekw_pitch := 0.0            # widok przy ekwipunku: spojrzenie w dół, przechył, przysiad
+var ekw_roll := 0.0
+var ekw_glowa := 0.0
+var _ekw_tw: Tween
 var latarka_poswiata: SpotLight3D   # szeroki, słaby snop wokół jasnego środka
 var latarka_odblask: OmniLight3D    # światło odbite na dłoniach
 var _latarka_t := 0.0
@@ -158,7 +162,7 @@ func _wybierz_bron(slot: String) -> void:
 	# latarka zostaje w ręce tylko z pistoletem (karabin trzyma się oburącz)
 	if p != null and p.defn()["bron"]["slot"] != "pistolet":
 		latarka_w_rece = false
-	if latarka_w_rece and ekw.znajdz_id("latarka").is_empty():
+	if latarka_w_rece and not ekw.ma_wyposazenie("latarka"):
 		latarka_w_rece = false
 	bron.ustaw(p, latarka_w_rece)
 	_odswiez_latarke()
@@ -173,8 +177,8 @@ func _odswiez_latarke() -> void:
 
 ## Wyciąga latarkę: z pistoletem (gdy jest) albo samą. sama=true wymusza samą latarkę.
 func wez_latarke(sama := false) -> void:
-	if ekw.znajdz_id("latarka").is_empty():
-		komunikat.emit("Nie masz latarki")
+	if not ekw.ma_wyposazenie("latarka"):
+		komunikat.emit("Brak latarki na slocie wyposażenia (pas/kamizelka)" if ekw.znajdz_id("latarka").is_empty() == false else "Nie masz latarki")
 		return
 	latarka_w_rece = true
 	latarka_wlaczona = true
@@ -185,6 +189,31 @@ func wez_latarke(sama := false) -> void:
 	else:
 		_wybierz_bron("")
 	Dzwiek.graj("klik", -8.0)
+
+
+## Widok przy ekwipunku: "kamizelka" – spojrzenie w dół na ładownice, "plecak" – zdjęcie plecaka
+## (przysiad, przechył), "" – powrót. Zwraca czas animacji.
+func widok_ekwipunku(tryb: String) -> float:
+	if _ekw_tw and _ekw_tw.is_valid():
+		_ekw_tw.kill()
+	_ekw_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	var cel := [0.0, 0.0, 0.0]
+	var czas := 0.3
+	match tryb:
+		"kamizelka":
+			cel = [-1.15, 0.0, 0.05]
+			czas = 0.35
+		"plecak":
+			cel = [-0.9, 0.22, 0.45]
+			czas = 0.65
+	_ekw_tw.tween_property(self, "ekw_pitch", (cel[0] - _pitch) if tryb != "" else 0.0, czas)
+	_ekw_tw.tween_property(self, "ekw_roll", cel[1], czas)
+	_ekw_tw.tween_property(self, "ekw_glowa", cel[2], czas)
+	if tryb != "":
+		bron.animacja_akcji("schowaj")
+	else:
+		bron.animacja_akcji(String(akcja.get("typ", "")) if not akcja.is_empty() else "")
+	return czas
 
 
 ## Kopnięcie kamery przy strzale (fov i drżenie), silniejsze dla mocniejszej broni.
@@ -269,7 +298,7 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	_trafienie_shake = maxf(0.0, _trafienie_shake - delta * 3.0)
 	_kop = move_toward(_kop, 0.0, delta * 7.0)
 	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * (_trafienie_shake * deg_to_rad(2.0) + _kop * deg_to_rad(0.35))
-	glowa.rotation.x = _pitch + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
+	glowa.rotation.x = clampf(_pitch + ekw_pitch, deg_to_rad(-88), deg_to_rad(88)) + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
 	glowa.rotation.y = deg_to_rad(_odrzut.x) + drzenie.x + shake.x
 	# wychylenie
 	var cel_w := 0.0
@@ -290,8 +319,8 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	var bok := (global_basis.inverse() * velocity).x
 	_przechyl = lerpf(_przechyl, -bok * 0.012, minf(1.0, delta * 5.0))
 	_ladowanie = move_toward(_ladowanie, 0.0, delta * 0.6)
-	glowa.position = Vector3(wychylenie * 0.32 + bob_x, wys - absf(wychylenie) * 0.06 + bob_y - _ladowanie, 0)
-	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp
+	glowa.position = Vector3(wychylenie * 0.32 + bob_x, wys - absf(wychylenie) * 0.06 + bob_y - _ladowanie - ekw_glowa, 0)
+	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp + ekw_roll
 	var fov_baza := float(Gra.ustawienia.get("fov", 75.0))
 	kamera.fov = lerpf(fov_baza, fov_baza * 0.8, bron.ads) + _kop * 2.2
 

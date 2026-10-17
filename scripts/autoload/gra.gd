@@ -107,7 +107,7 @@ func wydaj_zestaw_startowy() -> bool:
 	ekw.dodaj(_magazynek("mag_pw9", "a_9x18", 8))
 	ekw.dodaj(Przedmiot.nowy("a_9x18", 16))
 	ekw.dodaj(Przedmiot.nowy("bandaz"))
-	if ekw.znajdz_id("latarka").is_empty():
+	if not ekw.ma_wyposazenie("latarka") and ekw.znajdz_id("latarka").is_empty():
 		ekw.dodaj(Przedmiot.nowy("latarka"))
 	zapisz()
 	return true
@@ -208,9 +208,14 @@ func wczytaj() -> bool:
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])
+		# przedmioty, które po zmianie rozmiarów (stosy, przegródki) nie zmieściły się – do skrytki albo na pocztę
+		for p in Przedmiot.przepelnienie:
+			if not skrytka.dodaj(p):
+				poczta.append(p.to_dict())
+		Przedmiot.przepelnienie.clear()
 		# zapisy sprzed latarki-przedmiotu: jedna latarka w skrytce
 		if not d.get("latarka_wydana", false):
-			if ekw.znajdz_id("latarka").is_empty() and not skrytka.wszystkie().any(func(p): return p.id == "latarka"):
+			if not ekw.ma_wyposazenie("latarka") and ekw.znajdz_id("latarka").is_empty() and not skrytka.wszystkie().any(func(p): return p.id == "latarka"):
 				skrytka.dodaj(Przedmiot.nowy("latarka"))
 		return true
 	return false

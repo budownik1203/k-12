@@ -21,7 +21,7 @@ const HANDLARZE := {
 		"powitania": ["Broń jest. Amunicji też trochę. Sumienia brak na stanie.", "Zwrotów nie przyjmuję. Zwłaszcza od nieboszczyków.", "Podpisz tu, tu i tu. Nie, nie czytaj."],
 		"oferta": [["pw9", 1], ["obrzyn", 1], ["pm63", 1], ["kb47", 1], ["mag_pw9", 1], ["mag_pm63", 1], ["mag_kb47", 1],
 			["a_9x18", 50], ["a_12", 20], ["a_762", 60], ["a_762bp", 30], ["kamizelka_kl2", 1], ["helm_wz67", 1],
-			["kamizelka_kl4", 1], ["kamizelka_lbv", 1], ["plecak_szturmowy", 1], ["plecak_turystyczny", 1]],
+			["kamizelka_kl4", 1], ["kamizelka_lbv", 1], ["napiersnik", 1], ["plecak_szturmowy", 1], ["plecak_turystyczny", 1], ["plecak_wojskowy", 1]],
 		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik"], "skup": 0.5,
 	},
 	"medyk": {
@@ -33,8 +33,8 @@ const HANDLARZE := {
 	"posrednik": {
 		"nazwa": "Pośrednik", "opis": "skup i sprzedaż, znajomości u Szabrowników",
 		"powitania": ["Wszystko ma swoją cenę. Ty też, ale na razie kupuję zegarki.", "Pochodzenie towaru mnie nie interesuje. Stan – owszem.", "Dla stałych klientów rabat. Ty jeszcze nie jesteś stały. Ani żywy na dłużej."],
-		"oferta": [["worek", 1], ["kamizelka_wedkarska", 1], ["latarka", 1], ["klucz_piwnica", 1], ["konserwa", 1], ["papierosy", 1]],
-		"skupuje": ["lup", "klucz", "latarka", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.45, "skup_lup": 0.7,
+		"oferta": [["worek", 1], ["chlebak", 1], ["kamizelka_wedkarska", 1], ["kamizelka_mysliwska", 1], ["latarka", 1], ["mapa", 1], ["kompas", 1], ["klucz_piwnica", 1], ["konserwa", 1], ["papierosy", 1]],
+		"skupuje": ["lup", "klucz", "latarka", "mapa", "kompas", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.45, "skup_lup": 0.7,
 	},
 }
 
@@ -147,8 +147,10 @@ func zamknij() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if otwarty and event.is_action_pressed("pauza"):
+	if otwarty and (event.is_action_pressed("pauza") or event.is_action_pressed("ekwipunek")):
 		zamknij()
+		# ten sam Tab nie może od razu otworzyć skrytki
+		Sterowanie.blokuj_tab_do = Engine.get_process_frames() + 3
 		get_viewport().set_input_as_handled()
 
 

@@ -16,7 +16,7 @@ func _ready() -> void:
 	cs.shape = bs
 	add_child(cs)
 	var s := Sprite3D.new()
-	s.texture = Dane.ikona(przedmiot.id)
+	s.texture = Dane.ikona(przedmiot.ikona_id())
 	s.pixel_size = 0.0075
 	s.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	s.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST

@@ -107,20 +107,124 @@ def draw(pid, d, W, H):
         d.line([(10, 6), (13, 32)], fill=METAL_J)
         d.rectangle([9, 3, 19, 5], fill=MOSIADZ)
     elif pid in ("a_9x18", "a_762", "a_762bp"):
+        # pudełko 1x2: karton z etykietą, kilka naboi wystaje z otwartego wieczka
         box = {"a_9x18": KHAKI, "a_762": OLIWKA, "a_762bp": (60, 62, 60)}[pid]
-        shaded_rect(d, [3, 12, 28, 28], box)
         tip = (20, 20, 20) if pid == "a_762bp" else (176, 110, 60)
-        n = 4 if pid == "a_9x18" else 3
-        for i in range(n):
-            x = 6 + i * (22 // n)
-            top = 6 if pid == "a_9x18" else 3
-            d.rectangle([x, top + 4, x + 3, 13], fill=MOSIADZ)
-            d.rectangle([x, top, x + 3, top + 4], fill=tip)
-        d.rectangle([6, 18, 25, 22], fill=BIEL)
+        shaded_rect(d, [4, 16, 27, 60], box)
+        shaded_rect(d, [4, 10, 27, 16], tuple(max(0, v - 25) for v in box))
+        for i in range(4):
+            x = 7 + i * 5
+            d.rectangle([x, 4, x + 3, 11], fill=MOSIADZ)
+            d.rectangle([x, 1, x + 3, 4], fill=tip)
+        d.rectangle([7, 24, 24, 40], fill=BIEL)
+        d.line([(9, 28), (22, 28)], fill=(60, 60, 60))
+        d.line([(9, 32), (20, 32)], fill=(60, 60, 60))
+        d.line([(9, 36), (22, 36)], fill=CZERWIEN if pid == "a_762bp" else (60, 60, 60))
+    elif pid in ("a_9x18_garsc", "a_762_garsc", "a_762bp_garsc"):
+        # garść luźnych naboi
+        tip = (20, 20, 20) if pid.startswith("a_762bp") else (176, 110, 60)
+        dl = 7 if pid.startswith("a_9x18") else 12
+        for (x, y, k) in [(5, 20, 0), (12, 14, 1), (18, 21, 0), (9, 8, 1), (20, 9, 0)]:
+            if k == 0:
+                d.rectangle([x, y, x + dl, y + 3], fill=MOSIADZ)
+                d.rectangle([x + dl, y, x + dl + 3, y + 3], fill=tip)
+            else:
+                d.rectangle([x, y, x + 3, y + dl], fill=MOSIADZ)
+                d.rectangle([x, y - 3, x + 3, y], fill=tip)
     elif pid == "a_12":
+        # pudełko na 20 łusek: rząd czerwonych łusek w kartonie
+        shaded_rect(d, [3, 18, 28, 61], (150, 120, 70))
         for i, x in enumerate((5, 13, 21)):
             shaded_rect(d, [x, 6, x + 6, 22], CZERWIEN)
             shaded_rect(d, [x, 22, x + 6, 27], MOSIADZ)
+        d.rectangle([6, 34, 25, 48], fill=BIEL)
+        d.text((9, 35), "12", fill=CZERWIEN)
+    elif pid == "a_12_garsc":
+        for i, x in enumerate((5, 13, 21)):
+            shaded_rect(d, [x, 6, x + 6, 22], CZERWIEN)
+            shaded_rect(d, [x, 22, x + 6, 27], MOSIADZ)
+    elif pid == "mapa":
+        poly(d, [(3, 6), (12, 3), (20, 6), (29, 3), (29, 26), (20, 29), (12, 26), (3, 29)], (200, 190, 150))
+        d.line([(12, 3), (12, 26)], fill=(150, 140, 100))
+        d.line([(20, 6), (20, 29)], fill=(150, 140, 100))
+        d.line([(5, 18), (14, 14), (24, 20)], fill=CZERWIEN, width=2)
+        d.ellipse([22, 9, 26, 13], outline=GRANAT)
+    elif pid == "kompas":
+        d.ellipse([4, 4, 28, 28], fill=METAL, outline=METAL_C)
+        d.ellipse([7, 7, 25, 25], fill=BIEL)
+        poly(d, [(16, 8), (18, 16), (16, 24), (14, 16)], (60, 60, 60))
+        poly(d, [(16, 8), (18, 16), (14, 16)], CZERWIEN)
+    elif pid == "napiersnik":
+        shaded_rect(d, [4, 10, 60, 56], OLIWKA)
+        for x in (8, 22, 36):
+            shaded_rect(d, [x, 18, x + 11, 50], OLIWKA_J)
+            d.rectangle([x + 1, 18, x + 10, 22], fill=OLIWKA)
+        shaded_rect(d, [49, 26, 58, 50], OLIWKA_J)
+        d.line([(10, 10), (4, 2)], fill=OLIWKA, width=3)
+        d.line([(54, 10), (60, 2)], fill=OLIWKA, width=3)
+    elif pid == "kamizelka_mysliwska":
+        poly(d, [(8, 6), (24, 6), (32, 18), (40, 6), (56, 6), (58, 92), (6, 92)], (110, 84, 46))
+        for (x, y) in [(10, 40), (40, 40), (10, 66), (40, 66)]:
+            shaded_rect(d, [x, y, x + 14, y + 16], (90, 66, 36))
+        d.rectangle([14, 30, 18, 34], fill=POMARANCZ)
+    elif pid == "chlebak":
+        shaded_rect(d, [6, 14, 58, 58], (100, 96, 64))
+        shaded_rect(d, [6, 14, 58, 32], (86, 82, 54))
+        d.rectangle([28, 30, 36, 38], fill=METAL)
+        d.line([(10, 14), (32, 2), (54, 14)], fill=(70, 66, 44), width=3)
+    elif pid == "plecak_wojskowy":
+        shaded_rect(d, [26, 8, 102, 150], OLIWKA)
+        shaded_rect(d, [32, 4, 96, 40], OLIWKA_J)
+        shaded_rect(d, [4, 50, 26, 120], OLIWKA_J)
+        shaded_rect(d, [102, 50, 124, 120], OLIWKA_J)
+        shaded_rect(d, [40, 70, 88, 120], OLIWKA_J)
+        for x in (44, 80):
+            d.rectangle([x, 36, x + 4, 60], fill=METAL_C)
+        d.text((50, 125), "88", fill=(40, 44, 30))
+    elif pid == "maszyna_do_pisania":
+        shaded_rect(d, [6, 26, 90, 58], (60, 70, 66))
+        shaded_rect(d, [10, 8, 86, 26], (74, 86, 80))
+        d.rectangle([14, 4, 82, 9], fill=METAL_C)
+        for r in range(3):
+            for k in range(9):
+                d.rectangle([14 + k * 8 + r * 2, 34 + r * 7, 18 + k * 8 + r * 2, 37 + r * 7], fill=BIEL)
+        d.rectangle([30, 0, 64, 6], fill=BIEL)
+    elif pid == "kanister":
+        shaded_rect(d, [6, 14, 58, 92], (60, 90, 50))
+        d.line([(10, 18), (54, 88)], fill=(48, 72, 40), width=3)
+        d.line([(54, 18), (10, 88)], fill=(48, 72, 40), width=3)
+        shaded_rect(d, [14, 2, 34, 14], (60, 90, 50))
+        shaded_rect(d, [40, 4, 50, 14], METAL)
+    elif pid == "telefon":
+        shaded_rect(d, [8, 26, 56, 58], (150, 40, 34))
+        shaded_rect(d, [4, 12, 60, 24], (130, 34, 28))
+        d.ellipse([20, 32, 44, 56], fill=BIEL, outline=METAL_C)
+        d.ellipse([28, 40, 36, 48], fill=(150, 40, 34))
+    elif pid == "gasnica":
+        shaded_rect(d, [8, 18, 24, 92], CZERWIEN)
+        shaded_rect(d, [10, 8, 22, 18], METAL)
+        d.line([(22, 12), (30, 30)], fill=METAL_C, width=3)
+        d.rectangle([10, 40, 22, 60], fill=BIEL)
+    elif pid == "lornetka":
+        for x in (6, 34):
+            shaded_rect(d, [x, 8, x + 22, 26], (40, 40, 40))
+            d.ellipse([x + 4, 10, x + 18, 24], fill=(60, 90, 100))
+        d.rectangle([28, 12, 34, 20], fill=METAL)
+    elif pid == "maska_gazowa":
+        d.ellipse([10, 4, 54, 54], fill=(60, 66, 56), outline=(30, 30, 28))
+        d.ellipse([16, 16, 28, 28], fill=SZKLO)
+        d.ellipse([36, 16, 48, 28], fill=SZKLO)
+        shaded_rect(d, [24, 36, 40, 60], METAL)
+    elif pid == "kombinerki":
+        poly(d, [(12, 2), (20, 2), (18, 26), (14, 26)], METAL_J)
+        poly(d, [(8, 30), (15, 26), (14, 62), (6, 62)], CZERWIEN)
+        poly(d, [(24, 30), (17, 26), (18, 62), (26, 62)], CZERWIEN)
+    elif pid == "ikona":
+        shaded_rect(d, [4, 4, 60, 60], ZLOTO)
+        shaded_rect(d, [10, 10, 54, 54], (70, 40, 30))
+        d.ellipse([22, 14, 42, 34], fill=ZLOTO)
+        d.ellipse([26, 18, 38, 30], fill=(190, 150, 110))
+        poly(d, [(18, 54), (32, 34), (46, 54)], (40, 50, 90))
     elif pid == "bandaz":
         d.ellipse([5, 7, 27, 25], fill=BIEL, outline=(170, 166, 156))
         d.ellipse([12, 13, 20, 19], fill=(190, 186, 176))
@@ -262,12 +366,16 @@ def draw(pid, d, W, H):
 def main():
     data = json.loads((ROOT / "assets" / "dane" / "przedmioty.json").read_text(encoding="utf-8"))
     for p in data["przedmioty"]:
-        W, H = p["w"] * CELL, p["h"] * CELL
-        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        draw(p["id"], d, W, H)
-        img = outline(img)
-        img.save(OUT / f"{p['id']}.png")
+        warianty = [(p["id"], p["w"], p["h"])]
+        for r in p.get("rozmiary_stosu", []):
+            warianty.append((p["id"] + r[3], r[1], r[2]))
+        for (nazwa, w, h) in warianty:
+            W, H = w * CELL, h * CELL
+            img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            d = ImageDraw.Draw(img)
+            draw(nazwa, d, W, H)
+            img = outline(img)
+            img.save(OUT / f"{nazwa}.png")
     print("ikony:", len(data["przedmioty"]))
 
 

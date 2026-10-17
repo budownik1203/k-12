@@ -8,6 +8,9 @@ extends RefCounted
 ##   pancerz:   {"wytrz": float}
 ##   klucz:     {"uzycia": int}
 
+## Przedmioty, które po wczytaniu starego zapisu nie zmieściły się w pojemniku (trafią do skrytki).
+static var przepelnienie: Array = []
+
 var id: String
 var ilosc := 1
 var obrot := false
@@ -27,8 +30,7 @@ static func nowy(pid: String, ile := 1) -> Przedmiot:
 		"med":
 			p.dane = {"uzycia": int(d["med"]["uzycia"])}
 		"pojemnik":
-			var pj: Dictionary = d["pojemnik"]
-			p.dane = {"siatka": Siatka.new(int(pj["sw"]), int(pj["sh"]), float(pj["redukcja"]))}
+			p.dane = {"siatka": Siatka.z_definicji(d["pojemnik"])}
 		"pancerz":
 			p.dane = {"wytrz": float(d["pancerz"]["wytrzymalosc"])}
 		"klucz":
@@ -48,12 +50,34 @@ func nazwa() -> String:
 	return defn().get("nazwa", id)
 
 
+## Rozmiar bez obrotu. Stosy amunicji rosną z liczbą sztuk: garść 1x1, potem pudełko.
+## "rozmiary_stosu": [[do_ilu, w, h, przyrostek_ikony], ...]
+func rozmiar() -> Vector2i:
+	var d := defn()
+	if d.has("rozmiary_stosu"):
+		for r in d["rozmiary_stosu"]:
+			if ilosc <= int(r[0]):
+				return Vector2i(int(r[1]), int(r[2]))
+	return Vector2i(int(d.get("w", 1)), int(d.get("h", 1)))
+
+
+func ikona_id() -> String:
+	var d := defn()
+	if d.has("rozmiary_stosu"):
+		for r in d["rozmiary_stosu"]:
+			if ilosc <= int(r[0]):
+				return id + String(r[3])
+	return id
+
+
 func szer() -> int:
-	return int(defn().get("h", 1)) if obrot else int(defn().get("w", 1))
+	var r := rozmiar()
+	return r.y if obrot else r.x
 
 
 func wys() -> int:
-	return int(defn().get("w", 1)) if obrot else int(defn().get("h", 1))
+	var r := rozmiar()
+	return r.x if obrot else r.y
 
 
 func stos_max() -> int:
@@ -152,6 +176,22 @@ static func from_dict(dd: Dictionary) -> Przedmiot:
 			p.dane[k] = int(v)
 		else:
 			p.dane[k] = v
+	# pojemnik: siatka zawsze według aktualnej definicji (rozmiar, przegródki); stare zapisy przenosimy
+	if p.typ() == "pojemnik" and p.dane.get("siatka") is Siatka:
+		var stara: Siatka = p.dane["siatka"]
+		var nowa := Siatka.z_definicji(p.defn()["pojemnik"])
+		if stara.w != nowa.w or stara.h != nowa.h or not nowa.maska.is_empty():
+			var reszta := []
+			for e in stara.items:
+				var q: Przedmiot = e["p"]
+				if nowa.moze(q, e["x"], e["y"], q.obrot):
+					nowa.items.append(e)
+				else:
+					reszta.append(q)
+			for q in reszta:
+				if not nowa.dodaj(q):
+					przepelnienie.append(q)
+			p.dane["siatka"] = nowa
 	return p
 
 

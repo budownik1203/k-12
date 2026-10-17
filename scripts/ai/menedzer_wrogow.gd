@@ -20,6 +20,21 @@ class Oddzial:
 	var czlonkowie: Array = []
 	var dowodca: Node = null
 
+	## Kto idzie przodem przy przeszukiwaniu: dowódca albo najodważniejszy z żywych.
+	func prowadzacy() -> Node:
+		var best: Node = null
+		var bm := -INF
+		for w in czlonkowie:
+			if not is_instance_valid(w) or w.cialo.martwy:
+				continue
+			var m: float = w.morale + (30.0 if w.cecha == "agresywny" else 0.0) + (15.0 if w.rola == "flanka" else 0.0)
+			if w.stan == "opatrywanie":
+				m -= 100.0
+			if m > bm:
+				bm = m
+				best = w
+		return best
+
 	func alarm(pos: Vector3, od: Node) -> void:
 		for w in czlonkowie:
 			if is_instance_valid(w) and w != od:
@@ -58,7 +73,10 @@ func rozstaw(r: Node) -> void:
 		po_komorce[k].append(s)
 	var komorki := po_komorce.keys()
 	komorki.shuffle()
-	var liczba := clampi(int(r.info["komorki"].size() / 6.0), 2, 4)
+	var liczba := clampi(int(r.info["komorki"].size() / 7.0), 2, 3)
+	# wojskowi na posterunkach z worków: siedzą w gnieździe i trzymają wejście
+	for i in r.info.get("posterunki", []).size():
+		_posterunek(r.info["posterunki"][i], i)
 	var najemnicy := rng.randf() < 0.55
 	komorki.sort_custom(func(a, b): return po_komorce[a][0]["glebokosc"] > po_komorce[b][0]["glebokosc"])
 	var i := 0
@@ -98,6 +116,28 @@ func _oddzial(frak: String, punkty: Array, ile: int, idx: int) -> void:
 		if j == 0:
 			o.dowodca = w
 		w.set_meta("oddzial_nazwa", o.nazwa)
+	oddzialy.append(o)
+
+
+func _posterunek(pst: Dictionary, idx: int) -> void:
+	var o := Oddzial.new()
+	o.nazwa = "Posterunek %d" % (idx + 1)
+	var f: Dictionary = Dane.frakcje["wojskowy"]
+	var miejsca: Array = pst["miejsca"]
+	for j in miejsca.size():
+		var w := Wrog.new()
+		w.przygotuj("wojskowy", _losuj_zestaw(f["zestawy"]), rng)
+		w.menedzer = self
+		w.oddzial = o
+		w.rola = "dowodca" if j == 0 else "strzelec"
+		w.posterunek = {"pos": miejsca[j], "kier": pst["kier"]}
+		w.stan = "posterunek"
+		rajd.swiat.add_child(w)
+		w.global_position = miejsca[j] + Vector3(0, 0.05, 0)
+		w.rotation.y = atan2(-(pst["kier"] as Vector3).x, -(pst["kier"] as Vector3).z)
+		o.czlonkowie.append(w)
+		if j == 0:
+			o.dowodca = w
 	oddzialy.append(o)
 
 

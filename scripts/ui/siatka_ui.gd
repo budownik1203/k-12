@@ -55,7 +55,28 @@ func _draw() -> void:
 		draw_line(Vector2(x * KOM, 0), Vector2(x * KOM, siatka.h * KOM), Motyw.KOMORKA_LINIA)
 	for y in siatka.h + 1:
 		draw_line(Vector2(0, y * KOM), Vector2(siatka.w * KOM, y * KOM), Motyw.KOMORKA_LINIA)
-	draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Color(0, 0, 0, 0.5), false, 2.0)
+	if not siatka.maska.is_empty():
+		# przegródki: puste pola to szwy między ładownicami, każda ładownica ma własną obwódkę
+		for y in siatka.h:
+			for x in siatka.w:
+				var r := Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM))
+				if not siatka.dostepna(x, y):
+					draw_rect(r, Color(0.05, 0.05, 0.04, 0.0))
+					var tl := Motyw.tekstura("plotno")
+					if tl:
+						draw_texture_rect_region(tl, r, Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM)), Color(0.75, 0.75, 0.75))
+					continue
+				var c := Color(0.02, 0.02, 0.015, 0.95)
+				if not siatka.dostepna(x - 1, y):
+					draw_line(r.position, Vector2(r.position.x, r.end.y), c, 3.0)
+				if not siatka.dostepna(x + 1, y):
+					draw_line(Vector2(r.end.x, r.position.y), r.end, c, 3.0)
+				if not siatka.dostepna(x, y - 1):
+					draw_line(r.position, Vector2(r.end.x, r.position.y), c, 3.0)
+				if not siatka.dostepna(x, y + 1):
+					draw_line(Vector2(r.position.x, r.end.y), r.end, c, 3.0)
+	else:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Color(0, 0, 0, 0.5), false, 2.0)
 	var przeciagany: Przedmiot = kontroler.przeciagany() if kontroler and kontroler.has_method("przeciagany") else null
 	for i in siatka.items.size():
 		var e: Dictionary = siatka.items[i]
@@ -82,9 +103,13 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 	if podswietl:
 		ci.draw_rect(r.grow(-1), Color(0.8, 0.66, 0.3, 0.18))
 	ci.draw_rect(r.grow(-1), Color(0.33, 0.31, 0.25), false, 1.0)
-	var tex := Dane.ikona(p.id)
+	var tex := Dane.ikona(p.ikona_id())
 	if tex:
 		var ts := tex.get_size()
+		# duże przedmioty w małym slocie: ikona pomniejszona do ramki
+		var miesc := Vector2(ts.y, ts.x) if p.obrot else ts
+		var sk := minf(1.0, minf((r.size.x - 4.0) / miesc.x, (r.size.y - 4.0) / miesc.y))
+		ts *= sk
 		if p.obrot:
 			# ikona obrócona o 90°
 			var srodek := r.get_center()

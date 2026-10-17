@@ -19,6 +19,7 @@ var _pasek: Control
 var _znacznik := 0.0          # znacznik trafienia przy celowniku
 var _znacznik_zabity := false
 var _pomoc: PanelContainer
+var _kompas: Control
 var _komunikaty: VBoxContainer
 var _napisy: VBoxContainer
 var _wyjscia: Label
@@ -94,6 +95,14 @@ func _ready() -> void:
 	_kolko.offset_top = 80
 	_kolko.visible = false
 	_root.add_child(_kolko)
+	_kompas = Kompas.new()
+	_kompas.hud = self
+	_kompas.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_kompas.offset_left = -200
+	_kompas.offset_right = 200
+	_kompas.offset_top = 10
+	_kompas.offset_bottom = 40
+	_root.add_child(_kompas)
 	_pasek = Pasek.new()
 	_pasek.hud = self
 	_pasek.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -261,6 +270,9 @@ func _process(delta: float) -> void:
 		_kolko.visible = false
 	_znacznik = maxf(0.0, _znacznik - delta * (2.5 if _znacznik_zabity else 5.0))
 	_pasek.queue_redraw()
+	_kompas.visible = gracz.ekw.ma_wyposazenie("kompas") and not Sterowanie.blokada
+	if _kompas.visible:
+		_kompas.queue_redraw()
 	# czas rajdu
 	if rajd:
 		var t: float = rajd.czas
@@ -275,7 +287,13 @@ func _process(delta: float) -> void:
 				var ew: Ewakuacja = w
 				var d := ew.global_position - gracz.global_position
 				var kier := _kierunek(d)
-				linie.append("%s — %s  (%s, ~%d m)" % [ew.nazwa, ew.opis_stanu(), kier, int(d.length())])
+				# z mapą na slocie wyposażenia: dokładna odległość; bez mapy tylko ogólny kierunek
+				if gracz.ekw.ma_wyposazenie("mapa"):
+					linie.append("%s — %s  (%s, ~%d m)" % [ew.nazwa, ew.opis_stanu(), kier, int(d.length())])
+				else:
+					linie.append("%s — %s  (%s)" % [ew.nazwa, ew.opis_stanu(), kier])
+			if not gracz.ekw.ma_wyposazenie("mapa"):
+				linie.append("(bez mapy – odległości nieznane)")
 			_wyjscia.text = "\n".join(linie)
 		else:
 			_wyjscia.text = ""
@@ -394,6 +412,45 @@ class Kropka:
 			draw_line(p - Vector2(cos(a), sin(a)) * 26, p + Vector2(cos(a), sin(a)) * 26, kol, 4.0)
 
 
+## Kompas (gdy jest na slocie wyposażenia): pasek kierunków, przy liście [O] także znaczniki wyjść.
+class Kompas:
+	extends Control
+	var hud
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var g: Gracz = hud.gracz
+		if g == null:
+			return
+		var f := Motyw.mono_b()
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.35))
+		# kierunek patrzenia: 0 = północ (-Z)
+		var przod := -g.global_basis.z
+		var azymut := fposmod(rad_to_deg(atan2(przod.x, -przod.z)), 360.0)
+		var px_na_stopien := size.x / 120.0
+		for st in range(0, 360, 15):
+			var dlt := wrapf(float(st) - azymut, -180.0, 180.0)
+			if absf(dlt) > 60.0:
+				continue
+			var x := size.x * 0.5 + dlt * px_na_stopien
+			var nazwa: String = {0: "N", 90: "E", 180: "S", 270: "W"}.get(st, "")
+			if nazwa != "":
+				draw_string(f, Vector2(x - 5, 22), nazwa, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.95, 0.85, 0.5) if nazwa == "N" else Motyw.TEKST)
+			else:
+				draw_line(Vector2(x, 4), Vector2(x, 12 if st % 45 else 16), Motyw.TEKST_CIEMNY, 1.0)
+		draw_line(Vector2(size.x * 0.5, 0), Vector2(size.x * 0.5, 6), Color(0.95, 0.4, 0.25), 2.0)
+		if hud._wyjscia_t > 0.0 and hud.rajd:
+			for w in hud.rajd.info["wyjscia"]:
+				var d: Vector3 = (w as Node3D).global_position - g.global_position
+				var az := fposmod(rad_to_deg(atan2(d.x, -d.z)), 360.0)
+				var dl := wrapf(az - azymut, -180.0, 180.0)
+				if absf(dl) <= 60.0:
+					var x2 := size.x * 0.5 + dl * px_na_stopien
+					draw_rect(Rect2(x2 - 3, size.y - 7, 6, 6), Motyw.ZIELEN)
+
+
 ## Pasek szybkiego dostępu: [1] broń główna, [2] pistolet, [3] latarka, [4-9] leki z kamizelki i kieszeni.
 class Pasek:
 	extends Control
@@ -411,7 +468,7 @@ class Pasek:
 		var wpisy := []
 		wpisy.append([1, g.ekw.sloty["glowna"].id if g.ekw.sloty["glowna"] else "", 0, g.bron.przedmiot != null and g.bron.przedmiot == g.ekw.sloty["glowna"]])
 		wpisy.append([2, g.ekw.sloty["pistolet"].id if g.ekw.sloty["pistolet"] else "", 0, g.bron.przedmiot != null and g.bron.przedmiot == g.ekw.sloty["pistolet"]])
-		wpisy.append([3, "latarka" if not g.ekw.znajdz_id("latarka").is_empty() else "", 0, g.latarka_w_rece])
+		wpisy.append([3, "latarka" if not not g.ekw.ma_wyposazenie("latarka") else "", 0, g.latarka_w_rece])
 		var pasek: Array = g.ekw.pasek()
 		for i in 6:
 			if i < pasek.size():

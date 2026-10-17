@@ -5,6 +5,7 @@ extends Node
 var mysz := Vector2.ZERO
 var blokada := false   # true, gdy otwarty jest ekran ekwipunku/menu
 var menu_otwarte := false
+var blokuj_tab_do := 0       # klatka, do której Tab nie otwiera ekwipunku (zamknięto nim inne okno)
 
 const AKCJE := {
 	"przod": [KEY_W], "tyl": [KEY_S], "lewo": [KEY_A], "prawo": [KEY_D],

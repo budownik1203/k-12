@@ -70,6 +70,9 @@ func _ready() -> void:
 	elif args.has("--postacie"):
 		_tryb_testu = "postacie"
 		_zrzut_postaci.call_deferred(args[args.find("--postacie") + 1])
+	elif args.has("--posterunek"):
+		_tryb_testu = "posterunek"
+		_zrzut_posterunku.call_deferred(args[args.find("--posterunek") + 1])
 	elif args.has("--vm"):
 		_tryb_testu = "vm"
 		_zrzut_vm.call_deferred(args[args.find("--vm") + 1])
@@ -295,8 +298,8 @@ func _zrzuty(katalog: String) -> void:
 	# postacie: pies i szabrownik w oświetlonym pomieszczeniu startowym
 	gracz.global_position = info["start"]
 	gracz.rotation.y = info["start_rot"]
-	if Gra.ekw.znajdz_id("latarka").is_empty():
-		Gra.ekw.dodaj(Przedmiot.nowy("latarka"))
+	if not Gra.ekw.ma_wyposazenie("latarka"):
+		Gra.ekw.sloty["util0"] = Przedmiot.nowy("latarka")
 	if Gra.ekw.sloty["pistolet"] == null:
 		Gra.ekw.sloty["pistolet"] = Gra.nowy_naladowany("pw9", "a_9x18")
 	gracz.wez_latarke()
@@ -354,6 +357,43 @@ func _zrzuty(katalog: String) -> void:
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("latarka_sama.png"))
 	gracz.cialo.obrazenia("nogi", 30.0)
 	gracz.cialo.krwawienie["rece"] = 1
+	# tryby ekwipunku: kamizelka (spojrzenie w dół) i rozpięty plecak
+	if ekran_ekw:
+		var e := Gra.ekw
+		var kamz := Przedmiot.nowy("napiersnik")
+		var stara: Przedmiot = e.zdejmij("kamizelka")
+		e.zaloz("kamizelka", kamz)
+		for m in [Gra.magazynek("mag_kb47", "a_762", 30), Gra.magazynek("mag_kb47", "a_762", 18), Przedmiot.nowy("a_762", 7), Przedmiot.nowy("bandaz")]:
+			kamz.dane["siatka"].dodaj(m)
+		e.zdejmij("plecak")
+		var pl := Przedmiot.nowy("plecak_wojskowy")
+		e.zaloz("plecak", pl)
+		for q in [Przedmiot.nowy("a_9x18", 40), Przedmiot.nowy("a_9x18", 9), Przedmiot.nowy("kanister"), Przedmiot.nowy("telefon"), Przedmiot.nowy("konserwa"), Przedmiot.nowy("gasnica"), Przedmiot.nowy("kompas")]:
+			pl.dane["siatka"].dodaj(q)
+		if e.sloty["util1"] == null:
+			e.sloty["util1"] = Przedmiot.nowy("mapa")
+		ekran_ekw._wybierz("kamizelka")
+		for f in 50:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_kamizelka.png"))
+		ekran_ekw.zamknij()
+		for f in 30:
+			await get_tree().process_frame
+		ekran_ekw._wybierz("plecak")
+		for f in 70:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_plecak.png"))
+		ekran_ekw.zamknij()
+		for f in 30:
+			await get_tree().process_frame
+		ekran_ekw._otworz_wybor()
+		for f in 5:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_wybor.png"))
+		ekran_ekw._zamknij_wybor()
 	# ekran ekwipunku z pojemnikiem
 	var pojemniki := swiat.get_children().filter(func(x): return x is Pojemnik)
 	if not pojemniki.is_empty() and ekran_ekw:
@@ -425,6 +465,51 @@ func _zrzut_postaci(plik: String) -> void:
 	get_tree().quit()
 
 
+## Zrzut posterunku wojska (z wejścia) i kilku korytarzy z rekwizytami.
+func _zrzut_posterunku(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for f in 10:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+		if not (w is Wrog):
+			w.queue_free()
+	gracz.sterowanie = false
+	var n := 0
+	for pst in info.get("posterunki", []):
+		var kier: Vector3 = pst["kier"]
+		gracz.global_position = (pst["pos"] as Vector3) + kier * 4.2 + Vector3(0, 0.05, 0)
+		gracz.rotation.y = atan2(kier.x, kier.z)
+		for w in get_tree().get_nodes_in_group("wrogowie"):
+			if w is Wrog and not w.posterunek.is_empty():
+				for i in 30:
+					w._animuj(1.0 / 60.0)
+		for f in 30:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("posterunek_%d.png" % n))
+		n += 1
+	var m := 0
+	for k in info["komorki"]:
+		if m >= 4 or info["komorki"][k]["typ"] != "korytarz" or info["komorki"][k]["ramiona"].is_empty():
+			continue
+		var ram: Array = info["komorki"][k]["ramiona"][0]
+		var r: Rect2 = ram[1]
+		var ax: Vector2i = ram[0]
+		var c := gen._srodek(k)
+		var cel := Vector3(r.get_center().x, 0, r.get_center().y)
+		gracz.global_position = c - (cel - c).normalized() * 1.2 + Vector3(0, 0.05, 0)
+		var d := cel - gracz.global_position
+		gracz.rotation.y = atan2(-d.x, -d.z)
+		for f in 25:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("korytarz_%d.png" % m))
+		m += 1
+	print("posterunki: %d, korytarze: %d" % [n, m])
+	get_tree().quit()
+
+
 ## Zrzuty broni w rękach: fazy przeładowania i bieg.
 func _zrzut_vm(katalog: String) -> void:
 	DirAccess.make_dir_recursive_absolute(katalog)
@@ -465,8 +550,8 @@ func _test_broni() -> void:
 		Gra.ekw.sloty["pistolet"] = Gra.nowy_naladowany("pw9", "a_9x18")
 	if Gra.ekw.sloty["glowna"] == null:
 		Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
-	if Gra.ekw.znajdz_id("latarka").is_empty():
-		Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("latarka"))
+	if not Gra.ekw.ma_wyposazenie("latarka"):
+		Gra.ekw.sloty["util0"] = Przedmiot.nowy("latarka")
 	var bledy := 0
 	var gl: String = Gra.ekw.sloty["glowna"].id
 	var kroki := [["bron1", gl, false], ["bron3", "", true], ["bron2", "pw9", true], ["bron2", "pw9", false],

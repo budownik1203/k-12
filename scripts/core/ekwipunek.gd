@@ -5,11 +5,15 @@ extends RefCounted
 
 signal zmieniony
 
-const SLOTY := ["glowna", "pistolet", "helm", "pancerz", "kamizelka", "plecak"]
+const SLOTY := ["glowna", "pistolet", "helm", "pancerz", "kamizelka", "plecak", "util0", "util1", "util2", "util3"]
 const NAZWY_SLOTOW := {
 	"glowna": "Broń główna", "pistolet": "Pistolet", "helm": "Hełm",
 	"pancerz": "Pancerz", "kamizelka": "Kamizelka", "plecak": "Plecak",
+	"util0": "Pas", "util1": "Wyp. 2", "util2": "Wyp. 3", "util3": "Wyp. 4",
 }
+## Typy przedmiotów na sloty wyposażenia dodatkowego (latarka, mapa, kompas...).
+const UTILITY := ["latarka", "mapa", "kompas"]
+const MAX_UTILITY := 4
 
 var sloty := {}
 var kieszenie := Siatka.new(4, 1, 0.0)
@@ -24,6 +28,8 @@ func _init() -> void:
 ## Do którego slotu może trafić przedmiot (albo "" jeśli do żadnego).
 static func slot_dla(p: Przedmiot) -> String:
 	var d := p.defn()
+	if d.get("typ", "") in UTILITY:
+		return "util"
 	match d.get("typ", ""):
 		"bron":
 			return d["bron"]["slot"]
@@ -36,13 +42,47 @@ static func slot_dla(p: Przedmiot) -> String:
 
 static func pasuje(slot: String, p: Przedmiot) -> bool:
 	var s := slot_dla(p)
+	if slot.begins_with("util"):
+		return s == "util"
 	if slot == "glowna" and s == "pistolet":
 		return true  # pistolet też może być bronią główną
 	return s == slot
 
 
+## Liczba aktywnych slotów wyposażenia dodatkowego: jeden na pasie + tyle, ile daje kamizelka.
+func liczba_utility() -> int:
+	var n := 1
+	if sloty["kamizelka"] != null:
+		n += int(sloty["kamizelka"].defn()["pojemnik"].get("utility", 0))
+	return mini(n, MAX_UTILITY)
+
+
+func util_aktywny(slot: String) -> bool:
+	return not slot.begins_with("util") or int(slot.substr(4)) < liczba_utility()
+
+
+## Czy przedmiot o danym id jest w aktywnym slocie wyposażenia (np. latarka gotowa do użycia).
+func ma_wyposazenie(pid: String) -> bool:
+	for i in liczba_utility():
+		var p: Przedmiot = sloty["util%d" % i]
+		if p != null and p.id == pid:
+			return true
+	return false
+
+
+func wolny_util() -> String:
+	for i in liczba_utility():
+		if sloty["util%d" % i] == null:
+			return "util%d" % i
+	return ""
+
+
 func zaloz(slot: String, p: Przedmiot) -> bool:
-	if sloty[slot] != null or not pasuje(slot, p):
+	if slot == "util":
+		slot = wolny_util()
+		if slot == "":
+			return false
+	if sloty[slot] != null or not pasuje(slot, p) or not util_aktywny(slot):
 		return false
 	sloty[slot] = p
 	zmieniony.emit()
@@ -98,6 +138,8 @@ func waga() -> float:
 
 ## Dokłada przedmiot do ekwipunku. Magazynki, amunicja i leki najpierw do kamizelki.
 func dodaj(p: Przedmiot) -> bool:
+	if p.typ() in UTILITY and wolny_util() != "":
+		return zaloz("util", p)
 	var kolejnosc := siatki()
 	kolejnosc.erase(bezpieczny)
 	if p.typ() not in ["magazynek", "amunicja", "med"]:
@@ -276,6 +318,12 @@ static func from_dict(d: Dictionary) -> Ekwipunek:
 		e.sloty[s] = Przedmiot.from_dict(v) if v != null else null
 	if d.has("kieszenie"):
 		e.kieszenie = Siatka.from_dict(d["kieszenie"])
+	# latarka z dawnych zapisów leżała w siatce – przenosimy na pas
+	if e.sloty["util0"] == null:
+		var z := e.znajdz_id("latarka")
+		if not z.is_empty():
+			(z["siatka"] as Siatka).usun(z["p"])
+			e.sloty["util0"] = z["p"]
 	if d.has("bezpieczny"):
 		e.bezpieczny = Siatka.from_dict(d["bezpieczny"])
 	return e
