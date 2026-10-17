@@ -68,13 +68,16 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	swiat.add_child(cialo_scian)
 	_uklad()
 	_typy()
+	# geometria osobno dla każdego pomieszczenia: renderer Compatibility oświetla obiekt
+	# co najwyżej kilkoma światłami, więc jeden obiekt na cały poziom gasiłby dalsze lampy
 	for k in komorki:
+		bud = Kit.Budowniczy.new()
 		_pomieszczenie(k)
+		var mi := MeshInstance3D.new()
+		mi.name = "Pomieszczenie_%d_%d" % [k.x, k.y]
+		mi.mesh = bud.zbuduj({"okno": 0.5})
+		swiat.add_child(mi)
 	_sciany_wspolne()
-	var mi := MeshInstance3D.new()
-	mi.name = "Geometria"
-	mi.mesh = bud.zbuduj({"okno": 0.5})
-	swiat.add_child(mi)
 	_podloga_kolizja()
 	for k in komorki:
 		_wyposaz(k)

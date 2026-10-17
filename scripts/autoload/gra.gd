@@ -4,7 +4,7 @@ extends Node
 signal halas(pozycja: Vector3, zasieg: float, zrodlo: Node)
 signal zmiana_bonow
 
-const ZAPIS := "user://zapis_k12.json"
+var ZAPIS := "user://zapis_k12.json"
 const WERSJA := 1
 
 var bony := 0
@@ -20,6 +20,10 @@ var rajd_w_toku := false
 
 
 func _ready() -> void:
+	# testy automatyczne nie nadpisują zapisu gracza
+	var a := OS.get_cmdline_user_args()
+	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis"):
+		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
 

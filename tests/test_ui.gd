@@ -6,6 +6,7 @@ var bledy := 0
 
 
 func _ready() -> void:
+	Gra.ZAPIS = "user://zapis_test.json"
 	Gra.nowa_gra()
 	var ekran = load("res://scripts/ui/ekran_ekwipunku.gd").new()
 	ekran.tryb_bazy = true

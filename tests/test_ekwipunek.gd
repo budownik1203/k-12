@@ -2,6 +2,7 @@ extends Node
 ## Test logiki ekwipunku: godot --headless --path . res://tests/test_ekwipunek.tscn
 
 func _ready() -> void:
+	Gra.ZAPIS = "user://zapis_test.json"
 	var bledy := 0
 
 	var s := Siatka.new(4, 2, 0.3)

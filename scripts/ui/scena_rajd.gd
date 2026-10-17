@@ -73,9 +73,13 @@ func _ready() -> void:
 func _nawigacja_ze_sprawdzeniem() -> void:
 	var mapa := swiat.get_world_3d().navigation_map
 	for proba in 8:
+		var it0 := NavigationServer3D.map_get_iteration_id(mapa)
 		var region := Widok3D.wypiecz_nawigacje(swiat)
-		await get_tree().physics_frame
-		await get_tree().physics_frame
+		# czekamy, aż serwer nawigacji przeliczy mapę z nową siatką
+		for f in 120:
+			await get_tree().physics_frame
+			if NavigationServer3D.map_get_iteration_id(mapa) != it0 and NavigationServer3D.map_get_closest_point(mapa, info["start"]).distance_to(info["start"]) < 1.0:
+				break
 		var naprawione := false
 		for k in info["komorki"]:
 			var pts: Array = gen.punkty_drzwi(k)
@@ -84,6 +88,8 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 				var q2 := NavigationServer3D.map_get_closest_point(mapa, pts[i])
 				var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
 				if sc.is_empty() or sc[sc.size() - 1].distance_to(q2) > 0.35:
+					if OS.get_cmdline_user_args().has("--test"):
+						print("  naprawa: %s %s typ=%s q1=%s q2=%s koniec=%s" % [proba, k, info["komorki"][k]["typ"], q1, q2, sc[sc.size() - 1] if sc.size() > 0 else "brak"])
 					if gen.usun_srodkowy_mebel(k):
 						naprawione = true
 					break
@@ -305,6 +311,7 @@ func _zrzuty(katalog: String) -> void:
 	if not pojemniki.is_empty() and ekran_ekw:
 		var pj: Pojemnik = pojemniki[0]
 		pj.odkryte = 2
+		gracz.global_position = pj.global_position + Vector3(0.8, 0.05, 0.8)
 		ekran_ekw.otworz(pj)
 		for f in 10:
 			await get_tree().process_frame
@@ -319,6 +326,11 @@ func _zrzuty(katalog: String) -> void:
 func _test_walki() -> void:
 	for i in 20:
 		await get_tree().physics_frame
+	if gracz.ekw.sloty["glowna"] == null:
+		gracz.ekw.sloty["glowna"] = Gra.nowy_naladowany("pm63", "a_9x18")
+		gracz.ekw.dodaj(Gra.magazynek("mag_pm63", "a_9x18", 25))
+		gracz.ekw.dodaj(Gra.magazynek("mag_pm63", "a_9x18", 25))
+	gracz._wybierz_bron("glowna")
 	var wrogowie := get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w.frakcja == ("najemnik" if OS.get_cmdline_user_args().has("--najemnicy") else "szabrownik"))
 	var start := gracz.global_position
 	var n := 0
@@ -349,11 +361,15 @@ func _test_walki() -> void:
 		var dir := (p - gracz.kamera.global_position).normalized()
 		gracz._pitch = asin(clampf(dir.y, -1, 1))
 		gracz.glowa.rotation.x = gracz._pitch
-		if fmod(t, 0.5) < get_physics_process_delta_time() and gracz.bron.przedmiot:
-			gracz.bron.cooldown = 0.0
-			gracz.bron.spust_puszczony = true
-			gracz.bron._sprobuj_strzal({"kucanie": 0.0, "celnosc": 1.0})
-			strzaly += 1
+		var b := gracz.bron
+		if b.przedmiot and b.stan == "gotowa":
+			if b.przedmiot.dane["komora"] == "" and b.przedmiot.dane.get("wewn", 0) == 0:
+				b._zacznij_przeladowanie(false)
+			elif fmod(t, 0.25) < get_physics_process_delta_time():
+				b.cooldown = 0.0
+				b.spust_puszczony = true
+				b._sprobuj_strzal({"kucanie": 0.0, "celnosc": 1.0})
+				strzaly += 1
 	var zywi := get_tree().get_nodes_in_group("wrogowie").filter(func(w): return not w.cialo.martwy).size()
 	for w in get_tree().get_nodes_in_group("wrogowie").slice(0, 3):
 		print("  wróg %s stan=%s widzi=%s wykrycie=%.2f hp=%.0f%% dyst=%.1f" % [w.nazwa_jednostki, w.stan, w.widzi, w.wykrycie, w.cialo.procent() * 100, w.global_position.distance_to(gracz.global_position)])
