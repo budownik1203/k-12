@@ -25,11 +25,11 @@ static func przez_pancerz(pancerze: Dictionary, czesc: String, obr: float, pen: 
 			continue
 		var klasa := float(pd["klasa"]) * (0.45 + 0.55 * wytrz / maks)
 		var prog := klasa * 10.0
-		var szansa: float = clamp(0.5 + (pen - prog) / 14.0, 0.03, 0.97)
+		var szansa: float = clampf(0.5 + (pen - prog) / 14.0, 0.03, 0.97)
 		if randf() < szansa:
-			p.dane["wytrz"] = max(0.0, wytrz - pen * 0.12)
+			p.dane["wytrz"] = maxf(0.0, wytrz - pen * 0.12)
 			return {"obr": obr * 0.82, "przebity": true, "pancerz": true}
-		p.dane["wytrz"] = max(0.0, wytrz - obr * 0.07)
+		p.dane["wytrz"] = maxf(0.0, wytrz - obr * 0.07)
 		return {"obr": obr * 0.12 + 1.0, "przebity": false, "pancerz": true}
 	return {"obr": obr, "przebity": true, "pancerz": false}
 

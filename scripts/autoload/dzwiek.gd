@@ -58,3 +58,22 @@ func graj(nazwa: String, glosnosc_db := 0.0, wysokosc := 1.0) -> void:
 	p.volume_db = glosnosc_db + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8))
 	p.pitch_scale = wysokosc * randf_range(0.96, 1.04)
 	p.play()
+
+
+## Zapętlony dźwięk tła (ambient) jako dziecko podanego węzła.
+func ambient(nazwa: String, rodzic: Node, glosnosc_db := -8.0) -> AudioStreamPlayer:
+	var s := _strumien(nazwa)
+	if s == null:
+		return null
+	if s is AudioStreamWAV:
+		var w := (s as AudioStreamWAV).duplicate() as AudioStreamWAV
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = int(w.get_length() * w.mix_rate)
+		s = w
+	var p := AudioStreamPlayer.new()
+	p.stream = s
+	p.volume_db = glosnosc_db + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8))
+	rodzic.add_child(p)
+	p.play()
+	return p

@@ -505,3 +505,224 @@ if __name__ == "__main__":
     hydrant()
     tablica()
     lampa_sciana()
+
+
+# ================================================================ biom 1: mieszkania, piwnice, magazyny
+
+def parkiet():
+    w = h = 64
+    r = rng(201)
+    img = np.zeros((h, w, 3))
+    # jodełka uproszczona: klepki 16x4 naprzemiennie
+    for by in range(0, h, 4):
+        for bx in range(0, w, 16):
+            off = (by // 4 % 2) * 8
+            x0 = (bx + off) % w
+            tone = r.uniform(0.75, 1.05)
+            base = col((112, 70, 40)) * tone
+            for y in range(by, by + 4):
+                for x in range(x0, x0 + 16):
+                    img[y % h, x % w] = base * (0.93 + 0.1 * r.random())
+            img[by % h, :] *= 0.97
+            img[by:by + 4, x0 % w] = base * 0.55
+        img[by] *= 0.75
+    n = value_noise(h, w, 4, 4, 202)
+    img *= (0.8 + 0.25 * n)[..., None]
+    save(img, "parkiet.png")
+
+
+def tapeta(name, base_c, wzor_c, seed):
+    """Tapeta PRL z powtarzalnym wzorem, pociemniała, z zaciekami. Kafelkuje się w obu osiach (1 m x 2,8 m)."""
+    w, h = 64, 128
+    r = rng(seed)
+    n = value_noise(h, w, 4, 4, seed + 1)
+    img = col(base_c)[None, None] * (0.82 + 0.22 * n[..., None])
+    for yy in range(0, h, 16):
+        for xx in range(0, w, 16):
+            ox = 8 if (yy // 16) % 2 else 0
+            cx, cy = (xx + ox) % w, yy + 8
+            for dy in range(-3, 4):
+                for dx in range(-3, 4):
+                    if abs(dx) + abs(dy) in (3,) or (dx == 0 and dy == 0):
+                        img[(cy + dy) % h, (cx + dx) % w] = img[(cy + dy) % h, (cx + dx) % w] * 0.4 + col(wzor_c) * 0.6
+    # listwa przypodłogowa i brud przy podłodze
+    img[h - 5:h] = col((70, 50, 34))
+    img[h - 5] *= 1.25
+    for y in range(h - 16, h - 5):
+        img[y] -= (y - (h - 16)) * 1.5
+    # zacieki i odklejone pasy
+    for _ in range(5):
+        x = r.integers(0, w)
+        for y in range(r.integers(0, 20), r.integers(30, 90)):
+            img[y, x] -= 18
+            img[y, (x + 1) % w] -= 8
+    for _ in range(2):
+        blob(img, r.integers(10, 60), r.integers(0, w), r.integers(4, 8), (96, 84, 62), r, alpha=0.4)
+    x0 = r.integers(0, w - 6)
+    img[r.integers(10, 40):r.integers(60, 100), x0:x0 + 3] = col((150, 140, 118))
+    save(img, name)
+
+
+def kafelki():
+    w = h = 64
+    r = rng(211)
+    img = np.zeros((h, w, 3))
+    for ty in range(0, h, 16):
+        for tx in range(0, w, 16):
+            c = col((176, 182, 168)) if (tx // 16 + ty // 16) % 2 == 0 else col((150, 164, 150))
+            c = c * r.uniform(0.9, 1.04)
+            img[ty:ty + 16, tx:tx + 16] = c
+            img[ty:ty + 16, tx] = (90, 90, 84)
+            img[ty, tx:tx + 16] = (90, 90, 84)
+            img[ty + 1, tx + 1:tx + 15] += 16
+    for _ in range(4):
+        y, x = r.integers(0, h), r.integers(0, w)
+        for i in range(r.integers(4, 12)):
+            img[(y + i) % h, (x + i // 2) % w] = (70, 70, 66)
+    n = value_noise(h, w, 4, 4, 212)
+    img *= (0.78 + 0.25 * n)[..., None]
+    save(img, "kafelki.png")
+
+
+def cegla():
+    """Ceglana ściana piwnicy, 1 m x 2,8 m, kafelkuje się."""
+    w, h = 64, 128
+    r = rng(221)
+    img = np.zeros((h, w, 3)) + col((70, 66, 60))
+    bh, bw = 6, 16
+    for row in range(0, h // bh + 1):
+        off = (row % 2) * 8
+        for bx in range(-1, w // bw + 1):
+            x0 = bx * bw + off
+            c = col((122, 64, 46)) * r.uniform(0.7, 1.05)
+            for y in range(row * bh + 1, min(h, row * bh + bh)):
+                for x in range(x0 + 1, x0 + bw):
+                    img[y, x % w] = c * (0.9 + 0.15 * r.random())
+    n = value_noise(h, w, 4, 4, 222)
+    img *= (0.7 + 0.35 * n)[..., None]
+    # wykwity i wilgoć przy podłodze
+    for y in range(h - 30, h):
+        img[y] = img[y] * (1 - (y - (h - 30)) / 30 * 0.35) + col((90, 96, 80)) * ((y - (h - 30)) / 30 * 0.25)
+    save(img, "cegla.png")
+
+
+def beton_sciana():
+    """Ściana z betonu z zaciekami, 1 m x 2,8 m."""
+    w, h = 64, 128
+    r = rng(231)
+    n = value_noise(h, w, 4, 4, 232)
+    n2 = value_noise(h, w, 32, 16, 233, 2)
+    img = col((96, 96, 92))[None, None] * (0.75 + 0.3 * n[..., None]) - 12 * (n2[..., None] - 0.5)
+    for y in (42, 85):
+        img[y] -= 14
+    for _ in range(14):
+        x = r.integers(0, w)
+        for y in range(r.integers(0, 40), r.integers(50, 128)):
+            img[y, x] -= 10
+    img[h - 8:] -= 16
+    save(img, "beton_sciana.png")
+
+
+def tkanina():
+    w = h = 32
+    r = rng(241)
+    img = np.zeros((h, w, 3))
+    for y in range(h):
+        for x in range(w):
+            c = col((96, 70, 48)) if ((x // 4 + y // 4) % 2) else col((84, 60, 40))
+            img[y, x] = c * (0.88 + 0.2 * r.random())
+    save(img, "tkanina.png", 16)
+
+
+def fornir():
+    w = h = 64
+    n = value_noise(h, w, 2, 8, 251, 4)
+    s = value_noise(h, w, 1, 32, 252, 2)
+    img = col((118, 74, 42))[None, None] * (0.75 + 0.3 * n[..., None] + 0.1 * (s[..., None] - 0.5))
+    save(img, "fornir.png")
+
+
+def emalia():
+    w = h = 32
+    r = rng(261)
+    n = value_noise(h, w, 2, 2, 262)
+    img = col((196, 196, 182))[None, None] * (0.85 + 0.15 * n[..., None])
+    for _ in range(6):
+        blob(img, r.integers(0, h), r.integers(0, w), r.uniform(0.5, 1.3), (110, 76, 50), r, alpha=0.7)
+    save(img, "emalia.png", 16)
+
+
+def ekran_tv():
+    w = h = 32
+    yy, xx = np.mgrid[0:h, 0:w]
+    d = np.sqrt((yy - 16) ** 2 + (xx - 16) ** 2) / 22
+    img = col((40, 48, 46))[None, None] * (1.0 - 0.6 * d[..., None])
+    img[::2] *= 0.85
+    save(img, "ekran_tv.png", 16)
+
+
+def worek_piasek():
+    w = h = 32
+    r = rng(271)
+    n = value_noise(h, w, 4, 4, 272)
+    img = col((130, 116, 82))[None, None] * (0.8 + 0.3 * n[..., None])
+    for y in range(0, h, 2):
+        img[y] *= 0.94
+    save(img, "worek_piasek.png", 16)
+
+
+def metal_zielony():
+    w = h = 64
+    r = rng(281)
+    n = value_noise(h, w, 4, 4, 282)
+    img = col((62, 78, 54))[None, None] * (0.82 + 0.22 * n[..., None])
+    outline(img, 2, 2, h - 2, w - 2, (40, 52, 36))
+    for _ in range(14):
+        blob(img, r.integers(0, h), r.integers(0, w), r.uniform(0.6, 2.0), (110, 62, 34), r, wrap=False, alpha=0.7)
+    rect(img, 26, 16, 38, 48, (190, 180, 150))
+    text(img, 29, 32 - text_width("WP-12") // 2, "WP-12", (40, 40, 30))
+    save(img, "metal_zielony.png")
+
+
+def znak_wyjscie():
+    w, h = 64, 32
+    img = np.zeros((h, w, 3)) + col((30, 140, 70))
+    outline(img, 1, 1, h - 1, w - 1, (220, 240, 220))
+    text(img, 7, 32 - text_width("WYJSCIE") // 2, "WYJSCIE", (235, 250, 235))
+    text(img, 16, 32 - text_width("->") // 2, "->", (235, 250, 235))
+    save(img, "znak_wyjscie.png", 8)
+
+
+def zarowka():
+    w = h = 16
+    img = np.zeros((h, w, 3)) + col((255, 226, 160))
+    save(img, "zarowka.png", 4)
+
+
+def materac():
+    w = h = 32
+    r = rng(291)
+    n = value_noise(h, w, 4, 4, 292)
+    img = col((150, 140, 120))[None, None] * (0.8 + 0.25 * n[..., None])
+    for x in range(0, w, 8):
+        img[:, x] *= 0.8
+    blob(img, 18, 12, 6, (120, 96, 60), r, alpha=0.4)
+    save(img, "materac.png", 16)
+
+
+if __name__ == "__main__":
+    parkiet()
+    tapeta("tapeta_zielona.png", (104, 112, 84), (70, 82, 56), 301)
+    tapeta("tapeta_brazowa.png", (126, 100, 72), (88, 64, 44), 311)
+    kafelki()
+    cegla()
+    beton_sciana()
+    tkanina()
+    fornir()
+    emalia()
+    ekran_tv()
+    worek_piasek()
+    metal_zielony()
+    znak_wyjscie()
+    zarowka()
+    materac()

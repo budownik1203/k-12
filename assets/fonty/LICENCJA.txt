@@ -1,0 +1,3 @@
+Czcionki DejaVu (DejaVu Sans Mono, DejaVu Sans Condensed).
+Licencja: Bitstream Vera Fonts Copyright + DejaVu changes in public domain.
+https://dejavu-fonts.github.io/License.html

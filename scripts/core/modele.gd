@@ -10,8 +10,8 @@ const DREWNO := Color(0.42, 0.24, 0.12)
 const DREWNO_J := Color(0.52, 0.32, 0.17)
 const BAKELIT := Color(0.28, 0.14, 0.09)
 const SKORA := Color(0.62, 0.47, 0.38)
-const RUKAW := Color(0.2, 0.22, 0.18)
-const RUKAWICA := Color(0.14, 0.13, 0.12)
+const RUKAW := Color(0.3, 0.32, 0.26)
+const RUKAWICA := Color(0.24, 0.21, 0.18)
 
 
 static func bron(id: String) -> Dictionary:
@@ -80,13 +80,13 @@ static func bron(id: String) -> Dictionary:
 ## Ręce do widoku pierwszoosobowego (prawa na chwycie, lewa w punkcie "przod").
 static func rece(przod: Vector3, pistolet: bool) -> Array:
 	var r := [
-		[Vector3(0.0, -0.035, 0.025), Vector3(0.055, 0.06, 0.08), RUKAWICA],
-		[Vector3(0.025, -0.075, 0.17), Vector3(0.075, 0.075, 0.24), RUKAW, Vector3(18, -8, 0)],
+		[Vector3(0.0, -0.035, 0.03), Vector3(0.045, 0.05, 0.07), RUKAWICA],
+		[Vector3(0.02, -0.07, 0.17), Vector3(0.06, 0.06, 0.22), RUKAW, Vector3(18, -8, 0)],
 	]
 	if pistolet:
-		r.append([Vector3(-0.025, -0.05, 0.03), Vector3(0.05, 0.05, 0.07), RUKAWICA, Vector3(0, 20, 0)])
-		r.append([Vector3(-0.08, -0.09, 0.17), Vector3(0.075, 0.075, 0.24), RUKAW, Vector3(18, 25, 0)])
+		r.append([Vector3(-0.022, -0.045, 0.035), Vector3(0.042, 0.045, 0.06), RUKAWICA, Vector3(0, 20, 0)])
+		r.append([Vector3(-0.075, -0.085, 0.18), Vector3(0.06, 0.06, 0.22), RUKAW, Vector3(18, 25, 0)])
 	else:
-		r.append([przod + Vector3(-0.01, -0.02, 0.0), Vector3(0.055, 0.055, 0.075), RUKAWICA])
-		r.append([przod + Vector3(-0.085, -0.075, 0.14), Vector3(0.075, 0.075, 0.26), RUKAW, Vector3(12, 35, 0)])
+		r.append([przod + Vector3(-0.008, -0.02, 0.0), Vector3(0.045, 0.045, 0.065), RUKAWICA])
+		r.append([przod + Vector3(-0.08, -0.07, 0.14), Vector3(0.06, 0.06, 0.24), RUKAW, Vector3(12, 35, 0)])
 	return r

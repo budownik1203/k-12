@@ -54,6 +54,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	add_to_group("gracz")
 	ekw = Gra.ekw
 	cialo = Cialo.new(Gra.zdrowie)
 	cialo.smierc.connect(_smierc)
@@ -168,22 +169,22 @@ func _physics_process(delta: float) -> void:
 
 func _rozgladanie(delta: float, aktywne: bool) -> void:
 	var m := Sterowanie.pobierz_mysz() if aktywne else Vector2.ZERO
-	var czul := 0.0022 * float(Gra.ustawienia.get("czulosc", 1.0)) * lerp(1.0, 0.65, bron.ads)
+	var czul := 0.0022 * float(Gra.ustawienia.get("czulosc", 1.0)) * lerpf(1.0, 0.65, bron.ads)
 	rotate_y(-m.x * czul)
-	_pitch = clamp(_pitch - m.y * czul, deg_to_rad(-86), deg_to_rad(86))
+	_pitch = clampf(_pitch - m.y * czul, deg_to_rad(-86), deg_to_rad(86))
 	bron.dodaj_sway(m)
 	# odrzut: szybki wzrost, powolny powrót
-	var krok := _odrzut_cel * min(1.0, delta * 22.0)
+	var krok := _odrzut_cel * minf(1.0, delta * 22.0)
 	_odrzut += krok
 	_odrzut_cel -= krok
-	var powrot := _odrzut * min(1.0, delta * 3.2)
+	var powrot := _odrzut * minf(1.0, delta * 3.2)
 	_odrzut -= powrot
 	# ból: drżenie celownika
 	var drzenie := Vector2.ZERO
 	if cialo.bol():
 		_bol_t += delta
 		drzenie = Vector2(sin(_bol_t * 1.7) * 0.4 + sin(_bol_t * 4.3) * 0.25, cos(_bol_t * 1.3) * 0.35) * deg_to_rad(1.2)
-	_trafienie_shake = max(0.0, _trafienie_shake - delta * 3.0)
+	_trafienie_shake = maxf(0.0, _trafienie_shake - delta * 3.0)
 	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _trafienie_shake * deg_to_rad(2.0)
 	glowa.rotation.x = _pitch + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
 	glowa.rotation.y = deg_to_rad(_odrzut.x) + drzenie.x + shake.x
@@ -194,16 +195,16 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	if cel_w != 0.0 and _sciana_przy_wychyleniu(sign(cel_w)):
 		cel_w *= 0.3
 	wychylenie = move_toward(wychylenie, cel_w, delta * 4.0)
-	var wys: float = lerp(WYS_STOJ, WYS_KUC, kucanie)
-	glowa.position = Vector3(wychylenie * 0.32, wys - abs(wychylenie) * 0.06, 0)
+	var wys: float = lerpf(WYS_STOJ, WYS_KUC, kucanie)
+	glowa.position = Vector3(wychylenie * 0.32, wys - absf(wychylenie) * 0.06, 0)
 	kamera.rotation.z = -wychylenie * deg_to_rad(11)
 	var fov_baza := float(Gra.ustawienia.get("fov", 75.0))
-	kamera.fov = lerp(fov_baza, fov_baza * 0.8, bron.ads)
+	kamera.fov = lerpf(fov_baza, fov_baza * 0.8, bron.ads)
 
 
 func _sciana_przy_wychyleniu(strona: float) -> bool:
 	var space := get_world_3d().direct_space_state
-	var od := global_position + Vector3.UP * lerp(WYS_STOJ, WYS_KUC, kucanie)
+	var od := global_position + Vector3.UP * lerpf(WYS_STOJ, WYS_KUC, kucanie)
 	var do_ := od + global_basis.x * strona * 0.55
 	var q := PhysicsRayQueryParameters3D.create(od, do_, Balistyka.WARSTWA_SWIAT)
 	return not space.intersect_ray(q).is_empty()
@@ -222,7 +223,7 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		chce_kucac = true
 	kucanie = move_toward(kucanie, 1.0 if chce_kucac else 0.0, delta * 4.0)
 	var cap := ksztalt.shape as CapsuleShape3D
-	cap.height = lerp(1.75, 1.15, kucanie)
+	cap.height = lerpf(1.75, 1.15, kucanie)
 	ksztalt.position.y = cap.height * 0.5
 	var prog := prog_obciazenia()
 	var moze_biec := chce_biec and cialo.moze_biegac() and prog < 3 and wytrzymalosc > 1.0 and kucanie < 0.3 and akcja.is_empty() and bron.ads < 0.3
@@ -238,9 +239,9 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		v *= 0.75
 	_biegnie = moze_biec and kier.length() > 0.1
 	if moze_biec and kier.length() > 0.1:
-		wytrzymalosc = max(0.0, wytrzymalosc - delta * (11.0 + prog * 5.0))
+		wytrzymalosc = maxf(0.0, wytrzymalosc - delta * (11.0 + prog * 5.0))
 	else:
-		wytrzymalosc = min(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0))
+		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0))
 	var cel := (global_basis * kier.normalized()) * v
 	# bezwładność zależna od wagi
 	var przysp: float = [11.0, 8.0, 5.5, 3.5][prog] if is_on_floor() else 1.5
@@ -259,12 +260,12 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		if not _w_powietrzu:
 			_w_powietrzu = true
 			_y_spadania = global_position.y
-		_y_spadania = max(_y_spadania, global_position.y)
+		_y_spadania = maxf(_y_spadania, global_position.y)
 		velocity.y -= 9.8 * delta
 	move_and_slide()
 	# kroki i hałas
 	var pozioma := Vector2(velocity.x, velocity.z).length()
-	halas_ruchu = clamp(pozioma / PREDKOSC_BIEG, 0.0, 1.0) * (0.35 if kucanie > 0.5 else 1.0)
+	halas_ruchu = clampf(pozioma / PREDKOSC_BIEG, 0.0, 1.0) * (0.35 if kucanie > 0.5 else 1.0)
 	if is_on_floor() and pozioma > 0.4:
 		_krok += pozioma * delta
 		var dl := 0.85 if moze_biec else 0.62
@@ -294,7 +295,7 @@ func _bron(delta: float, aktywne: bool) -> void:
 			_wybierz_bron("glowna")
 		elif Input.is_action_just_pressed("bron2") and ekw.sloty["pistolet"] != null and aktywny_slot != "pistolet":
 			_wybierz_bron("pistolet")
-	var ruch: float = clamp(Vector2(velocity.x, velocity.z).length() / PREDKOSC_BIEG, 0.0, 1.0)
+	var ruch: float = clampf(Vector2(velocity.x, velocity.z).length() / PREDKOSC_BIEG, 0.0, 1.0)
 	bron.aktualizuj(delta, {
 		"strzal": aktywne and Input.is_action_pressed("strzal"),
 		"ads": aktywne and Input.is_action_pressed("celuj"),
@@ -407,7 +408,7 @@ func upusc(p: Przedmiot) -> void:
 func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := false) -> void:
 	if cialo.martwy:
 		return
-	var wys: float = lerp(WYS_STOJ, WYS_KUC, kucanie) + 0.12
+	var wys: float = lerpf(WYS_STOJ, WYS_KUC, kucanie) + 0.12
 	var y: float = (punkt.y - global_position.y) / wys
 	var czesc := "nogi"
 	if y > 0.88:

@@ -89,8 +89,8 @@ func zajeta() -> bool:
 ##      "sprawdz": bool (wciśnięty), "moze": bool, "ruch": float 0..1, "kucanie": float, "celnosc": float}
 func aktualizuj(delta: float, we: Dictionary) -> void:
 	_ruch = we.get("ruch", 0.0)
-	cooldown = max(0.0, cooldown - delta)
-	bloom = max(0.0, bloom - delta * 2.5)
+	cooldown = maxf(0.0, cooldown - delta)
+	bloom = maxf(0.0, bloom - delta * 2.5)
 	var moze: bool = we.get("moze", true) and przedmiot != null
 	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0)
 	if przedmiot == null:
@@ -137,7 +137,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 
 
 func _tryb() -> String:
-	return bd["tryby"][clamp(int(przedmiot.dane["tryb"]), 0, bd["tryby"].size() - 1)]
+	return bd["tryby"][clampf(int(przedmiot.dane["tryb"]), 0, bd["tryby"].size() - 1)]
 
 
 func _pobierz_naboj() -> String:
@@ -173,8 +173,8 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	cooldown = 60.0 / float(bd["rpm"])
 	var ad: Dictionary = Dane.def(amun)["amunicja"]
 	var srut := int(ad.get("srut", 1))
-	var baza: float = lerp(float(bd["rozrzut_biodro"]), float(bd["rozrzut_ads"]), ads)
-	var kat: float = baza * (1.0 + _ruch * 1.4) * lerp(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) + bloom
+	var baza: float = lerpf(float(bd["rozrzut_biodro"]), float(bd["rozrzut_ads"]), ads)
+	var kat: float = baza * (1.0 + _ruch * 1.4) * lerpf(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) + bloom
 	var space := kamera.get_world_3d().direct_space_state
 	var od := kamera.global_position
 	var przod := -kamera.global_basis.z
@@ -185,11 +185,11 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 			kier = Balistyka.rozrzut(kier, float(bd.get("rozrzut_srutu", 3.0)))
 		_promien(space, od, kier, obr, float(ad["penetracja"]))
 	# odrzut
-	var sila := float(bd["odrzut"]) * lerp(1.0, 0.65, ads) * lerp(1.0, 0.85, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0)
+	var sila: float = float(bd["odrzut"]) * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0))
 	if gracz.has_method("dodaj_odrzut"):
 		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
 	if _tryb() == "auto":
-		bloom = min(bloom + 0.35, 3.0)
+		bloom = minf(bloom + 0.35, 3.0)
 	_kick += Vector3(randf_range(-0.004, 0.004), 0.01, 0.05 + sila * 0.012)
 	_kick_rot += Vector3(deg_to_rad(4.0 + sila * 1.5), randf_range(-0.02, 0.02), 0)
 	var wylot := model.global_transform * Vector3(md["lufa"])
@@ -331,12 +331,12 @@ func _process(delta: float) -> void:
 	if model == null:
 		return
 	var pistolet := jest_pistolet()
-	var hip := Vector3(0.14, -0.15, -0.3) if not pistolet else Vector3(0.12, -0.13, -0.3)
+	var hip := Vector3(0.15, -0.16, -0.36) if not pistolet else Vector3(0.13, -0.14, -0.36)
 	var celownik := float(md["celownik"])
 	var ads_poz := Vector3(0.0, -celownik, -0.24 if not pistolet else -0.3)
 	var t := ads * ads * (3.0 - 2.0 * ads)
 	_bob += delta * (6.5 * _ruch)
-	var bob := Vector3(sin(_bob) * 0.008, abs(cos(_bob)) * -0.01, 0) * _ruch * (1.0 - t * 0.85)
+	var bob := Vector3(sin(_bob) * 0.008, absf(cos(_bob)) * -0.01, 0) * _ruch * (1.0 - t * 0.85)
 	_sway = _sway.lerp(Vector2.ZERO, delta * 8.0)
 	_kick = _kick.lerp(Vector3.ZERO, delta * 14.0)
 	_kick_rot = _kick_rot.lerp(Vector3.ZERO, delta * 12.0)
@@ -345,7 +345,7 @@ func _process(delta: float) -> void:
 	# animacje stanów
 	var f := 0.0
 	if stan != "gotowa" and stan_total > 0.0:
-		f = clamp(stan_t / stan_total, 0.0, 1.0)
+		f = clampf(stan_t / stan_total, 0.0, 1.0)
 	var dip := 0.0
 	match stan:
 		"przeladowanie":

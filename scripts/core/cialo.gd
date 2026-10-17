@@ -30,7 +30,7 @@ func stan_do_zapisu() -> Dictionary:
 	var d := {}
 	for c in MAX:
 		if hp[c] < MAX[c]:
-			d[c] = max(hp[c], 1.0)
+			d[c] = maxf(hp[c], 1.0)
 	return d
 
 
@@ -50,9 +50,9 @@ func obrazenia(czesc: String, ile: float, zrodlo := "pocisk") -> void:
 	if hp[czesc] <= 0.0 and czesc not in ["glowa", "klatka"]:
 		# zniszczona kończyna: obrażenia rozchodzą się na tułów
 		hp["klatka"] -= ile * 0.45
-		hp["brzuch"] = max(0.0, hp["brzuch"] - ile * 0.25)
+		hp["brzuch"] = maxf(0.0, hp["brzuch"] - ile * 0.25)
 	else:
-		hp[czesc] = max(0.0, hp[czesc] - ile)
+		hp[czesc] = maxf(0.0, hp[czesc] - ile)
 	# krwawienia
 	var r := randf()
 	if ile >= 28.0 and r < 0.22:
@@ -101,12 +101,12 @@ func tick(delta: float) -> void:
 		if k > 0:
 			var d: float = KRWAWIENIE_HP[k] * delta
 			if hp[c] > 0.0:
-				hp[c] = max(0.0, hp[c] - d)
+				hp[c] = maxf(0.0, hp[c] - d)
 			else:
 				hp["klatka"] -= d * 0.8
 			zm = true
 	if przeciwbol > 0.0:
-		przeciwbol = max(0.0, przeciwbol - delta)
+		przeciwbol = maxf(0.0, przeciwbol - delta)
 	if zm:
 		_sprawdz_smierc("wykrwawienie")
 		zmiana.emit()
@@ -115,7 +115,7 @@ func tick(delta: float) -> void:
 func krwawi() -> int:
 	var m := 0
 	for c in MAX:
-		m = max(m, krwawienie[c])
+		m = maxf(m, krwawienie[c])
 	return m
 
 
@@ -198,7 +198,7 @@ func lecz(efekt: String, dane: Dictionary, med: Przedmiot) -> String:
 					najgorsza = c
 			if najgorsza == "":
 				return ""
-			var ile: float = min(float(dane.get("na_raz", 20)), brak, float(med.dane["uzycia"]))
+			var ile: float = minf(minf(float(dane.get("na_raz", 20)), brak), float(med.dane["uzycia"]))
 			hp[najgorsza] += ile
 			med.dane["uzycia"] -= int(ceil(ile))
 			zmiana.emit()

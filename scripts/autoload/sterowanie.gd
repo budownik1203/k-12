@@ -4,6 +4,7 @@ extends Node
 
 var mysz := Vector2.ZERO
 var blokada := false   # true, gdy otwarty jest ekran ekwipunku/menu
+var menu_otwarte := false
 
 const AKCJE := {
 	"przod": [KEY_W], "tyl": [KEY_S], "lewo": [KEY_A], "prawo": [KEY_D],
@@ -11,7 +12,7 @@ const AKCJE := {
 	"przeladuj": [KEY_R], "interakcja": [KEY_F], "latarka": [KEY_L], "ekwipunek": [KEY_TAB, KEY_I],
 	"bron1": [KEY_1], "bron2": [KEY_2], "tryb": [KEY_B], "sprawdz": [KEY_T], "skok": [KEY_SPACE],
 	"lek_bandaz": [KEY_4], "lek_opatrunek": [KEY_5], "lek_apteczka": [KEY_6], "lek_szyna": [KEY_7], "lek_bolostop": [KEY_8],
-	"pauza": [KEY_ESCAPE], "napelnij": [KEY_G],
+	"pauza": [KEY_ESCAPE], "napelnij": [KEY_G], "wyjscia": [KEY_O],
 }
 
 
@@ -46,3 +47,7 @@ func pobierz_mysz() -> Vector2:
 func przechwyc(tak: bool) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if tak else Input.MOUSE_MODE_VISIBLE
 	mysz = Vector2.ZERO
+
+
+func blokada_menu() -> bool:
+	return menu_otwarte

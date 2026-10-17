@@ -45,7 +45,7 @@ static func box(st: SurfaceTool, c: Vector3, s: Vector3, col: Color, rot := Vect
 	]
 	for f in faces:
 		var n: Vector3 = b * f[0]
-		var shade := 0.82 + 0.18 * clamp(n.y * 0.6 + n.x * 0.2 + 0.4, 0.0, 1.0)
+		var shade: float = 0.82 + 0.18 * clampf(n.y * 0.6 + n.x * 0.2 + 0.4, 0.0, 1.0)
 		var cc := Color(col.r * shade, col.g * shade, col.b * shade)
 		var pts := []
 		for v in f[1]:
@@ -96,7 +96,7 @@ class Budowniczy:
 	## Czworokąt p0..p3 przeciwnie do wskazówek zegara patrząc od przodu.
 	func quad(mat: String, p: Array, uv: Array, col := Color.WHITE) -> void:
 		var st := _st(mat)
-		var n := (p[1] - p[0]).cross(p[2] - p[0]).normalized()
+		var n: Vector3 = (p[1] - p[0]).cross(p[2] - p[0]).normalized()
 		for i in [0, 2, 1, 0, 3, 2]:
 			st.set_color(col)
 			st.set_normal(n)
