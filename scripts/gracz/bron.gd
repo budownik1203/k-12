@@ -106,22 +106,6 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			_lat_node.position = Vector3(-0.02, -0.075, 0.02)
 			_lat_node.rotation = Vector3(0.03, 0.0, 0)
 			model.add_child(_lat_node)
-		# płomień wylotowy: dwa skrzyżowane czworokąty widoczne przez ułamek sekundy
-		_blysk = MeshInstance3D.new()
-		var q := QuadMesh.new()
-		q.size = Vector2(0.05, 0.05) if bd["slot"] == "pistolet" else Vector2(0.075, 0.075)
-		_blysk.mesh = q
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		mat.albedo_color = Color(1.0, 0.72, 0.32)
-		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-		mat.no_depth_test = true
-		_blysk.material_override = mat
-		_blysk.position = Vector3(md["lufa"]) + Vector3(0, 0, -0.07)
-		_blysk.visible = false
-		_blysk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		model.add_child(_blysk)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		if mi == _blysk or mi == _szklo:
 			continue
@@ -448,16 +432,17 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
 	if _tryb() == "auto":
 		bloom = minf(bloom + 0.35, 3.0)
-	_kick += Vector3(randf_range(-0.006, 0.006), 0.012, 0.07 + sila * 0.016)
-	_kick_rot += Vector3(deg_to_rad(6.0 + sila * 2.0), randf_range(-0.04, 0.04), randf_range(-0.05, 0.05))
+	_kick += Vector3(randf_range(-0.006, 0.006), 0.012 * lerpf(1.0, 0.2, ads), 0.07 + sila * 0.016)
+	# przy celowaniu broń idzie głównie w tył (w ramię), a nie w górę – zamek nie wchodzi na linię wzroku
+	_kick_rot += Vector3(deg_to_rad(6.0 + sila * 2.0) * lerpf(1.0, 0.3, ads), randf_range(-0.04, 0.04), randf_range(-0.05, 0.05))
 	var wylot := model.global_transform * Vector3(md["lufa"])
-	Efekty.blysk(gracz.get_parent(), wylot, (3.0 if bd["slot"] == "pistolet" else 4.0) * (0.15 if _bez_plomienia else 1.0))
-	if _blysk and not _bez_plomienia:
-		_blysk.visible = true
-		_blysk.rotation.z = randf() * TAU
-		# przy celowaniu płomień jest tuż przed okiem: mały i krótki, żeby nie zasłaniał celu
-		_blysk.scale = Vector3.ONE * randf_range(0.8, 1.2) * lerpf(1.0, 0.35, ads)
-		_blysk_t = 0.03
+	Efekty.blysk(gracz.get_parent(), wylot, (3.0 if bd["slot"] == "pistolet" else 4.0) * (0.15 if _bez_plomienia else 1.0) * lerpf(1.0, 0.6, ads))
+	if not _bez_plomienia:
+		# gwiazda + języki ognia wzdłuż lufy; przy celowaniu gwiazda bez środka – cel zostaje widoczny
+		var sk := 0.65 if bd["slot"] == "pistolet" else (1.35 if bd["kaliber"] == "12/70" else 1.0)
+		Efekty.plomien_wylotu(model, Transform3D(Basis(), Vector3(md["lufa"])), sk, ads)
+	if ads < 0.5:
+		Efekty.dym_wylotu(gracz.get_parent(), wylot, -kamera.global_basis.z, 0.6 if _bez_plomienia else 1.0)
 	if not bd.has("wewnetrzny"):
 		Efekty.luska(gracz.get_parent(), model.global_transform * Vector3(0.03, 0.05, -0.06), kamera.global_basis.x)
 	if gracz.has_method("kopniecie"):
@@ -634,7 +619,7 @@ func _process(delta: float) -> void:
 	if przedmiot == null:
 		hip = Vector3(-0.07, -0.17, -0.36)
 	var celownik := float(md["celownik"])
-	var ads_poz := Vector3(0.0, -celownik, (-0.24 if not pistolet else -0.3) + (0.06 if md.get("luneta", false) else 0.0))
+	var ads_poz := Vector3(0.0, -celownik, (-0.3 if not pistolet else -0.32) + (0.06 if md.get("luneta", false) else 0.0))
 	var t := ads * ads * (3.0 - 2.0 * ads)
 	_bob += delta * (6.0 * _ruch + 2.5 * _bieg)
 	var bob := Vector3(sin(_bob) * 0.011, absf(cos(_bob)) * -0.014, 0) * _ruch * (1.0 - t * 0.85) * (1.0 + _bieg * 0.8)

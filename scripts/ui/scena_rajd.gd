@@ -373,21 +373,29 @@ func _zrzuty(katalog: String) -> void:
 		if e.sloty["util1"] == null:
 			e.sloty["util1"] = Przedmiot.nowy("mapa")
 		ekran_ekw.otworz(null)
+		await get_tree().create_timer(0.4).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_panel.png"))
 		ekran_ekw.przelacz_pojemnik("kamizelka")
-		for f in 50:
-			await get_tree().process_frame
+		await get_tree().create_timer(0.6).timeout
 		ekran_ekw.przelacz_pojemnik("plecak")
-		for f in 20:
-			await get_tree().process_frame
+		await get_tree().create_timer(0.7).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_otwieranie.png"))
-		for f in 60:
-			await get_tree().process_frame
+		await get_tree().create_timer(1.4).timeout
+		ekran_ekw.przelacz_pojemnik("bezpieczny")
+		await get_tree().create_timer(1.6).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_kamizelka_plecak.png"))
 		ekran_ekw.zamknij()
-		for f in 30:
-			await get_tree().process_frame
+		await get_tree().create_timer(1.0).timeout
+		ekran_ekw.otworz(null)
+		ekran_ekw.szybka_kamizelka()
+		await get_tree().create_timer(0.8).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekw_szybka_kamizelka.png"))
+		ekran_ekw.zamknij()
+		await get_tree().create_timer(0.6).timeout
 	# ekran ekwipunku z pojemnikiem
 	var pojemniki := swiat.get_children().filter(func(x): return x is Pojemnik)
 	if not pojemniki.is_empty() and ekran_ekw:
@@ -534,6 +542,27 @@ func _zrzut_vm(katalog: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_bieg.png"))
 	gracz.bron._bieg = 0.0
+	# strzał: z biodra i przy celowaniu (płomień, światło)
+	gracz.sterowanie = true
+	for nazwa in ["vm_strzal_biodro", "vm_strzal_ads"]:
+		if nazwa == "vm_strzal_ads":
+			Input.action_press("celuj")
+			for f in 50:
+				await get_tree().process_frame
+		gracz.bron.cooldown = 0.0
+		gracz.bron.spust_puszczony = true
+		var przed: Variant = gracz.bron.przedmiot.dane.get("komora")
+		Engine.time_scale = 0.05
+		gracz.bron._sprobuj_strzal({})
+		print("STRZAL ", nazwa, " stan=", gracz.bron.stan, " komora przed=", przed, " dzieci=", gracz.bron.model.get_child_count(), " ", gracz.bron.model.get_child(gracz.bron.model.get_child_count()-1).name, " lay=", gracz.bron.model.get_child(0).get("layers"))
+		for kl in 4:
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + "_%d.png" % kl))
+		Engine.time_scale = 1.0
+		for f in 30:
+			await get_tree().process_frame
+	Input.action_release("celuj")
+	gracz.sterowanie = false
 	# dodatki: KB-47 z kolimatorem, tłumikiem i latarką; potem luneta przy celowaniu
 	var kb: Przedmiot = Gra.ekw.sloty["glowna"]
 	kb.dane["dod_wylot"] = Przedmiot.nowy("tlumik_762")

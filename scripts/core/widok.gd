@@ -6,7 +6,7 @@ extends RefCounted
 const POMNIEJSZENIE := 2   # 1/2 rozdzielczości: wciąż PS1, ale cel widać na kilkanaście metrów
 
 
-static func zbuduj(rodzic: Node, mgla := 0.1, ambient := 0.085) -> Dictionary:
+static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
 	var kont := SubViewportContainer.new()
 	kont.name = "Widok3D"
 	kont.stretch = true

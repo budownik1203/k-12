@@ -855,7 +855,8 @@ func _strzelaj(delta: float) -> void:
 				Dzwiek.graj("swist", -6.0)
 	var wylot: Vector3 = (_czesci["bron"] as Node3D).global_transform * Vector3(_czesci["wylot"])
 	Efekty.blysk(get_parent(), wylot, 2.5)
-	Efekty.plomien(get_parent(), wylot)
+	var bxf: Transform3D = (_czesci["bron"] as Node3D).global_transform
+	Efekty.plomien_wylotu(get_parent(), Transform3D(bxf.basis.orthonormalized(), wylot), 1.8)
 	_odrzut_anim = 1.0
 	if randf() < 0.45:
 		Efekty.smuga(get_parent(), wylot, wylot + kier0 * minf(d, 60.0))

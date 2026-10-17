@@ -203,11 +203,13 @@ func widok_ekwipunku(tryb: String) -> float:
 	var czas := 0.3
 	match tryb:
 		"kamizelka":
-			cel = [-1.15, 0.0, 0.05]
-			czas = 0.35
+			# zerknięcie w dół na przyciągniętą do przodu kamizelkę
+			cel = [-0.42, 0.0, 0.04]
+			czas = 0.3
 		"plecak":
-			cel = [-0.9, 0.22, 0.45]
-			czas = 0.65
+			# przyklęk i spojrzenie na rozłożony przed sobą plecak (ok. 0,7 m od stóp)
+			cel = [-0.95, 0.0, 0.6]
+			czas = 0.9
 	_ekw_tw.tween_property(self, "ekw_pitch", (cel[0] - _pitch) if tryb != "" else 0.0, czas)
 	_ekw_tw.tween_property(self, "ekw_roll", cel[1], czas)
 	_ekw_tw.tween_property(self, "ekw_glowa", cel[2], czas)

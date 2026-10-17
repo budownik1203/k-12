@@ -24,8 +24,10 @@ static func bron(id: String) -> Dictionary:
 					[Vector3(0, 0.05, -0.38), Vector3(0.056, 0.06, 0.18), DREWNO_J],
 					[Vector3(0, 0.094, -0.4), Vector3(0.032, 0.026, 0.2), DREWNO_J],
 					[Vector3(0, 0.06, -0.61), Vector3(0.022, 0.022, 0.3), METAL_C],
-					[Vector3(0, 0.1, -0.69), Vector3(0.012, 0.045, 0.012), METAL_C],
-					[Vector3(0, 0.096, -0.22), Vector3(0.03, 0.016, 0.04), METAL],
+					[Vector3(0, 0.095, -0.69), Vector3(0.006, 0.05, 0.008), METAL_C],
+					[Vector3(-0.011, 0.105, -0.22), Vector3(0.007, 0.03, 0.04), METAL],
+					[Vector3(0.011, 0.105, -0.22), Vector3(0.007, 0.03, 0.04), METAL],
+					[Vector3(0, 0.094, -0.22), Vector3(0.03, 0.008, 0.04), METAL],
 					[Vector3(0, -0.035, 0.0), Vector3(0.034, 0.1, 0.045), BAKELIT, Vector3(18, 0, 0)],
 					[Vector3(0, 0.0, -0.06), Vector3(0.01, 0.03, 0.05), METAL],
 				],
@@ -33,7 +35,7 @@ static func bron(id: String) -> Dictionary:
 					[Vector3(0, -0.07, -0.17), Vector3(0.03, 0.12, 0.065), METAL_C, Vector3(-12, 0, 0)],
 					[Vector3(0, -0.16, -0.2), Vector3(0.03, 0.09, 0.062), METAL_C, Vector3(-28, 0, 0)],
 				],
-				"lufa": Vector3(0, 0.06, -0.77), "celownik": 0.1, "przod": Vector3(0, 0.0, -0.38),
+				"lufa": Vector3(0, 0.06, -0.77), "celownik": 0.12, "przod": Vector3(0, 0.0, -0.38),
 			}
 		"pm63":
 			return {
@@ -43,11 +45,12 @@ static func bron(id: String) -> Dictionary:
 					[Vector3(0, -0.035, 0.0), Vector3(0.035, 0.11, 0.045), BAKELIT, Vector3(10, 0, 0)],
 					[Vector3(0, -0.03, -0.17), Vector3(0.03, 0.07, 0.03), BAKELIT],
 					[Vector3(0, 0.025, 0.12), Vector3(0.04, 0.012, 0.18), METAL_C],
-					[Vector3(0, 0.08, -0.21), Vector3(0.01, 0.03, 0.01), METAL_C],
-					[Vector3(0, 0.074, 0.0), Vector3(0.025, 0.012, 0.02), METAL_C],
+					[Vector3(0, 0.08, -0.21), Vector3(0.006, 0.03, 0.01), METAL_C],
+					[Vector3(-0.01, 0.084, 0.0), Vector3(0.006, 0.024, 0.02), METAL_C],
+					[Vector3(0.01, 0.084, 0.0), Vector3(0.006, 0.024, 0.02), METAL_C],
 				],
 				"mag": [[Vector3(0, -0.12, 0.004), Vector3(0.026, 0.16, 0.034), METAL_C, Vector3(10, 0, 0)]],
-				"lufa": Vector3(0, 0.04, -0.32), "celownik": 0.08, "przod": Vector3(0, -0.04, -0.17),
+				"lufa": Vector3(0, 0.04, -0.32), "celownik": 0.095, "przod": Vector3(0, -0.04, -0.17),
 			}
 		"pw9":
 			return {
@@ -56,10 +59,11 @@ static func bron(id: String) -> Dictionary:
 					[Vector3(0, 0.008, -0.06), Vector3(0.028, 0.022, 0.14), METAL_C],
 					[Vector3(0, -0.035, 0.005), Vector3(0.029, 0.09, 0.042), BAKELIT, Vector3(12, 0, 0)],
 					[Vector3(0, 0.058, -0.145), Vector3(0.006, 0.012, 0.008), METAL_C],
-					[Vector3(0, 0.058, 0.005), Vector3(0.02, 0.01, 0.008), METAL_C],
+					[Vector3(-0.007, 0.058, 0.005), Vector3(0.006, 0.012, 0.008), METAL_C],
+					[Vector3(0.007, 0.058, 0.005), Vector3(0.006, 0.012, 0.008), METAL_C],
 				],
 				"mag": [[Vector3(0, -0.085, 0.012), Vector3(0.024, 0.02, 0.034), METAL_C, Vector3(12, 0, 0)]],
-				"lufa": Vector3(0, 0.035, -0.16), "celownik": 0.062, "przod": Vector3(0, -0.05, 0.02),
+				"lufa": Vector3(0, 0.035, -0.16), "celownik": 0.064, "przod": Vector3(0, -0.05, 0.02),
 			}
 		"obrzyn":
 			return {
@@ -72,7 +76,7 @@ static func bron(id: String) -> Dictionary:
 					[Vector3(0, 0.062, -0.42), Vector3(0.008, 0.01, 0.008), METAL_C],
 				],
 				"mag": [],
-				"lufa": Vector3(0, 0.045, -0.45), "celownik": 0.064, "przod": Vector3(0, -0.01, -0.2),
+				"lufa": Vector3(0, 0.045, -0.45), "celownik": 0.068, "przod": Vector3(0, -0.01, -0.2),
 			}
 	return {"cialo": [[Vector3.ZERO, Vector3(0.05, 0.05, 0.2), Color.MAGENTA]], "mag": [], "lufa": Vector3(0, 0, -0.2), "celownik": 0.05, "przod": Vector3(0, 0, -0.1)}
 

@@ -174,3 +174,161 @@ static func blysk(rodzic: Node3D, pos: Vector3, sila := 2.5) -> void:
 	var t := l.create_tween()
 	t.tween_property(l, "light_energy", 0.0, 0.06)
 	t.tween_callback(l.queue_free)
+
+
+# ------------------------------------------------------------------ płomień wylotowy
+
+static var _tex_gwiazdy: Array = []      # [pełne..., puste środkiem...]
+static var _tex_bok: ImageTexture
+static var _tex_dym: ImageTexture
+static var _mat_gw: Array = []
+static var _mat_gw_puste: Array = []
+static var _mat_bok: StandardMaterial3D
+static var _mat_dym: StandardMaterial3D
+
+
+## Gwiazda płomienia patrzona od przodu: jasny rdzeń i 4–6 nieregularnych płatków. "pusty" = bez środka
+## (przy celowaniu linia wzroku przechodzi przez wylot, więc środek musi zostać przezroczysty).
+static func _gwiazda(ziarno: int, pusty: bool) -> ImageTexture:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = ziarno
+	var n := rng.randi_range(4, 6)
+	var faza := rng.randf() * TAU
+	var dl := []
+	for i in n:
+		dl.append(rng.randf_range(0.55, 1.0))
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		for x in 64:
+			var p := Vector2(x + 0.5, y + 0.5) / 32.0 - Vector2.ONE
+			var r := p.length()
+			var a := atan2(p.y, p.x) + faza
+			var sek := fposmod(a / TAU * n, 1.0)
+			var idx := int(fposmod(a / TAU * n, float(n)))
+			var platek := pow(maxf(0.0, 1.0 - absf(sek - 0.5) * 2.0), 2.2) * float(dl[idx])
+			var zasieg := 0.16 + 0.8 * platek
+			var v := clampf(1.0 - r / maxf(0.01, zasieg), 0.0, 1.0)
+			v = pow(v, 1.4)
+			var rdzen := clampf(1.0 - r / 0.22, 0.0, 1.0)
+			var jas := maxf(v, rdzen)
+			if pusty:
+				jas *= smoothstep(0.2, 0.42, r)
+			var kol := Color(1.0, 0.95, 0.8).lerp(Color(1.0, 0.5, 0.12), clampf(r * 1.3, 0.0, 1.0))
+			img.set_pixel(x, y, Color(kol.r * jas, kol.g * jas, kol.b * jas, jas))
+	return ImageTexture.create_from_image(img)
+
+
+## Płomień z boku: język ognia od wylotu (dół tekstury) do czubka (góra), z wcięciami.
+static func _bok() -> ImageTexture:
+	var img := Image.create(32, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		var v := 1.0 - (y + 0.5) / 64.0          # 0 = wylot, 1 = czubek
+		var szer := 0.5 * pow(1.0 - v, 0.55) * (0.75 + 0.25 * sin(v * 19.0))
+		if v < 0.12:
+			szer *= 0.55 + v * 3.7
+		for x in 32:
+			var u := absf((x + 0.5) / 32.0 - 0.5)
+			var jas := clampf(1.0 - u / maxf(0.01, szer), 0.0, 1.0)
+			jas = pow(jas, 1.2) * (1.0 - v * 0.55)
+			var kol := Color(1.0, 0.93, 0.75).lerp(Color(1.0, 0.45, 0.1), clampf(v * 1.4 + u, 0.0, 1.0))
+			img.set_pixel(x, y, Color(kol.r * jas, kol.g * jas, kol.b * jas, jas))
+	return ImageTexture.create_from_image(img)
+
+
+static func _dym() -> ImageTexture:
+	var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	for y in 32:
+		for x in 32:
+			var r := (Vector2(x + 0.5, y + 0.5) / 16.0 - Vector2.ONE).length()
+			var a := clampf(1.0 - r, 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.62, 0.6, 0.56, a * a))
+	return ImageTexture.create_from_image(img)
+
+
+static func _mat_add(t: Texture2D, billboard: bool) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_texture = t
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.disable_receive_shadows = true
+	if billboard:
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	return m
+
+
+static func _przygotuj_plomien() -> void:
+	if _mat_bok != null:
+		return
+	for i in 3:
+		_mat_gw.append(_mat_add(_gwiazda(17 + i * 31, false), true))
+		_mat_gw_puste.append(_mat_add(_gwiazda(17 + i * 31, true), true))
+	_mat_bok = _mat_add(_bok(), false)
+	_mat_dym = StandardMaterial3D.new()
+	_mat_dym.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_mat_dym.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_mat_dym.albedo_texture = _dym()
+	_mat_dym.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	_mat_dym.vertex_color_use_as_albedo = false
+
+
+## Płomień wylotowy: gwiazda od przodu + dwa skrzyżowane języki ognia wzdłuż lufy (-Z w xf), trwa ~2 klatki.
+## xf w przestrzeni rodzica. celowanie > 0.5: gwiazda bez środka i mniejsza (nie zasłania celu).
+static func plomien_wylotu(rodzic: Node3D, xf: Transform3D, skala := 1.0, celowanie := 0.0) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	_przygotuj_plomien()
+	var n := Node3D.new()
+	rodzic.add_child(n)
+	n.transform = xf
+	var i := randi() % 3
+	var gw := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	var s := 0.16 * skala * randf_range(0.85, 1.15) * (0.7 if celowanie > 0.5 else 1.0)
+	q.size = Vector2(s, s)
+	gw.mesh = q
+	gw.material_override = _mat_gw_puste[i] if celowanie > 0.5 else _mat_gw[i]
+	gw.position = Vector3(0, 0, -0.01 * skala)
+	n.add_child(gw)
+	var dl := 0.26 * skala * randf_range(0.8, 1.25)
+	for k in 2:
+		var b := MeshInstance3D.new()
+		var qb := QuadMesh.new()
+		qb.size = Vector2(dl * 0.36, dl)
+		b.mesh = qb
+		b.material_override = _mat_bok
+		b.rotation = Vector3(-PI * 0.5, 0, 0)
+		var piv := Node3D.new()
+		piv.rotation.z = (PI * 0.5) * k + randf_range(-0.3, 0.3)
+		n.add_child(piv)
+		piv.add_child(b)
+		b.position = Vector3(0, 0, -dl * 0.5)
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var t := n.create_tween()
+	t.tween_property(n, "scale", Vector3(0.55, 0.55, 1.3), 0.045)
+	t.tween_callback(n.queue_free)
+
+
+## Smużka dymu z lufy po strzale (świat): rośnie, wznosi się i rozwiewa.
+static func dym_wylotu(rodzic: Node3D, pos: Vector3, kier: Vector3, sila := 1.0) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	_przygotuj_plomien()
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.12, 0.12)
+	mi.mesh = q
+	var m: StandardMaterial3D = _mat_dym.duplicate()
+	m.albedo_color = Color(1, 1, 1, 0.22 * sila)
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rodzic.add_child(mi)
+	mi.global_position = pos + kier * 0.08
+	var t := mi.create_tween().set_parallel(true)
+	t.tween_property(mi, "scale", Vector3.ONE * 3.5, 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	t.tween_property(mi, "global_position", mi.global_position + kier * 0.35 + Vector3(0, 0.25, 0), 0.9)
+	t.tween_property(m, "albedo_color:a", 0.0, 0.9)
+	t.chain().tween_callback(mi.queue_free)

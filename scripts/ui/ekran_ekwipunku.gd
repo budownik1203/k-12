@@ -39,6 +39,11 @@ var _kolko_otw: KolkoPostepu
 var _swiezy := ""              # właśnie otwarty pojemnik: jego ramka dostaje animację wejścia
 var _ramki := {}               # pojemnik -> ramka na środku
 var _zamykany := ""
+var _r3d: Rozlozenie3D = null    # rajd: pojemniki rozłożone w świecie przed graczem
+var _warstwa: Control            # rajd: siatki pojemników nad ich modelami 3D
+var _szybki := false             # 2x Tab: tylko kamizelka (szybki dostęp)
+var _pokaz_ms := 0
+var _kolko_otw_poz := Vector2.ZERO
 var _warsztat := false          # otwarte przy stole roboczym: wolno montować dodatki warsztatowe
 var _tlo: TextureRect
 var _lp: PanelContainer
@@ -189,6 +194,11 @@ func _buduj() -> void:
 	kol.add_child(dol)
 	if not tryb_bazy:
 		_root.add_child(sp)
+		sp.visible = false
+		_warstwa = Control.new()
+		_warstwa.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_warstwa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_root.add_child(_warstwa)
 	# tooltip i menu
 	_tooltip = PanelContainer.new()
 	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -220,7 +230,7 @@ func _buduj() -> void:
 
 const NAZWY_POJ := {"kieszenie": "Kieszenie", "kamizelka": "Kamizelka", "plecak": "Plecak", "bezpieczny": "Kontener bezpieczny"}
 ## Czas otwarcia w rajdzie: sięgnięcie do kieszeni, spojrzenie w dół na ładownice, zdjęcie i rozpięcie plecaka.
-const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.45, "plecak": 1.0, "bezpieczny": 0.6}
+const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.35, "plecak": 1.7, "bezpieczny": 1.1}
 
 
 func _siatka_pojemnika(co: String) -> Siatka:
@@ -248,6 +258,13 @@ func przelacz_pojemnik(co: String) -> void:
 			dokoncz.call()
 			return
 		_zamykany = co
+		if _r3d:
+			_r3d.zamknij(co, 0.5)
+			var twr := r.create_tween()
+			twr.tween_property(r, "modulate:a", 0.0, 0.12)
+			twr.tween_interval(0.35)
+			twr.tween_callback(dokoncz)
+			return
 		r.pivot_offset = Vector2(r.size.x * 0.5, 0.0 if co == "plecak" else r.size.y)
 		var tw := r.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		tw.tween_property(r, "modulate:a", 0.0, 0.16)
@@ -267,26 +284,40 @@ func przelacz_pojemnik(co: String) -> void:
 		_swiezy = co
 		_przebuduj()
 		return
+	if _szybki and co == "kamizelka":
+		czas = 0.22
 	_otwieranie = co
 	_otw_t = 0.0
 	_otw_czas = czas
-	if co in ["kamizelka", "plecak"]:
-		gracz.widok_ekwipunku("plecak" if (co == "plecak" or "plecak" in otwarte) else "kamizelka")
+	if _r3d:
+		_r3d.otworz(co, _siatka_pojemnika(co), czas)
+	if co in ["kamizelka", "plecak", "bezpieczny"]:
+		var na_ziemi := co != "kamizelka" or "plecak" in otwarte or "bezpieczny" in otwarte
+		gracz.widok_ekwipunku("plecak" if na_ziemi else "kamizelka")
 	Dzwiek.graj("plecak", -6.0 if co == "plecak" else -11.0, 0.8 if co == "plecak" else 1.1)
 	if co == "plecak":
 		Gra.emituj_halas(gracz.global_position, 4.0, gracz)
 	_przebuduj()
 
 
+## 2x Tab w rajdzie: szybki dostęp do kamizelki (zerknięcie w dół, bez panelu oporządzenia).
+func szybka_kamizelka() -> void:
+	_szybki = true
+	_lp.visible = false
+	_gora.visible = false
+	if not "kamizelka" in otwarte and _otwieranie == "":
+		przelacz_pojemnik("kamizelka")
+
+
 func _ustaw_widok() -> void:
 	if gracz == null or tryb_bazy:
 		return
-	var poza := "plecak" if "plecak" in otwarte else ("kamizelka" if "kamizelka" in otwarte else "")
+	var poza := "plecak" if ("plecak" in otwarte or "bezpieczny" in otwarte) else ("kamizelka" if "kamizelka" in otwarte else "")
 	gracz.widok_ekwipunku(poza)
 
 
 func _domyslnie_otwarte() -> Array:
-	return ["kieszenie", "kamizelka", "plecak", "bezpieczny"] if tryb_bazy else ["kieszenie"]
+	return ["kieszenie", "kamizelka", "plecak", "bezpieczny"] if tryb_bazy else []
 
 
 func otworz(pojemnik: Pojemnik = null) -> void:
@@ -306,8 +337,14 @@ func _pokaz() -> void:
 	if not otwarty:
 		otwarte = _domyslnie_otwarte()
 		_otwieranie = ""
-		if not tryb_bazy:
-			_swiezy = "kieszenie"
+		_szybki = false
+		_pokaz_ms = Time.get_ticks_msec()
+		_lp.visible = true
+		_gora.visible = true
+		if not tryb_bazy and gracz and _r3d == null:
+			_r3d = Rozlozenie3D.new()
+			gracz.get_parent().add_child(_r3d)
+			_r3d.przygotuj(gracz)
 	otwarty = true
 	_root.visible = true
 	get_tree().call_group("hud", "ukryj", true)
@@ -336,12 +373,19 @@ func zamknij() -> void:
 	Sterowanie.przechwyc(true)
 	_pojemnik = null
 	_warsztat = false
-	if gracz and not tryb_bazy and ("kamizelka" in otwarte or "plecak" in otwarte or _otwieranie != ""):
+	if gracz and not tryb_bazy and ("kamizelka" in otwarte or "plecak" in otwarte or "bezpieczny" in otwarte or _otwieranie != ""):
 		gracz.widok_ekwipunku("")
 		if "plecak" in otwarte:
 			Dzwiek.graj("plecak", -8.0, 1.1)
 	_otwieranie = ""
 	otwarte = []
+	_szybki = false
+	if _r3d:
+		_r3d.zamknij_wszystko(0.4)
+		_r3d = null
+	if _warstwa:
+		for c in _warstwa.get_children():
+			c.queue_free()
 	zamkniety.emit()
 	if tryb_bazy:
 		Gra.zapisz()
@@ -354,6 +398,9 @@ func _przebuduj() -> void:
 		c.queue_free()
 	for c in _prawy_scroll.get_children():
 		c.queue_free()
+	if _warstwa:
+		for c in _warstwa.get_children():
+			c.queue_free()
 	_siatki.clear()
 	_sloty.clear()
 	# lewy panel: oporządzenie na sylwetce, przy pojemnikach przyciski otwierania
@@ -386,9 +433,14 @@ func _przebuduj() -> void:
 	_lewy.add_child(_rzad_utility())
 	var inne := HBoxContainer.new()
 	inne.add_theme_constant_override("separation", 8)
-	inne.add_child(_przycisk_otw("kieszenie"))
+	if tryb_bazy:
+		inne.add_child(_przycisk_otw("kieszenie"))
 	inne.add_child(_przycisk_otw("bezpieczny"))
 	_lewy.add_child(inne)
+	if not tryb_bazy:
+		# kieszenie są na ciele: zawsze pod ręką w panelu
+		_lewy.add_child(Motyw.naszywka("Kieszenie"))
+		_lewy.add_child(_siatka_ui(ekw.kieszenie, "kieszenie"))
 	_opis_ciala = Motyw.etykieta("", 12, Motyw.TEKST, Motyw.cond())
 	_opis_ciala.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_opis_ciala.custom_minimum_size = Vector2(320, 18)
@@ -429,7 +481,11 @@ func _przebuduj() -> void:
 		var gui := _siatka_ui(siatka, co)
 		gui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		wn.add_child(gui)
-		_srodek.add_child(ramka)
+		if _warstwa:
+			_warstwa.add_child(ramka)
+			ramka.visible = false        # pozycję nada _process (nad modelem 3D)
+		else:
+			_srodek.add_child(ramka)
 		_ramki[co] = ramka
 		if co == _swiezy:
 			_animuj_wejscie.call_deferred(ramka, co)
@@ -450,8 +506,13 @@ func _przebuduj() -> void:
 		_kolko_otw.podpowiedz = false
 		_kolko_otw.srodkuj = true
 		wo.add_child(_kolko_otw)
-		_srodek.add_child(ramka_o)
-	elif otwarte.is_empty():
+		if _warstwa:
+			_warstwa.add_child(ramka_o)
+			ramka_o.set_meta("otwieranie", true)
+			ramka_o.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		else:
+			_srodek.add_child(ramka_o)
+	elif otwarte.is_empty() and _warstwa == null:
 		var l2 := Motyw.etykieta("Otwórz pojemnik przyciskiem przy slocie.", 14, Motyw.TEKST_CIEMNY, Motyw.cond())
 		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_srodek.add_child(l2)
@@ -478,6 +539,13 @@ func _animuj_wejscie(r: Control, co: String) -> void:
 		return
 	var tw := r.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	r.modulate.a = 0.0
+	if _warstwa:
+		# rajd: kafelki pojawiają się we wnętrzu rozłożonego pojemnika
+		r.pivot_offset = r.size * 0.5
+		r.scale = Vector2(0.94, 0.94)
+		tw.tween_property(r, "modulate:a", 1.0, 0.2)
+		tw.tween_property(r, "scale", Vector2.ONE, 0.2)
+		return
 	match co:
 		"plecak":
 			r.pivot_offset = Vector2(r.size.x * 0.5, 0.0)
@@ -575,7 +643,9 @@ func _odswiez() -> void:
 
 func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu() and Engine.get_process_frames() > Sterowanie.blokuj_tab_do:
-		if otwarty:
+		if otwarty and not tryb_bazy and not _szybki and Time.get_ticks_msec() - _pokaz_ms < 320 and _pojemnik == null:
+			szybka_kamizelka()
+		elif otwarty:
 			zamknij()
 		elif gracz == null or not gracz.cialo.martwy:
 			if tryb_bazy or gracz == null:
@@ -602,6 +672,28 @@ func _process(delta: float) -> void:
 				if co == "plecak":
 					Dzwiek.graj("plecak", -9.0, 1.3)
 			_przebuduj()
+	# rajd: siatki pojemników nad ich modelami w świecie
+	if _warstwa and _r3d:
+		for co in _ramki:
+			var r: Control = _ramki[co]
+			if not is_instance_valid(r):
+				continue
+			var pk: Variant = _r3d.punkt_ekranu(co)
+			if pk == null:
+				r.visible = false
+				continue
+			var cel: Vector2 = (pk as Vector2) - r.size * 0.5 - Vector2(0, 12)
+			cel.x = clampf(cel.x, 4.0, _root.size.x - r.size.x - 4.0)
+			cel.y = clampf(cel.y, 4.0, _root.size.y - r.size.y - 30.0)
+			if not r.visible:
+				r.visible = true
+				r.position = cel
+			r.position = r.position.lerp(cel, 0.5)
+		for c in _warstwa.get_children():
+			if c.has_meta("otwieranie") and c is Control:
+				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
+				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
+				c.position = cc - (c as Control).size * 0.5
 	# przeszukiwanie: stopniowe odkrywanie zawartości
 	if _pojemnik != null and _prawa_ui != null and not _pojemnik.przeszukany():
 		_szukanie_t += delta

@@ -6,7 +6,7 @@ render_mode vertex_lighting, specular_disabled, diffuse_lambert, cull_back;
 uniform sampler2D albedo_tex : source_color, filter_nearest, repeat_enable;
 uniform vec4 tint : source_color = vec4(1.0);
 // Rozdzielczość siatki, do której przyciągane są wierzchołki (pionowo). Mniej = mocniejsze drganie.
-uniform float snap_resolution = 270.0;
+uniform float snap_resolution = 360.0;
 // 0 = poprawne mapowanie perspektywiczne, 1 = pełne afiniczne jak na PS1.
 uniform float affine_strength : hint_range(0.0, 1.0) = 0.45;
 uniform bool use_vertex_color = false;
