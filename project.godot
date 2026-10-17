@@ -1,0 +1,44 @@
+; Strefa K-12 — taktyczny extraction FPS (PvE)
+config_version=5
+
+[application]
+
+config/name="Strefa K-12"
+config/description="Taktyczny shooter PvE z mechaniką extraction w stylu low poly PS1."
+run/main_scene="res://scenes/menu.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+
+[autoload]
+
+Dane="*res://scripts/autoload/dane.gd"
+Gra="*res://scripts/autoload/gra.gd"
+Sterowanie="*res://scripts/autoload/sterowanie.gd"
+Dzwiek="*res://scripts/autoload/dzwiek.gd"
+PsxMaterialy="*res://scripts/autoload/psx_materialy.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[layer_names]
+
+3d_physics/layer_1="swiat"
+3d_physics/layer_2="postacie"
+3d_physics/layer_3="hitbox_wroga"
+3d_physics/layer_4="hitbox_gracza"
+3d_physics/layer_5="interakcje"
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0
+textures/default_filters/use_nearest_mipmap_filter=true
+anti_aliasing/quality/msaa_3d=0

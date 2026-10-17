@@ -1,0 +1,48 @@
+extends Node
+## Autoload "Sterowanie": zbiera ruch myszy niezależnie od tego, w którym viewporcie jest gracz,
+## i definiuje akcje klawiszy w jednym miejscu.
+
+var mysz := Vector2.ZERO
+var blokada := false   # true, gdy otwarty jest ekran ekwipunku/menu
+
+const AKCJE := {
+	"przod": [KEY_W], "tyl": [KEY_S], "lewo": [KEY_A], "prawo": [KEY_D],
+	"bieg": [KEY_SHIFT], "kucanie": [KEY_CTRL, KEY_C], "wychyl_l": [KEY_Q], "wychyl_p": [KEY_E],
+	"przeladuj": [KEY_R], "interakcja": [KEY_F], "latarka": [KEY_L], "ekwipunek": [KEY_TAB, KEY_I],
+	"bron1": [KEY_1], "bron2": [KEY_2], "tryb": [KEY_B], "sprawdz": [KEY_T], "skok": [KEY_SPACE],
+	"lek_bandaz": [KEY_4], "lek_opatrunek": [KEY_5], "lek_apteczka": [KEY_6], "lek_szyna": [KEY_7], "lek_bolostop": [KEY_8],
+	"pauza": [KEY_ESCAPE], "napelnij": [KEY_G],
+}
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	for a in AKCJE:
+		if not InputMap.has_action(a):
+			InputMap.add_action(a)
+			for k in AKCJE[a]:
+				var ev := InputEventKey.new()
+				ev.physical_keycode = k
+				InputMap.action_add_event(a, ev)
+	for pair in [["strzal", MOUSE_BUTTON_LEFT], ["celuj", MOUSE_BUTTON_RIGHT]]:
+		if not InputMap.has_action(pair[0]):
+			InputMap.add_action(pair[0])
+			var mb := InputEventMouseButton.new()
+			mb.button_index = pair[1]
+			InputMap.action_add_event(pair[0], mb)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not blokada:
+		mysz += event.relative
+
+
+func pobierz_mysz() -> Vector2:
+	var m := mysz
+	mysz = Vector2.ZERO
+	return m
+
+
+func przechwyc(tak: bool) -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if tak else Input.MOUSE_MODE_VISIBLE
+	mysz = Vector2.ZERO

@@ -1,0 +1,113 @@
+{
+  "_opis": "Baza przedmiotów Strefy K-12. w/h = rozmiar w siatce, waga w kg, cena w bonach zaopatrzeniowych.",
+  "przedmioty": [
+    {"id": "pw9", "nazwa": "PW-9 Kruk", "typ": "bron", "w": 2, "h": 1, "waga": 0.73, "cena": 3500,
+     "opis": "Pistolet służbowy. Zawodny, ale przynajmniej równie zawodny w obie strony.",
+     "bron": {"kaliber": "9x18", "magazynki": ["mag_pw9"], "tryby": ["semi"], "rpm": 380, "rozrzut_biodro": 2.4, "rozrzut_ads": 0.55, "odrzut": 1.9, "mnoznik": 1.0, "slot": "pistolet", "przeladowanie": 2.1}},
+    {"id": "pm63", "nazwa": "PM-63 Rak", "typ": "bron", "w": 3, "h": 2, "waga": 1.8, "cena": 14000,
+     "opis": "Pistolet maszynowy. Instrukcja obsługi zaleca trzymać go oburącz i modlić się jedną.",
+     "bron": {"kaliber": "9x18", "magazynki": ["mag_pm63"], "tryby": ["auto", "semi"], "rpm": 650, "rozrzut_biodro": 3.0, "rozrzut_ads": 1.0, "odrzut": 1.15, "mnoznik": 0.95, "slot": "glowna", "przeladowanie": 2.5}},
+    {"id": "kb47", "nazwa": "KB-47 Kałach", "typ": "bron", "w": 4, "h": 2, "waga": 3.6, "cena": 28000,
+     "opis": "Karabinek automatyczny. Strzela zawsze, nawet gdy właściciel już nie może.",
+     "bron": {"kaliber": "7.62x39", "magazynki": ["mag_kb47"], "tryby": ["auto", "semi"], "rpm": 600, "rozrzut_biodro": 3.6, "rozrzut_ads": 0.35, "odrzut": 2.3, "mnoznik": 1.0, "slot": "glowna", "przeladowanie": 2.9}},
+    {"id": "obrzyn", "nazwa": "Obrzyn 12/70", "typ": "bron", "w": 3, "h": 1, "waga": 2.1, "cena": 6500,
+     "opis": "Dubeltówka po skróceniu w warunkach domowych. Opinia rzeczoznawcy: nie.",
+     "bron": {"kaliber": "12/70", "wewnetrzny": 2, "tryby": ["semi"], "rpm": 300, "rozrzut_biodro": 2.6, "rozrzut_ads": 1.8, "odrzut": 6.0, "mnoznik": 1.0, "rozrzut_srutu": 3.8, "slot": "glowna", "przeladowanie": 1.2}},
+
+    {"id": "mag_pw9", "nazwa": "Magazynek PW-9 (8)", "typ": "magazynek", "w": 1, "h": 1, "waga": 0.09, "cena": 600,
+     "opis": "Osiem naboi. W raportach zawsze liczone jako dziesięć.", "magazynek": {"kaliber": "9x18", "pojemnosc": 8}},
+    {"id": "mag_pm63", "nazwa": "Magazynek PM-63 (25)", "typ": "magazynek", "w": 1, "h": 2, "waga": 0.18, "cena": 1500,
+     "opis": "Długi, prosty, wystający. Jak kolejka po meblościankę.", "magazynek": {"kaliber": "9x18", "pojemnosc": 25}},
+    {"id": "mag_kb47", "nazwa": "Magazynek KB-47 (30)", "typ": "magazynek", "w": 1, "h": 2, "waga": 0.33, "cena": 2200,
+     "opis": "Stalowy, wygięty, niezniszczalny. Przeżyje ciebie i twoich spadkobierców.", "magazynek": {"kaliber": "7.62x39", "pojemnosc": 30}},
+
+    {"id": "a_9x18", "nazwa": "9x18 PST", "typ": "amunicja", "w": 1, "h": 1, "waga": 0.01, "cena": 25, "stos": 50,
+     "opis": "Nabój pistoletowy. Przydział: 8 sztuk na kwartał.", "amunicja": {"kaliber": "9x18", "obrazenia": 48, "penetracja": 14}},
+    {"id": "a_762", "nazwa": "7.62x39 PS", "typ": "amunicja", "w": 1, "h": 1, "waga": 0.016, "cena": 70, "stos": 60,
+     "opis": "Rdzeń stalowy. Zgodny z normą, której nikt nie widział.", "amunicja": {"kaliber": "7.62x39", "obrazenia": 56, "penetracja": 34}},
+    {"id": "a_762bp", "nazwa": "7.62x39 BP", "typ": "amunicja", "w": 1, "h": 1, "waga": 0.016, "cena": 280, "stos": 60,
+     "opis": "Przeciwpancerny. Wydawany wyłącznie za okazaniem przepustki, której nie wydaje się nikomu.", "amunicja": {"kaliber": "7.62x39", "obrazenia": 52, "penetracja": 48}},
+    {"id": "a_12", "nazwa": "12/70 śrut 8,5 mm", "typ": "amunicja", "w": 1, "h": 1, "waga": 0.05, "cena": 55, "stos": 20,
+     "opis": "Osiem kulek nadziei w jednej łusce.", "amunicja": {"kaliber": "12/70", "obrazenia": 30, "penetracja": 4, "srut": 8}},
+
+    {"id": "bandaz", "nazwa": "Bandaż", "typ": "med", "w": 1, "h": 1, "waga": 0.05, "cena": 800,
+     "opis": "Zatrzymuje lekkie krwawienie. Ciężkiego nawet nie próbuje.", "med": {"efekt": "krwawienie_lekkie", "czas": 3.0, "uzycia": 1}},
+    {"id": "opatrunek", "nazwa": "Opatrunek hemostatyczny", "typ": "med", "w": 1, "h": 1, "waga": 0.1, "cena": 2600,
+     "opis": "Tamuje ciężkie krwawienie. Z importu, więc na kartki.", "med": {"efekt": "krwawienie_ciezkie", "czas": 5.0, "uzycia": 1}},
+    {"id": "szyna", "nazwa": "Szyna Kramera", "typ": "med", "w": 1, "h": 2, "waga": 0.2, "cena": 2200,
+     "opis": "Unieruchamia złamanie. Unieruchamia też dumę.", "med": {"efekt": "zlamanie", "czas": 6.0, "uzycia": 1}},
+    {"id": "bolostop", "nazwa": "Tabletki Bólostop", "typ": "med", "w": 1, "h": 1, "waga": 0.03, "cena": 1600,
+     "opis": "Usuwa ból na trzy minuty. Skutki uboczne: patrz ból.", "med": {"efekt": "bol", "czas": 2.0, "uzycia": 4, "trwanie": 180}},
+    {"id": "apteczka", "nazwa": "Apteczka AI-2", "typ": "med", "w": 1, "h": 1, "waga": 0.2, "cena": 4200,
+     "opis": "Wojskowa apteczka indywidualna. Zawartość niekompletna zgodnie z protokołem.", "med": {"efekt": "leczenie", "czas": 2.5, "uzycia": 100, "na_raz": 20}},
+
+    {"id": "kamizelka_wedkarska", "nazwa": "Kamizelka wędkarska", "typ": "pojemnik", "w": 2, "h": 2, "waga": 0.6, "cena": 5500,
+     "opis": "Dużo kieszonek, zero ochrony. Ryby nie strzelają.", "pojemnik": {"slot": "kamizelka", "sw": 4, "sh": 2, "redukcja": 0.1}},
+    {"id": "kamizelka_lbv", "nazwa": "Kamizelka taktyczna LBV", "typ": "pojemnik", "w": 3, "h": 3, "waga": 1.2, "cena": 19000,
+     "opis": "Ładownice na magazynki rozmieszczone przez kogoś, kto kiedyś widział człowieka.", "pojemnik": {"slot": "kamizelka", "sw": 5, "sh": 3, "redukcja": 0.15}},
+    {"id": "worek", "nazwa": "Worek po ziemniakach", "typ": "pojemnik", "w": 2, "h": 2, "waga": 0.3, "cena": 2000,
+     "opis": "Dwa sznurki zamiast szelek. Pachnie jak 1983.", "pojemnik": {"slot": "plecak", "sw": 4, "sh": 4, "redukcja": 0.05}},
+    {"id": "plecak_turystyczny", "nazwa": "Plecak turystyczny (24)", "typ": "pojemnik", "w": 4, "h": 4, "waga": 1.5, "cena": 16000,
+     "opis": "Dużo miejsca, mniejsze odciążenie. Pamięta obóz harcerski.", "pojemnik": {"slot": "plecak", "sw": 6, "sh": 4, "redukcja": 0.3}},
+    {"id": "plecak_szturmowy", "nazwa": "Plecak szturmowy (12)", "typ": "pojemnik", "w": 3, "h": 3, "waga": 1.0, "cena": 15000,
+     "opis": "Mało miejsca, ale ładunek mniej waży. Stelaż z demobilu.", "pojemnik": {"slot": "plecak", "sw": 4, "sh": 3, "redukcja": 0.45}},
+
+    {"id": "kamizelka_kl2", "nazwa": "Kamizelka milicyjna (kl. 2)", "typ": "pancerz", "w": 3, "h": 3, "waga": 4.0, "cena": 12000,
+     "opis": "Zatrzymuje pistolet. Karabin traktuje jako sugestię.", "pancerz": {"slot": "pancerz", "klasa": 2, "wytrzymalosc": 40, "strefy": ["klatka", "brzuch"]}},
+    {"id": "kamizelka_kl4", "nazwa": "Pancerz wojskowy (kl. 4)", "typ": "pancerz", "w": 3, "h": 3, "waga": 9.0, "cena": 46000,
+     "opis": "Ciężki jak plan pięcioletni i równie skuteczny przeciwko rzeczywistości.", "pancerz": {"slot": "pancerz", "klasa": 4, "wytrzymalosc": 60, "strefy": ["klatka", "brzuch"]}},
+    {"id": "helm_wz67", "nazwa": "Hełm wz. 67", "typ": "pancerz", "w": 2, "h": 2, "waga": 1.2, "cena": 6500,
+     "opis": "Stalowy garnek z paskiem. Dzwoni po trafieniu, żebyś wiedział, że żyjesz.", "pancerz": {"slot": "helm", "klasa": 2, "wytrzymalosc": 25, "strefy": ["glowa"]}},
+
+    {"id": "zegarek", "nazwa": "Zegarek Rakieta", "typ": "lup", "w": 1, "h": 1, "waga": 0.05, "cena": 6000, "opis": "Spieszy się o 12 lat."},
+    {"id": "wodka", "nazwa": "Wódka Czysta Kordonowa", "typ": "lup", "w": 1, "h": 2, "waga": 0.8, "cena": 4000, "opis": "Waluta twardsza niż bony. Nie pić w rajdzie (patrz: regulamin, pkt 4)."},
+    {"id": "papierosy", "nazwa": "Papierosy Start", "typ": "lup", "w": 1, "h": 1, "waga": 0.03, "cena": 1200, "opis": "Bez filtra. Bez przyszłości."},
+    {"id": "konserwa", "nazwa": "Konserwa turystyczna", "typ": "lup", "w": 1, "h": 1, "waga": 0.35, "cena": 900, "opis": "Data ważności: tak."},
+    {"id": "lampa_elektronowa", "nazwa": "Lampa elektronowa", "typ": "lup", "w": 1, "h": 1, "waga": 0.1, "cena": 3500, "opis": "Serce telewizora. Pośrednik płaci za serca."},
+    {"id": "akumulator", "nazwa": "Akumulator 6V", "typ": "lup", "w": 2, "h": 2, "waga": 6.0, "cena": 9500, "opis": "Ciężki, pełny kwasu i możliwości."},
+    {"id": "kaseta", "nazwa": "Kaseta magnetofonowa", "typ": "lup", "w": 1, "h": 1, "waga": 0.05, "cena": 1500, "opis": "Na etykiecie: „NIE SŁUCHAĆ”. Ktoś posłuchał."},
+    {"id": "teczka_akt", "nazwa": "Teczka akt „Ściśle tajne”", "typ": "lup", "w": 1, "h": 2, "waga": 0.4, "cena": 13000, "opis": "Zawiera wykaz osób, które zawierają się w wykazie."},
+    {"id": "lancuszek", "nazwa": "Złoty łańcuszek", "typ": "lup", "w": 1, "h": 1, "waga": 0.02, "cena": 10000, "opis": "Z Peweksu. Albo z szyi."},
+    {"id": "radio", "nazwa": "Radio tranzystorowe", "typ": "lup", "w": 2, "h": 1, "waga": 0.7, "cena": 7000, "opis": "Łapie tylko jedną stację. Ta stacja łapie ciebie."},
+    {"id": "klucz_nastawny", "nazwa": "Klucz nastawny", "typ": "lup", "w": 2, "h": 1, "waga": 0.8, "cena": 2400, "opis": "Pasuje do wszystkiego, jeśli uderzyć wystarczająco mocno."},
+    {"id": "przewody", "nazwa": "Zwój przewodów", "typ": "lup", "w": 2, "h": 1, "waga": 0.5, "cena": 2000, "opis": "Miedź. Najcenniejszy surowiec strefy po ludziach."},
+    {"id": "kartka_mieso", "nazwa": "Kartka na mięso", "typ": "lup", "w": 1, "h": 1, "waga": 0.01, "cena": 300, "opis": "Uprawnia do 2,5 kg mięsa. Mięsa nie ma od 12 lat."},
+    {"id": "spirytus", "nazwa": "Spirytus salicylowy", "typ": "lup", "w": 1, "h": 1, "waga": 0.2, "cena": 1800, "opis": "Do użytku zewnętrznego. W strefie wszystko jest zewnętrzne."},
+
+    {"id": "klucz_piwnica", "nazwa": "Klucz do piwnicy nr 7", "typ": "klucz", "w": 1, "h": 1, "waga": 0.02, "cena": 5000,
+     "opis": "Otwiera wyjście przez piwnice. Piwnica nr 7 nie figuruje w dokumentacji budynku.", "klucz": {"otwiera": "wyjscie_piwnica", "uzycia": 3}}
+  ],
+
+  "tabele_lootu": {
+    "szafka_kuchenna": [["konserwa", 30], ["wodka", 12], ["spirytus", 10], ["papierosy", 14], ["kartka_mieso", 14], ["bandaz", 8], ["a_9x18", 6], ["nic", 30]],
+    "szafa": [["papierosy", 12], ["zegarek", 6], ["lancuszek", 3], ["kaseta", 14], ["radio", 6], ["kamizelka_wedkarska", 3], ["worek", 4], ["bandaz", 8], ["nic", 34]],
+    "biurko": [["teczka_akt", 5], ["kaseta", 14], ["papierosy", 10], ["lampa_elektronowa", 10], ["klucz_piwnica", 4], ["a_9x18", 10], ["mag_pw9", 6], ["nic", 30]],
+    "skrzynia": [["a_762", 14], ["a_9x18", 16], ["a_12", 14], ["mag_kb47", 6], ["mag_pm63", 6], ["mag_pw9", 8], ["przewody", 10], ["klucz_nastawny", 8], ["akumulator", 4], ["nic", 20]],
+    "skrzynia_wojskowa": [["a_762", 20], ["a_762bp", 6], ["mag_kb47", 12], ["kb47", 3], ["pm63", 4], ["opatrunek", 10], ["apteczka", 10], ["helm_wz67", 5], ["kamizelka_kl2", 4], ["szyna", 8], ["nic", 12]],
+    "apteczka_scienna": [["bandaz", 30], ["opatrunek", 12], ["bolostop", 18], ["apteczka", 10], ["szyna", 10], ["spirytus", 10], ["nic", 20]],
+    "regal": [["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["nic", 30]]
+  },
+
+  "frakcje": {
+    "szabrownik": {
+      "nazwa": "Szabrownicy", "hp_mnoznik": 1.0, "celnosc": 0.55, "reakcja": 0.75, "morale": 0.35,
+      "zestawy": [
+        {"bron": "pw9", "amunicja": "a_9x18", "magazynki": 2, "pancerz": null, "helm": null, "waga": 40},
+        {"bron": "obrzyn", "amunicja": "a_12", "magazynki": 0, "pancerz": null, "helm": null, "waga": 35},
+        {"bron": "pm63", "amunicja": "a_9x18", "magazynki": 1, "pancerz": null, "helm": null, "waga": 20},
+        {"bron": "kb47", "amunicja": "a_762", "magazynki": 1, "pancerz": "kamizelka_kl2", "helm": null, "waga": 5}
+      ],
+      "lup": [["papierosy", 30], ["konserwa", 25], ["wodka", 15], ["kartka_mieso", 20], ["bandaz", 20], ["zegarek", 6], ["nic", 30]],
+      "kolory": {"ubranie": [0.36, 0.30, 0.24], "spodnie": [0.22, 0.22, 0.24], "glowa": [0.25, 0.22, 0.2]}
+    },
+    "najemnik": {
+      "nazwa": "Najemnicy", "hp_mnoznik": 1.0, "celnosc": 0.8, "reakcja": 0.45, "morale": 0.65,
+      "zestawy": [
+        {"bron": "kb47", "amunicja": "a_762", "magazynki": 3, "pancerz": "kamizelka_kl4", "helm": "helm_wz67", "waga": 50},
+        {"bron": "pm63", "amunicja": "a_9x18", "magazynki": 3, "pancerz": "kamizelka_kl2", "helm": "helm_wz67", "waga": 50}
+      ],
+      "lup": [["opatrunek", 25], ["apteczka", 20], ["a_762bp", 10], ["lancuszek", 8], ["teczka_akt", 8], ["nic", 30]],
+      "kolory": {"ubranie": [0.24, 0.27, 0.22], "spodnie": [0.2, 0.22, 0.18], "glowa": [0.16, 0.17, 0.15]}
+    }
+  }
+}
