@@ -168,6 +168,7 @@ static func blysk(rodzic: Node3D, pos: Vector3, sila := 2.5) -> void:
 	l.light_color = Color(1.0, 0.75, 0.4)
 	l.light_energy = sila
 	l.omni_range = 5.0
+	l.light_specular = 0.0
 	rodzic.add_child(l)
 	l.global_position = pos
 	var t := l.create_tween()

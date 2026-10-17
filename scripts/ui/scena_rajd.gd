@@ -586,6 +586,14 @@ func _test_broni() -> void:
 	for f in 60:
 		await get_tree().process_frame
 	print("  z pistoletem: latarka przod=%s poz=%s" % [-gracz.latarka.global_basis.z, gracz.latarka.global_position - gracz.kamera.global_position])
+	# hełm: strzały w głowę z karabinu (obr. 56, pen. 34)
+	Gra.ekw.sloty["helm"] = Przedmiot.nowy("helm_wz67")
+	var glowa_y := gracz.global_position + Vector3.UP * 1.65
+	for i in 4:
+		gracz.trafiony(glowa_y, 56.0, 34.0, null)
+		print("  strzał w głowę %d: hp głowy=%.0f hełm=%.0f martwy=%s ogłuszenie=%.1f" % [i + 1, gracz.cialo.hp["glowa"], float(Gra.ekw.sloty["helm"].dane["wytrz"]), gracz.cialo.martwy, gracz.oglusz])
+		if gracz.cialo.martwy:
+			break
 	print("TEST BRONI: bledy %d" % bledy)
 	get_tree().quit()
 

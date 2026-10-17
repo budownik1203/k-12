@@ -904,7 +904,7 @@ func _ruch(delta: float) -> void:
 	if not _oslona.is_empty() and global_position.distance_to(_oslona["pos"]) < 0.9:
 		_w_oslonie = true
 	# ciężki ruch: powolne rozpędzanie i hamowanie z wyposażeniem na plecach
-	var przysp := 3.2 if v.length() > Vector2(velocity.x, velocity.z).length() else 4.5
+	var przysp := 9.0 if v.length() > Vector2(velocity.x, velocity.z).length() else 14.0
 	velocity.x = move_toward(velocity.x, v.x, delta * przysp)
 	velocity.z = move_toward(velocity.z, v.z, delta * przysp)
 	if not is_on_floor():

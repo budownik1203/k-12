@@ -1268,7 +1268,8 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 func _lampa(k: Vector2i) -> void:
 	var typ: String = komorki[k]["typ"]
 	var start := k == _komorka_startu()
-	if not start and rng.randf() < 0.25:
+	if not start and rng.randf() < 0.14:
+		_swiatlo_awaryjne(k)
 		return
 	var gola: bool = typ in ["piwnica", "magazyn", "warsztat"] or (typ == "korytarz" and komorki[k]["mats"][0] == "cegla")
 	var rozrzut := 0.5 if typ != "korytarz" else 0.0
@@ -1287,9 +1288,9 @@ func _lampa(k: Vector2i) -> void:
 	var awaria := 0.0
 	var r := rng.randf()
 	if not start:
-		if r < 0.18:
+		if r < 0.1:
 			awaria = 1.0
-		elif r < 0.45:
+		elif r < 0.42:
 			awaria = rng.randf_range(0.25, 0.75)
 		else:
 			awaria = 0.04
@@ -1297,6 +1298,43 @@ func _lampa(k: Vector2i) -> void:
 	l.set("awaria", awaria)
 	l.set("plafon", l.get_path_to(model))
 	lampy.append(l)
+	# zepsuta albo bardzo zawodna lampa: obok świeci lampka awaryjna, żeby nie było całkiem ciemno
+	if awaria >= 0.6:
+		_swiatlo_awaryjne(k)
+
+
+## Lampka awaryjna na ścianie: słabe, ciepłe albo czerwonawe światło z akumulatora.
+func _swiatlo_awaryjne(k: Vector2i) -> void:
+	var r: Rect2 = komorki[k]["rect"]
+	var d: Vector2i = DIRS[rng.randi() % 4]
+	var b := _bok(r, d)
+	var u: float = rng.randf_range(b[2] + 0.6, b[3] - 0.6)
+	var lico := _punkt_sciany(k, d, u)
+	var naz := Vector3(d.x, 0, d.y)
+	var czerwona := rng.randf() < 0.45
+	var kol := Color(0.95, 0.3, 0.22) if czerwona else Color(1.0, 0.7, 0.4)
+	var obudowa := Kit.instancja([[Vector3(0, 0, 0), Vector3(0.22, 0.1, 0.08), Color(0.2, 0.2, 0.19)],
+		[Vector3(0, -0.01, -0.045), Vector3(0.17, 0.06, 0.01), kol]])
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.vertex_color_use_as_albedo = true
+	obudowa.material_override = m
+	swiat.add_child(obudowa)
+	obudowa.position = lico - naz * 0.05 + Vector3.UP * (H - 0.35)
+	obudowa.rotation.y = ROT[d]
+	var l := OmniLight3D.new()
+	l.light_color = kol
+	l.light_energy = 0.55 if czerwona else 0.5
+	l.omni_range = 7.5 if typ_dla(k) != "korytarz" else 6.0
+	l.omni_attenuation = 1.1
+	l.shadow_enabled = false
+	swiat.add_child(l)
+	l.position = obudowa.position - naz * 0.4 - Vector3.UP * 0.2
+	lampy.append(l)
+
+
+func typ_dla(k: Vector2i) -> String:
+	return komorki[k]["typ"]
 
 
 # ------------------------------------------------------------------ wyjścia

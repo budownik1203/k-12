@@ -28,6 +28,16 @@ func _init(stan := {}) -> void:
 		zlamanie[c] = false
 
 
+## Pełne wyleczenie (Medyk w bazie).
+func wylecz() -> void:
+	for c in MAX:
+		hp[c] = MAX[c]
+		krwawienie[c] = 0
+		zlamanie[c] = false
+	przeciwbol = 0.0
+	zmiana.emit()
+
+
 func stan_do_zapisu() -> Dictionary:
 	var d := {}
 	for c in MAX:

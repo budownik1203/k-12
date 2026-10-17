@@ -204,6 +204,9 @@ func _przebuduj() -> void:
 			b.pressed.connect(func():
 				Gra.dodaj_bony(-koszt)
 				Gra.zdrowie = {}
+				for g in get_tree().get_nodes_in_group("gracz"):
+					(g as Gracz).cialo.wylecz()
+				Gra.ekw.zmieniony.emit()
 				Dzwiek.graj("leczenie", -4.0)
 				_powitanie.text = "„Gotowe. Blizny w cenie.”"
 				_przebuduj())

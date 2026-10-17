@@ -5,6 +5,31 @@ extends Node
 var _cache := {}
 var _pula_3d: Array[AudioStreamPlayer3D] = []
 var _pula_2d: Array[AudioStreamPlayer] = []
+var _lp: AudioEffectLowPassFilter
+var _przytl_t := 0.0
+var _przytl_sila := 0.0
+
+
+## Przytłumienie wszystkich dźwięków (ogłuszenie): filtr dolnoprzepustowy na szynie głównej, powoli wraca.
+func przytlum(czas: float, sila: float) -> void:
+	if _lp == null:
+		_lp = AudioEffectLowPassFilter.new()
+		_lp.cutoff_hz = 20000.0
+		AudioServer.add_bus_effect(0, _lp)
+	_przytl_t = maxf(_przytl_t, czas)
+	_przytl_sila = maxf(_przytl_sila, sila)
+
+
+func _process(delta: float) -> void:
+	if _lp == null:
+		return
+	if _przytl_t > 0.0:
+		_przytl_t -= delta
+		var f := clampf(_przytl_t / 1.5, 0.0, 1.0) * _przytl_sila
+		_lp.cutoff_hz = lerpf(20000.0, 500.0, f)
+	else:
+		_przytl_sila = 0.0
+		_lp.cutoff_hz = 20000.0
 
 
 func _strumien(nazwa: String) -> AudioStream:

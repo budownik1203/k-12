@@ -19,6 +19,8 @@ var _pasek: Control
 var _znacznik := 0.0          # znacznik trafienia przy celowniku
 var _znacznik_zabity := false
 var _pomoc: PanelContainer
+var _oglusz_blysk := 0.0
+var _biel: ColorRect
 var _kompas: Control
 var _komunikaty: VBoxContainer
 var _napisy: VBoxContainer
@@ -152,6 +154,11 @@ func _ready() -> void:
 	if gracz:
 		gracz.komunikat.connect(komunikat)
 		gracz.trafiony_sygnal.connect(_trafiony)
+	_biel = ColorRect.new()
+	_biel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_biel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_biel.color = Color(1, 0.98, 0.92, 0.0)
+	_root.add_child(_biel)
 	_pomoc = PanelContainer.new()
 	_pomoc.set_anchors_preset(Control.PRESET_CENTER)
 	_pomoc.offset_left = -300
@@ -311,7 +318,9 @@ func _process(delta: float) -> void:
 	if _mat:
 		var niskie := clampf(1.0 - c.procent() * 1.6, 0.0, 0.6)
 		_mat.set_shader_parameter("kolor_bolu", Color(0.5, 0.0, 0.0, maxf(_trafienie * 0.7, niskie)))
-		_mat.set_shader_parameter("rozmycie_bol", 1.2 if c.bol() else (_trafienie * 2.0))
+		_mat.set_shader_parameter("rozmycie_bol", maxf(1.2 if c.bol() else (_trafienie * 2.0), minf(3.0, gracz.oglusz * 1.2)))
+	_oglusz_blysk = maxf(0.0, _oglusz_blysk - delta * 0.7)
+	_biel.color.a = _oglusz_blysk * _oglusz_blysk
 	_kropka.queue_redraw()
 	_cialo.queue_redraw()
 
@@ -369,6 +378,11 @@ func napis_wroga(kto: String, tekst: String, pos: Vector3) -> void:
 	tw.tween_interval(2.6)
 	tw.tween_property(l, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(l.queue_free)
+
+
+## Ogłuszenie: biały błysk i rozmycie, które powoli schodzą.
+func ogluszenie(sila: float) -> void:
+	_oglusz_blysk = maxf(_oglusz_blysk, 0.35 + sila * 0.6)
 
 
 ## Znacznik trafienia przy celowniku (wołany przez broń gracza).

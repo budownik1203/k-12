@@ -47,6 +47,7 @@ var _biegnie := false
 var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
 var latarka_wlaczona := true
 var _kop := 0.0                 # kopnięcie kamery po strzale
+var oglusz := 0.0               # ogłuszenie po trafieniu w hełm (sekundy, malejąco)
 var ekw_pitch := 0.0            # widok przy ekwipunku: spojrzenie w dół, przechył, przysiad
 var ekw_roll := 0.0
 var ekw_glowa := 0.0
@@ -216,6 +217,19 @@ func widok_ekwipunku(tryb: String) -> float:
 	return czas
 
 
+## Ogłuszenie (trafienie w hełm): biały błysk, pisk w uszach, przytłumiony dźwięk, drżenie i spowolnienie.
+func ogluszenie(sila: float, tekst: String) -> void:
+	oglusz = maxf(oglusz, 1.0 + sila * 3.0)
+	_odrzut_cel += Vector2(randf_range(-3.0, 3.0), randf_range(2.0, 5.0)) * sila
+	_trafienie_shake = maxf(_trafienie_shake, sila * 1.5)
+	if sila > 0.4:
+		Dzwiek.graj("pisk", lerpf(-14.0, -3.0, sila))
+	Dzwiek.przytlum(1.0 + sila * 3.0, sila)
+	get_tree().call_group("hud", "ogluszenie", sila)
+	if tekst != "":
+		komunikat.emit(tekst)
+
+
 ## Kopnięcie kamery przy strzale (fov i drżenie), silniejsze dla mocniejszej broni.
 func kopniecie(sila: float) -> void:
 	_kop = minf(1.5, _kop + 0.35 + sila * 0.09)
@@ -297,6 +311,10 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 		drzenie = Vector2(sin(_bol_t * 1.7) * 0.4 + sin(_bol_t * 4.3) * 0.25, cos(_bol_t * 1.3) * 0.35) * deg_to_rad(1.2)
 	_trafienie_shake = maxf(0.0, _trafienie_shake - delta * 3.0)
 	_kop = move_toward(_kop, 0.0, delta * 7.0)
+	oglusz = maxf(0.0, oglusz - delta)
+	if oglusz > 0.0:
+		var o := minf(1.0, oglusz / 2.0)
+		drzenie += Vector2(sin(Time.get_ticks_msec() * 0.0021) * 1.6, cos(Time.get_ticks_msec() * 0.0017) * 1.1) * deg_to_rad(1.5) * o
 	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * (_trafienie_shake * deg_to_rad(2.0) + _kop * deg_to_rad(0.35))
 	glowa.rotation.x = clampf(_pitch + ekw_pitch, deg_to_rad(-88), deg_to_rad(88)) + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
 	glowa.rotation.y = deg_to_rad(_odrzut.x) + drzenie.x + shake.x
@@ -358,6 +376,8 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	v *= [1.0, 0.9, 0.75, 0.5][prog] * cialo.mnoznik_ruchu()
 	if not akcja.is_empty():
 		v *= 0.45
+	if oglusz > 0.0:
+		v *= 1.0 - 0.45 * minf(1.0, oglusz / 2.0)
 	if bron.ads > 0.5:
 		v *= 0.75
 	_biegnie = moze_biec and kier.length() > 0.1
@@ -371,11 +391,16 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	var cel2 := Vector2(cel.x, cel.z)
 	var przysp: float
 	if not is_on_floor():
-		przysp = 1.2
+		przysp = 2.0
 	elif cel2.length() > teraz.length() + 0.05:
-		przysp = [6.5, 5.2, 4.0, 2.8][prog]
+		# rozpędzanie: do chodu prawie od razu, do biegu wolniej (zależnie od obciążenia)
+		przysp = [22.0, 18.0, 14.0, 10.0][prog] if teraz.length() < PREDKOSC_CHOD else [9.0, 7.5, 6.0, 4.5][prog]
 	else:
-		przysp = [8.5, 7.0, 5.5, 4.0][prog]
+		# hamowanie i zmiana kierunku: stopy trzymają się podłogi
+		przysp = [30.0, 26.0, 22.0, 16.0][prog]
+	# zmiana kierunku (np. w bok przy biegu) też hamuje mocno, bez poślizgu
+	if is_on_floor() and teraz.length() > 0.3 and cel2.length() > 0.3 and teraz.normalized().dot(cel2.normalized()) < 0.7:
+		przysp = maxf(przysp, 20.0)
 	teraz = teraz.move_toward(cel2, przysp * delta)
 	velocity.x = teraz.x
 	velocity.z = teraz.y
@@ -606,7 +631,31 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 		czesc = "brzuch"
 	if czesc in ["klatka", "brzuch"] and randf() < 0.22:
 		czesc = "rece"
-	var wynik := Balistyka.przez_pancerz({"pancerz": ekw.sloty["pancerz"], "helm": ekw.sloty["helm"]}, czesc, obr, pen)
+	var helm: Przedmiot = ekw.sloty["helm"]
+	var kier0 := (punkt - global_position)
+	if od_kogo is Node3D:
+		kier0 = (od_kogo as Node3D).global_position - global_position
+	if czesc == "glowa" and helm != null and float(helm.dane["wytrz"]) > 0.0:
+		var maks := float(helm.defn()["pancerz"]["wytrzymalosc"])
+		var stan_h: float = float(helm.dane["wytrz"]) / maks
+		# rykoszet: kula pod kątem ślizga się po okrągłej skorupie
+		if randf() < 0.35 * clampf(stan_h, 0.3, 1.0) and not srut:
+			helm.dane["wytrz"] = maxf(0.0, float(helm.dane["wytrz"]) - pen * 0.1)
+			Dzwiek.graj("helm", -2.0, randf_range(1.0, 1.2))
+			ogluszenie(0.45, "Rykoszet od hełmu!")
+			trafiony_sygnal.emit(kier0, czesc)
+			ekw.zmieniony.emit()
+			return
+	var wynik := Balistyka.przez_pancerz({"pancerz": ekw.sloty["pancerz"], "helm": helm}, czesc, obr, pen)
+	# druga szansa: śmiertelny strzał w głowę w hełmie – hełm się wgniata i przestaje chronić, ty żyjesz, ale ogłuszony
+	if czesc == "glowa" and helm != null and float(helm.dane.get("wytrz", 0.0)) > 0.0 and cialo.hp["glowa"] - float(wynik["obr"]) <= 0.0:
+		wynik["obr"] = maxf(0.0, cialo.hp["glowa"] - randf_range(3.0, 9.0))
+		helm.dane["wytrz"] = 0.0
+		Dzwiek.graj("helm", 2.0, 0.85)
+		ogluszenie(1.0, "Hełm przyjął kulę – jest zniszczony!")
+	elif czesc == "glowa" and wynik["pancerz"]:
+		Dzwiek.graj("helm", -4.0, 1.1)
+		ogluszenie(0.3, "")
 	cialo.obrazenia(czesc, wynik["obr"], "srut" if srut else "pocisk")
 	_trafienie_shake = 1.0 if wynik["przebity"] else 0.5
 	_odrzut_cel += Vector2(randf_range(-1.5, 1.5), randf_range(0.5, 2.0))

@@ -97,7 +97,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		# płomień wylotowy: dwa skrzyżowane czworokąty widoczne przez ułamek sekundy
 		_blysk = MeshInstance3D.new()
 		var q := QuadMesh.new()
-		q.size = Vector2(0.11, 0.11) if bd["slot"] == "pistolet" else Vector2(0.17, 0.17)
+		q.size = Vector2(0.05, 0.05) if bd["slot"] == "pistolet" else Vector2(0.075, 0.075)
 		_blysk.mesh = q
 		var mat := StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -106,7 +106,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		mat.no_depth_test = true
 		_blysk.material_override = mat
-		_blysk.position = Vector3(md["lufa"]) + Vector3(0, 0, -0.04)
+		_blysk.position = Vector3(md["lufa"]) + Vector3(0, 0, -0.07)
 		_blysk.visible = false
 		_blysk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		model.add_child(_blysk)
@@ -350,8 +350,9 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	if _blysk:
 		_blysk.visible = true
 		_blysk.rotation.z = randf() * TAU
-		_blysk.scale = Vector3.ONE * randf_range(0.8, 1.3)
-		_blysk_t = 0.045
+		# przy celowaniu płomień jest tuż przed okiem: mały i krótki, żeby nie zasłaniał celu
+		_blysk.scale = Vector3.ONE * randf_range(0.8, 1.2) * lerpf(1.0, 0.35, ads)
+		_blysk_t = 0.03
 	if not bd.has("wewnetrzny"):
 		Efekty.luska(gracz.get_parent(), model.global_transform * Vector3(0.03, 0.05, -0.06), kamera.global_basis.x)
 	if gracz.has_method("kopniecie"):
