@@ -54,6 +54,14 @@ var _w_oslonie := false
 var _oslona := {}
 var _napis_t := 0.0
 var _czas_walki := 0.0
+const RAMIE := 0.29           # długość ramienia i przedramienia
+var _md := {}
+var _mag_node: Node3D
+var _latarka: SpotLight3D
+var _odrzut_anim := 0.0
+var _przeladowanie_max := 1.0
+var _oddech := 0.0
+var _rozgl := 0.0
 var _drgniecie := 0.0         # odrzut ciała po trafieniu (0..1)
 var _ost_kier := Vector3.FORWARD
 var _nasluch := false         # czujny w miejscu: słyszał odległe strzały, nie idzie sprawdzać
@@ -127,43 +135,109 @@ func _buduj_model() -> void:
 	var spod := _kolor(kol.get("spodnie", [0.2, 0.2, 0.2]))
 	var gl := _kolor(kol.get("glowa", [0.2, 0.2, 0.2]))
 	var skora := Color(0.6, 0.46, 0.38)
+	var ciemny := Color(0.09, 0.085, 0.08)
+	var rek := ciemny if frakcja == "najemnik" else skora
+	var ubr_c := ubr.darkened(0.25)
 	_model = Node3D.new()
 	add_child(_model)
-	# węzły części (pivoty) – animowane proceduralnie
+	# miednica i pas
 	_czesci["biodra"] = _czesc(_model, Vector3(0, 0.95, 0))
-	_czesci["tulow"] = _czesc(_czesci["biodra"], Vector3(0, 0.0, 0))
-	_czesci["tulow"].add_child(Kit.instancja([[Vector3(0, 0.3, 0), Vector3(0.44, 0.6, 0.26), ubr]]))
+	_czesci["biodra"].add_child(Kit.instancja([
+		[Vector3(0, 0.04, 0), Vector3(0.34, 0.2, 0.22), spod],
+		[Vector3(0, 0.13, 0), Vector3(0.36, 0.05, 0.24), ciemny],
+		[Vector3(0.12, 0.1, -0.12), Vector3(0.07, 0.08, 0.04), ubr_c],
+	]))
+	# tułów: brzuch, klatka, kołnierz
+	_czesci["tulow"] = _czesc(_czesci["biodra"], Vector3(0, 0.12, 0))
+	var tul := [
+		[Vector3(0, 0.15, 0), Vector3(0.36, 0.28, 0.22), ubr],
+		[Vector3(0, 0.4, 0), Vector3(0.43, 0.26, 0.25), ubr],
+		[Vector3(0, 0.55, 0.01), Vector3(0.22, 0.05, 0.19), ubr_c],
+		[Vector3(0, 0.03, -0.01), Vector3(0.38, 0.06, 0.24), ubr_c],
+	]
 	if pancerz != null:
-		_czesci["tulow"].add_child(Kit.instancja([[Vector3(0, 0.33, 0), Vector3(0.48, 0.48, 0.32), Color(0.2, 0.24, 0.18) if frakcja == "najemnik" else Color(0.16, 0.18, 0.26)]]))
-	_czesci["glowa"] = _czesc(_czesci["tulow"], Vector3(0, 0.62, 0))
-	var glowa_bryly := [[Vector3(0, 0.13, 0), Vector3(0.22, 0.26, 0.24), skora], [Vector3(0, 0.2, 0.0), Vector3(0.25, 0.16, 0.27), gl]]
+		var kp := Color(0.2, 0.24, 0.17) if frakcja == "najemnik" else Color(0.16, 0.18, 0.26)
+		tul.append([Vector3(0, 0.35, 0), Vector3(0.41, 0.34, 0.3), kp])
+		for i in 3:
+			tul.append([Vector3(-0.1 + i * 0.1, 0.24, -0.16), Vector3(0.075, 0.12, 0.05), kp.darkened(0.2)])
+		tul.append([Vector3(-0.14, 0.43, -0.16), Vector3(0.07, 0.08, 0.04), kp.darkened(0.25)])
+	else:
+		# kamizelka wędkarska z kieszeniami
+		tul.append([Vector3(0, 0.33, -0.005), Vector3(0.44, 0.3, 0.26), Color(0.32, 0.3, 0.2)])
+		for x in [-0.11, 0.11]:
+			tul.append([Vector3(x, 0.26, -0.14), Vector3(0.1, 0.09, 0.04), Color(0.27, 0.25, 0.17)])
+	if frakcja == "szabrownik" and randf() < 0.6:
+		tul.append([Vector3(0, 0.33, 0.2), Vector3(0.3, 0.36, 0.15), Color(0.3, 0.22, 0.14)])   # tobołek
+		tul.append([Vector3(0, 0.53, 0.2), Vector3(0.24, 0.06, 0.13), Color(0.25, 0.18, 0.11)])
+	_czesci["tulow"].add_child(Kit.instancja(tul))
+	# głowa
+	_czesci["glowa"] = _czesc(_czesci["tulow"], Vector3(0, 0.58, 0))
+	var glowa_bryly := [
+		[Vector3(0, 0.04, 0), Vector3(0.1, 0.08, 0.1), skora],
+		[Vector3(0, 0.17, 0), Vector3(0.2, 0.24, 0.22), skora],
+		[Vector3(0, 0.19, -0.111), Vector3(0.14, 0.028, 0.01), Color(0.06, 0.05, 0.05)],   # oczy w cieniu
+		[Vector3(0, 0.13, -0.113), Vector3(0.03, 0.05, 0.02), skora.darkened(0.1)],        # nos
+	]
 	if frakcja == "szabrownik":
-		glowa_bryly.append([Vector3(0, 0.12, 0.04), Vector3(0.28, 0.32, 0.24), gl])  # kaptur
-		glowa_bryly.append([Vector3(0, 0.1, -0.125), Vector3(0.18, 0.1, 0.02), Color(0.12, 0.1, 0.09)])  # chusta na twarzy
+		glowa_bryly.append([Vector3(0, 0.2, 0.025), Vector3(0.26, 0.3, 0.24), gl])           # kaptur
+		glowa_bryly.append([Vector3(0, 0.1, -0.112), Vector3(0.19, 0.1, 0.02), Color(0.14, 0.11, 0.1)])  # chusta
+	else:
+		glowa_bryly.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])         # kominiarka
+		glowa_bryly.append([Vector3(0, 0.19, -0.119), Vector3(0.15, 0.045, 0.01), skora.darkened(0.2)])
+		glowa_bryly.append([Vector3(0, 0.19, -0.125), Vector3(0.14, 0.026, 0.01), Color(0.06, 0.05, 0.05)])
 	if helm != null:
-		glowa_bryly.append([Vector3(0, 0.25, 0), Vector3(0.3, 0.14, 0.32), Color(0.22, 0.26, 0.18)])
+		glowa_bryly.append([Vector3(0, 0.29, 0.0), Vector3(0.27, 0.12, 0.29), Color(0.22, 0.26, 0.18)])
+		glowa_bryly.append([Vector3(0, 0.24, 0.0), Vector3(0.31, 0.03, 0.33), Color(0.2, 0.24, 0.16)])
 	_czesci["glowa"].add_child(Kit.instancja(glowa_bryly))
+	# ręce: ramię -> łokieć -> dłoń (ustawiane kinematyką odwrotną na chwyt broni)
 	for strona in [-1, 1]:
-		var ramie := _czesc(_czesci["tulow"], Vector3(0.27 * strona, 0.55, 0))
-		ramie.add_child(Kit.instancja([[Vector3(0, -0.28, 0), Vector3(0.13, 0.56, 0.13), ubr], [Vector3(0, -0.6, 0), Vector3(0.1, 0.1, 0.1), skora]]))
-		_czesci["ramie_l" if strona < 0 else "ramie_p"] = ramie
-		var noga := _czesc(_czesci["biodra"], Vector3(0.11 * strona, 0.0, 0))
-		noga.add_child(Kit.instancja([[Vector3(0, -0.47, 0), Vector3(0.16, 0.94, 0.17), spod], [Vector3(0, -0.92, -0.05), Vector3(0.15, 0.08, 0.26), Color(0.1, 0.09, 0.08)]]))
-		_czesci["noga_l" if strona < 0 else "noga_p"] = noga
+		var ramie := _czesc(_czesci["tulow"], Vector3(0.25 * strona, 0.5, 0))
+		ramie.add_child(Kit.instancja([[Vector3(0, -0.13, 0), Vector3(0.12, 0.29, 0.12), ubr], [Vector3(0, 0.0, 0), Vector3(0.14, 0.08, 0.14), ubr_c]]))
+		var lokiec := _czesc(ramie, Vector3(0, -RAMIE, 0))
+		lokiec.add_child(Kit.instancja([[Vector3(0, -0.12, 0), Vector3(0.095, 0.25, 0.095), ubr], [Vector3(0, -0.26, 0), Vector3(0.1, 0.04, 0.1), ubr_c],
+			[Vector3(0, -RAMIE, -0.01), Vector3(0.075, 0.095, 0.085), rek]]))
+		var s := "_l" if strona < 0 else "_p"
+		_czesci["ramie" + s] = ramie
+		_czesci["lokiec" + s] = lokiec
+		# nogi: udo -> kolano -> stopa
+		var noga := _czesc(_czesci["biodra"], Vector3(0.1 * strona, 0.0, 0))
+		noga.add_child(Kit.instancja([[Vector3(0, -0.22, 0), Vector3(0.15, 0.46, 0.16), spod], [Vector3(0.08 * strona, -0.25, -0.02), Vector3(0.04, 0.1, 0.09), spod.darkened(0.2)]]))
+		var kolano := _czesc(noga, Vector3(0, -0.45, 0))
+		kolano.add_child(Kit.instancja([[Vector3(0, -0.2, 0), Vector3(0.135, 0.4, 0.145), spod],
+			[Vector3(0, -0.38, 0), Vector3(0.14, 0.1, 0.15), ciemny], [Vector3(0, -0.455, -0.045), Vector3(0.13, 0.09, 0.26), ciemny]]))
+		_czesci["noga" + s] = noga
+		_czesci["kolano" + s] = kolano
 	# broń w rękach
 	var md := Modele.bron(bron.id)
-	var bm := Kit.instancja(md["cialo"] + md["mag"])
-	_czesci["bron"] = _czesc(_czesci["tulow"], Vector3(0.12, 0.38, -0.25))
-	_czesci["bron"].add_child(bm)
+	_md = md
+	_czesci["bron"] = _czesc(_czesci["tulow"], Vector3(0.1, 0.25, -0.25))
+	_czesci["bron"].add_child(Kit.instancja(md["cialo"]))
+	_mag_node = Kit.instancja(md["mag"]) if not md["mag"].is_empty() else Node3D.new()
+	_czesci["bron"].add_child(_mag_node)
 	_czesci["wylot"] = Vector3(md["lufa"])
+	# latarka na broni najemnika: włączana przy czujności i walce (zdradza pozycję)
+	if frakcja == "najemnik" and bron.defn()["bron"]["slot"] != "pistolet":
+		var lw := Vector3(md["lufa"]) + Vector3(0.0, -0.035, 0.12)
+		_czesci["bron"].add_child(Kit.instancja([[lw + Vector3(0, 0, 0.02), Vector3(0.03, 0.03, 0.07), Color(0.1, 0.1, 0.1)]]))
+		_latarka = SpotLight3D.new()
+		_latarka.light_color = Color(0.92, 0.95, 1.0)
+		_latarka.light_energy = 2.2
+		_latarka.spot_range = 15.0
+		_latarka.spot_angle = 17.0
+		_latarka.spot_attenuation = 1.2
+		_latarka.shadow_enabled = false
+		_latarka.visible = false
+		_latarka.position = lw - Vector3(0, 0, 0.02)
+		_czesci["bron"].add_child(_latarka)
 	# hitboksy
-	_hitbox(_czesci["glowa"], "glowa", Vector3(0, 0.14, 0), Vector3(0.26, 0.3, 0.27))
-	_hitbox(_czesci["tulow"], "klatka", Vector3(0, 0.42, 0), Vector3(0.44, 0.34, 0.27))
-	_hitbox(_czesci["tulow"], "brzuch", Vector3(0, 0.12, 0), Vector3(0.42, 0.26, 0.26))
-	_hitbox(_czesci["ramie_l"], "rece", Vector3(0, -0.3, 0), Vector3(0.14, 0.6, 0.14))
-	_hitbox(_czesci["ramie_p"], "rece", Vector3(0, -0.3, 0), Vector3(0.14, 0.6, 0.14))
-	_hitbox(_czesci["noga_l"], "nogi", Vector3(0, -0.47, 0), Vector3(0.17, 0.94, 0.18))
-	_hitbox(_czesci["noga_p"], "nogi", Vector3(0, -0.47, 0), Vector3(0.17, 0.94, 0.18))
+	_hitbox(_czesci["glowa"], "glowa", Vector3(0, 0.17, 0), Vector3(0.24, 0.3, 0.26))
+	_hitbox(_czesci["tulow"], "klatka", Vector3(0, 0.4, 0), Vector3(0.44, 0.32, 0.27))
+	_hitbox(_czesci["tulow"], "brzuch", Vector3(0, 0.12, 0), Vector3(0.4, 0.26, 0.25))
+	for s2 in ["_l", "_p"]:
+		_hitbox(_czesci["ramie" + s2], "rece", Vector3(0, -0.14, 0), Vector3(0.13, 0.3, 0.13))
+		_hitbox(_czesci["lokiec" + s2], "rece", Vector3(0, -0.14, 0), Vector3(0.11, 0.3, 0.11))
+		_hitbox(_czesci["noga" + s2], "nogi", Vector3(0, -0.22, 0), Vector3(0.16, 0.46, 0.17))
+		_hitbox(_czesci["kolano" + s2], "nogi", Vector3(0, -0.22, 0), Vector3(0.15, 0.46, 0.16))
 	for mi in _model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
@@ -570,6 +644,7 @@ func _strzelaj(delta: float) -> void:
 		if zapas_mag > 0 or bron.defn()["bron"].has("wewnetrzny"):
 			zapas_mag = maxi(0, zapas_mag - 1)
 			_przeladowanie = float(bron.defn()["bron"]["przeladowanie"]) * 1.1
+			_przeladowanie_max = _przeladowanie
 			_napis(["Przeładowuję!", "Osłaniaj!", "Pusty!"].pick_random())
 			Dzwiek.graj_3d("przeladowanie", global_position, get_parent(), -4.0)
 		else:
@@ -621,6 +696,10 @@ func _strzelaj(delta: float) -> void:
 				Dzwiek.graj("swist", -6.0)
 	var wylot: Vector3 = (_czesci["bron"] as Node3D).global_transform * Vector3(_czesci["wylot"])
 	Efekty.blysk(get_parent(), wylot, 2.5)
+	Efekty.plomien(get_parent(), wylot)
+	_odrzut_anim = 1.0
+	if randf() < 0.45:
+		Efekty.smuga(get_parent(), wylot, wylot + kier0 * minf(d, 60.0))
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}
 	Dzwiek.graj_3d(dzw.get(bd["kaliber"], "strzal_pistolet"), wylot, get_parent(), 2.0, 0.97, 70.0)
 
@@ -685,28 +764,128 @@ func _ruch(delta: float) -> void:
 
 func _animuj(delta: float) -> void:
 	var pozioma := Vector2(velocity.x, velocity.z).length()
-	_anim_t += delta * pozioma * 2.6
-	var faza := sin(_anim_t)
-	var amp := clampf(pozioma / 4.0, 0.0, 1.0) * 0.7
+	_anim_t += delta * (pozioma * 2.7 + 0.0)
+	_oddech += delta
+	var amp := clampf(pozioma / 3.7, 0.0, 1.0)
+	var p := _anim_t
 	var biodra: Node3D = _czesci["biodra"]
-	# przysiad przy każdym kroku i kołysanie tułowia: ciężar ciała przenoszony z nogi na nogę
-	biodra.position.y = lerpf(0.95, 0.6, kucanie) - absf(sin(_anim_t)) * amp * 0.06
-	biodra.rotation.z = sin(_anim_t) * amp * 0.08
-	(_czesci["noga_l"] as Node3D).rotation.x = faza * amp + kucanie * 1.2
-	(_czesci["noga_p"] as Node3D).rotation.x = -faza * amp + kucanie * 0.4
+	var tulow: Node3D = _czesci["tulow"]
+	# biodra: przysiad przy kroku, przenoszenie ciężaru, kucanie
+	biodra.position.y = lerpf(0.95, 0.58, kucanie) - absf(sin(p)) * amp * 0.05
+	biodra.rotation.z = sin(p) * amp * 0.06
+	biodra.rotation.y = sin(p) * amp * 0.1
+	# nogi: udo w przód/tył, kolano zgina się przy przenoszeniu nogi
+	for i in 2:
+		var s := "_l" if i == 0 else "_p"
+		var faza := p + (PI if i == 1 else 0.0)
+		var udo := sin(faza) * amp * 0.75 + kucanie * (1.25 if i == 0 else 0.55)
+		var zgiecie := maxf(0.0, -cos(faza)) * amp * 1.2 + amp * 0.1 + kucanie * (2.1 if i == 0 else 1.75)
+		(_czesci["noga" + s] as Node3D).rotation.x = udo
+		(_czesci["kolano" + s] as Node3D).rotation.x = -zgiecie
+	if kucanie > 0.0 and amp < 0.1:
+		# przyklęk na jedno kolano
+		(_czesci["noga_p"] as Node3D).rotation.x = lerpf(0.0, -0.35, kucanie)
+		(_czesci["kolano_p"] as Node3D).rotation.x = lerpf(0.0, -1.9, kucanie)
+	# tułów: oddech, pochylenie w ruchu, drgnięcie po trafieniu, celowanie w pionie
 	_drgniecie = move_toward(_drgniecie, 0.0, delta * 3.5)
+	_odrzut_anim = move_toward(_odrzut_anim, 0.0, delta * 9.0)
 	var lk := global_basis.inverse() * _ost_kier
-	(_czesci["tulow"] as Node3D).rotation.x = -0.1 - kucanie * 0.25 - amp * 0.12 + _drgniecie * 0.45 * signf(lk.z)
-	(_czesci["tulow"] as Node3D).rotation.z = -_drgniecie * 0.3 * signf(lk.x)
-	var celuje := stan == "walka" or stan == "szukanie"
-	var ram_cel := 1.3 if celuje else 0.35
-	(_czesci["ramie_p"] as Node3D).rotation.x = lerpf((_czesci["ramie_p"] as Node3D).rotation.x, ram_cel, delta * 8.0)
-	(_czesci["ramie_l"] as Node3D).rotation.x = lerpf((_czesci["ramie_l"] as Node3D).rotation.x, ram_cel + 0.1, delta * 8.0)
-	(_czesci["ramie_l"] as Node3D).rotation.z = -0.45 if celuje else -0.05
-	(_czesci["ramie_p"] as Node3D).rotation.z = 0.15 if celuje else 0.05
+	var celuje := stan == "walka" or (stan == "szukanie" and frakcja == "najemnik") or (stan == "czujny" and not _nasluch)
+	var pion := 0.0
+	if celuje and ostatnia_pozycja != Vector3.ZERO:
+		var oko := _oko()
+		var cel := ostatnia_pozycja + Vector3.UP * 1.1
+		var poz := Vector2(cel.x - oko.x, cel.z - oko.z).length()
+		pion = clampf(atan2(cel.y - oko.y, maxf(poz, 0.5)), -0.6, 0.5)
+	tulow.rotation.x = -0.06 - kucanie * 0.15 - amp * 0.1 + _drgniecie * 0.45 * signf(lk.z) + pion * 0.7 + sin(_oddech * 1.6) * 0.012
+	tulow.rotation.z = -_drgniecie * 0.3 * signf(lk.x)
+	tulow.rotation.y = -biodra.rotation.y * 0.8 + (0.12 if celuje else 0.0)
+	# głowa: rozgląda się na patrolu, w walce patrzy w cel
+	var glowa: Node3D = _czesci["glowa"]
+	if stan == "patrol":
+		_rozgl += delta * 0.6
+		glowa.rotation.y = sin(_rozgl) * 0.45 * (1.0 - amp * 0.5)
+		glowa.rotation.x = 0.08
+	else:
+		glowa.rotation.y = lerpf(glowa.rotation.y, -0.12 if celuje else 0.0, delta * 5.0)
+		glowa.rotation.x = pion * 0.3
+	# broń: złożona do strzału albo w pozycji niskiej gotowości
 	var b: Node3D = _czesci["bron"]
-	b.position = Vector3(0.12, 0.38 if celuje else 0.2, -0.32 if celuje else -0.15)
-	b.rotation.x = 0.0 if celuje else 0.6
+	var pistolet: bool = bron.defn()["bron"]["slot"] == "pistolet"
+	var b_poz := Vector3(0.09, 0.44, -0.33) if celuje else Vector3(0.11, 0.24, -0.27)
+	var b_rot := Vector3(0.0, 0.03, 0.0) if celuje else Vector3(-0.75, 0.35, 0.15)
+	if pistolet:
+		b_poz = Vector3(0.02, 0.44, -0.45) if celuje else Vector3(0.12, 0.2, -0.2)
+		b_rot = Vector3(0, 0, 0) if celuje else Vector3(-1.0, 0.2, 0)
+	var przel := 0.0
+	if _przeladowanie > 0.0:
+		przel = 1.0 - _przeladowanie / maxf(0.1, _przeladowanie_max)
+		b_poz = Vector3(0.06, 0.32, -0.28)
+		b_rot = Vector3(0.35, 0.3, 0.7)
+	b_poz += Vector3(0, 0.01, 0.06) * _odrzut_anim
+	b_rot += Vector3(0.18, 0, 0) * _odrzut_anim
+	b_poz.y += sin(p) * amp * 0.012 + sin(_oddech * 1.6) * 0.004
+	b.position = b.position.lerp(b_poz, minf(1.0, delta * 10.0))
+	b.rotation = b.rotation.lerp(b_rot, minf(1.0, delta * 10.0))
+	# magazynek w czasie przeładowania: wypada, wraca w dłoni
+	var reka_l_cel: Vector3 = b.transform * (Vector3(_md["przod"]) + Vector3(0, -0.02, 0))
+	if pistolet:
+		reka_l_cel = b.transform * Vector3(-0.03, -0.05, 0.03)
+	if _mag_node:
+		_mag_node.position = Vector3.ZERO
+		_mag_node.visible = true
+	if przel > 0.0 and not _md["mag"].is_empty():
+		var mag_poz := b.transform * Vector3(0, -0.08, -0.05)
+		var pas := Vector3(-0.16, 0.08, -0.12)
+		if przel < 0.3:
+			reka_l_cel = mag_poz
+			_mag_node.position = Vector3(0, -0.3 * przel / 0.3, 0)
+			_mag_node.visible = przel < 0.25
+		elif przel < 0.6:
+			reka_l_cel = mag_poz.lerp(pas, sin((przel - 0.3) / 0.3 * PI))
+			_mag_node.visible = false
+		elif przel < 0.85:
+			reka_l_cel = pas.lerp(mag_poz, (przel - 0.6) / 0.25)
+			_mag_node.visible = true
+			_mag_node.position = (b.transform.affine_inverse() * reka_l_cel) - Vector3(0, -0.08, -0.05)
+		else:
+			reka_l_cel = mag_poz.lerp(b.transform * Vector3(_md["przod"]), (przel - 0.85) / 0.15)
+	_ik(_czesci["ramie_p"], _czesci["lokiec_p"], b.transform * Vector3(0, -0.04, 0.03), Vector3(1.0, -1.0, 0.4))
+	_ik(_czesci["ramie_l"], _czesci["lokiec_l"], reka_l_cel, Vector3(-1.0, -1.0, 0.2))
+	# latarka na broni
+	if _latarka:
+		_latarka.visible = stan in ["walka", "szukanie", "czujny"]
+
+
+## Kinematyka odwrotna ręki (dwa odcinki): ramię celuje tak, by dłoń trafiła w punkt cel (przestrzeń tułowia).
+## biegun: kierunek, w którą stronę wypycha się łokieć.
+func _ik(ramie: Node3D, lokiec: Node3D, cel: Vector3, biegun: Vector3) -> void:
+	var s := ramie.position
+	var v := cel - s
+	var d := clampf(v.length(), 0.08, RAMIE * 2.0 - 0.003)
+	var dir := v.normalized()
+	var cos_a := clampf(d / (2.0 * RAMIE), -1.0, 1.0)
+	var alfa := acos(cos_a)
+	var pole := biegun.normalized() - dir * biegun.normalized().dot(dir)
+	if pole.length() < 0.01:
+		pole = Vector3(0, -1, 0)
+	pole = pole.normalized()
+	var u := (dir * cos(alfa) + pole * sin(alfa)).normalized()
+	var e := s + u * RAMIE
+	var f := (s + dir * d - e).normalized()
+	var bu := _baza_wzdluz(-u, pole)
+	ramie.basis = bu
+	lokiec.basis = bu.inverse() * _baza_wzdluz(-f, pole)
+
+
+## Baza, której oś Y jest równa y (czyli -Y kości wskazuje kierunek kończyny).
+func _baza_wzdluz(y: Vector3, pomoc: Vector3) -> Basis:
+	var x := y.cross(pomoc)
+	if x.length() < 0.01:
+		x = y.cross(Vector3.FORWARD)
+	x = x.normalized()
+	var z := x.cross(y).normalized()
+	return Basis(x, y, z)
 
 
 func _napis(t: String) -> void:
@@ -730,7 +909,19 @@ func _smierc(_przyczyna: String) -> void:
 		menedzer.zwolnij_oslone(self)
 	# upada w kierunku lotu pocisku: postrzelony z przodu – na plecy
 	var lk := global_basis.inverse() * _ost_kier
+	if _latarka:
+		_latarka.visible = false
+	# nogi się uginają, ręce opadają
+	var tk := create_tween().set_parallel(true)
+	for s2 in ["_l", "_p"]:
+		tk.tween_property(_czesci["kolano" + s2], "rotation:x", -1.4 + randf_range(-0.3, 0.3), 0.3)
+		tk.tween_property(_czesci["noga" + s2], "rotation:x", 0.7 + randf_range(-0.3, 0.3), 0.3)
+		tk.tween_property(_czesci["ramie" + s2], "rotation", Vector3(randf_range(-0.6, 0.6), 0, randf_range(-1.2, 1.2)), 0.45)
+		tk.tween_property(_czesci["lokiec" + s2], "rotation", Vector3(randf_range(-0.8, 0.2), 0, 0), 0.45)
+	tk.tween_property(_czesci["bron"], "position", Vector3(0.3, 0.1, -0.1), 0.4)
+	tk.tween_property(_czesci["glowa"], "rotation:x", randf_range(-0.5, 0.5), 0.5)
 	var t := create_tween()
+	t.tween_interval(0.12)
 	t.tween_property(_model, "rotation:x", deg_to_rad(86.0 * (1.0 if lk.z >= 0.0 else -1.0)), 0.55).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 	t.parallel().tween_property(_model, "rotation:z", randf_range(-0.35, 0.35), 0.55)
 	t.parallel().tween_property(_model, "position", _model.position + Vector3(lk.x, 0, lk.z).normalized() * 0.35 + Vector3(0, 0.12, 0), 0.55)

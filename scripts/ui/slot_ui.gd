@@ -25,7 +25,11 @@ func przedmiot() -> Przedmiot:
 func _draw() -> void:
 	draw_string(Motyw.mono_b(), Vector2(0, 11), Ekwipunek.NAZWY_SLOTOW[slot].to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Motyw.TEKST_CIEMNY)
 	var r := Rect2(Vector2(0, 16), size - Vector2(0, 16))
-	draw_rect(r, Motyw.KOMORKA)
+	var kt := Motyw.tekstura("komorka")
+	if kt:
+		draw_texture_rect(kt, r, true)
+	else:
+		draw_rect(r, Motyw.KOMORKA)
 	var p := przedmiot()
 	var przec: Przedmiot = kontroler.przeciagany() if kontroler and kontroler.has_method("przeciagany") else null
 	if p != null and p != przec:

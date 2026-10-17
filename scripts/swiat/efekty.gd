@@ -107,6 +107,60 @@ static func luska(rodzic: Node3D, pos: Vector3, w_prawo: Vector3, srut := false)
 	p.finished.connect(p.queue_free)
 
 
+static var _mat_plomien: StandardMaterial3D
+static var _mat_smuga: StandardMaterial3D
+
+
+## Płomień wylotowy widziany z zewnątrz (krótki, migający czworokąt zwrócony do kamery).
+static func plomien(rodzic: Node3D, pos: Vector3) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	if _mat_plomien == null:
+		_mat_plomien = StandardMaterial3D.new()
+		_mat_plomien.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_mat_plomien.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_mat_plomien.albedo_color = Color(1.0, 0.7, 0.3)
+		_mat_plomien.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	var s := randf_range(0.22, 0.34)
+	q.size = Vector2(s, s)
+	mi.mesh = q
+	mi.material_override = _mat_plomien
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rodzic.add_child(mi)
+	mi.global_position = pos
+	var t := mi.create_tween()
+	t.tween_interval(0.05)
+	t.tween_callback(mi.queue_free)
+
+
+## Smuga pocisku: cienka świecąca kreska od wylotu do celu, gaśnie w ułamku sekundy.
+static func smuga(rodzic: Node3D, od: Vector3, do_: Vector3) -> void:
+	if rodzic == null or not rodzic.is_inside_tree() or od.distance_to(do_) < 1.0:
+		return
+	if _mat_smuga == null:
+		_mat_smuga = StandardMaterial3D.new()
+		_mat_smuga.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_mat_smuga.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_mat_smuga.albedo_color = Color(1.0, 0.75, 0.4)
+	var mi := MeshInstance3D.new()
+	var b := BoxMesh.new()
+	var dl := od.distance_to(do_)
+	b.size = Vector3(0.012, 0.012, minf(dl, 6.0))
+	mi.mesh = b
+	mi.material_override = _mat_smuga
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rodzic.add_child(mi)
+	var kier := (do_ - od).normalized()
+	var start := od + kier * minf(dl, 6.0) * 0.5
+	mi.global_position = start
+	mi.look_at(do_, Vector3.UP if absf(kier.y) < 0.95 else Vector3.RIGHT)
+	var t := mi.create_tween()
+	t.tween_property(mi, "global_position", do_ - kier * minf(dl, 6.0) * 0.5, minf(0.12, dl / 300.0 + 0.02))
+	t.tween_callback(mi.queue_free)
+
+
 static func blysk(rodzic: Node3D, pos: Vector3, sila := 2.5) -> void:
 	if rodzic == null or not rodzic.is_inside_tree():
 		return

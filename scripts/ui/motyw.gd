@@ -107,6 +107,49 @@ static func etykieta(tekst: String, rozmiar := 15, kolor := TEKST, font: Font = 
 	return l
 
 
+static var _tex := {}
+
+
+static func tekstura(nazwa: String) -> Texture2D:
+	if not _tex.has(nazwa):
+		var p := "res://assets/textures/ui/%s.png" % nazwa
+		_tex[nazwa] = load(p) if ResourceLoader.exists(p) else null
+	return _tex[nazwa]
+
+
+## Kieszeń oporządzenia: płótno z lamówką i przeszyciem (9-patch).
+static func styl_kieszeni(ciemna := false) -> StyleBox:
+	var t := tekstura("kieszen_ciemna" if ciemna else "kieszen")
+	if t == null:
+		return panel()
+	var s := StyleBoxTexture.new()
+	s.texture = t
+	s.set_texture_margin_all(14)
+	s.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	s.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	s.set_content_margin_all(14)
+	return s
+
+
+## Naszywka z napisem (tytuł sekcji ekwipunku).
+static func naszywka(tekst: String, rozmiar := 12) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var t := tekstura("naszywka")
+	if t:
+		var s := StyleBoxTexture.new()
+		s.texture = t
+		s.set_texture_margin_all(5)
+		s.content_margin_left = 8
+		s.content_margin_right = 8
+		s.content_margin_top = 1
+		s.content_margin_bottom = 1
+		pc.add_theme_stylebox_override("panel", s)
+	var l := etykieta(tekst.to_upper(), rozmiar, Color(0.12, 0.11, 0.08), mono_b())
+	pc.add_child(l)
+	pc.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	return pc
+
+
 static func naglowek(tekst: String, rozmiar := 13) -> Label:
 	var l := etykieta(tekst.to_upper(), rozmiar, TEKST_CIEMNY, mono_b())
 	return l

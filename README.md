@@ -36,11 +36,12 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej) |
+| F1 | plansza ze sterowaniem |
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** szybko przenosi, **PPM** menu
 (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
-w panelu zdrowia leczy właśnie ją. Przedmiot upuszczony poza oknem albo **Del** na wskazanym – ląduje na ziemi.
+w panelu zdrowia leczy właśnie ją. Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
 
 ## Pętla gry
 
@@ -82,6 +83,9 @@ godot --headless --path . res://scenes/rajd.tscn -- --test --ziarno 31   # gener
 godot --headless --path . res://scenes/rajd.tscn -- --walka   # starcie z oddziałem
 godot --headless --path . res://scenes/rajd.tscn -- --test --sluch   # kto reaguje na strzał ze środka mapy
 godot --path . res://scenes/rajd.tscn -- --zrzuty <katalog>   # zrzuty ekranu
+godot --headless --path . res://scenes/rajd.tscn -- --test_bron   # klawisze broni i latarki
+godot --path . res://scenes/rajd.tscn -- --postacie <plik.png>   # przeciwnicy w pozach
+godot --path . res://scenes/rajd.tscn -- --vm <katalog>          # fazy przeładowania
 ```
 
 Testy używają osobnego pliku zapisu i nie ruszają zapisu gracza.

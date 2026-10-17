@@ -53,11 +53,23 @@ func _buduj() -> void:
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.theme = Motyw.motyw()
 	add_child(_root)
-	var tlo := ColorRect.new()
-	tlo.color = Color(0, 0, 0, 0.72)
+	# wnętrze rozpiętego oporządzenia: płótno na całym ekranie, przyciemnione brzegi
+	var tlo := TextureRect.new()
+	tlo.texture = Motyw.tekstura("plotno")
+	tlo.stretch_mode = TextureRect.STRETCH_TILE
 	tlo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	tlo.mouse_filter = Control.MOUSE_FILTER_STOP
+	tlo.modulate = Color(0.85, 0.85, 0.85, 0.97)
 	_root.add_child(tlo)
+	var cien := ColorRect.new()
+	cien.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cien.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sm := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 q = UV - 0.5; COLOR = vec4(0.0, 0.0, 0.0, smoothstep(0.18, 0.62, dot(q, q) * 1.6)); }"
+	sm.shader = sh
+	cien.material = sm
+	_root.add_child(cien)
 	var marg := MarginContainer.new()
 	marg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for s in ["left", "right", "top", "bottom"]:
@@ -66,7 +78,7 @@ func _buduj() -> void:
 	var kol := VBoxContainer.new()
 	marg.add_child(kol)
 	var gora := HBoxContainer.new()
-	gora.add_child(Motyw.etykieta("KARTA EWIDENCYJNA OPERATORA  ·  formularz K-12/E", 18, Motyw.TEKST, Motyw.mono_b()))
+	gora.add_child(Motyw.naszywka("Oporządzenie operatora  ·  K-12/E", 14))
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gora.add_child(spacer)
@@ -79,7 +91,8 @@ func _buduj() -> void:
 	kol.add_child(rzad)
 	# lewy: sloty i zdrowie
 	var lp := PanelContainer.new()
-	lp.custom_minimum_size = Vector2(330, 0)
+	lp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
+	lp.custom_minimum_size = Vector2(350, 0)
 	rzad.add_child(lp)
 	_panele.append(lp)
 	_lewy = VBoxContainer.new()
@@ -87,6 +100,7 @@ func _buduj() -> void:
 	lp.add_child(_lewy)
 	# środek: kieszenie, kamizelka, plecak
 	var sp := PanelContainer.new()
+	sp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni())
 	sp.custom_minimum_size = Vector2(300, 0)
 	rzad.add_child(sp)
 	_panele.append(sp)
@@ -98,12 +112,14 @@ func _buduj() -> void:
 	ss.add_child(_srodek)
 	# prawy: pojemnik / skrytka
 	var pp := PanelContainer.new()
+	pp.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
 	pp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rzad.add_child(pp)
 	_panele.append(pp)
 	_prawy = VBoxContainer.new()
 	pp.add_child(_prawy)
 	_prawy_tytul = Motyw.naglowek("")
+	_prawy_tytul.add_theme_color_override("font_color", Color(0.86, 0.8, 0.6))
 	_prawy.add_child(_prawy_tytul)
 	_prawy_scroll = ScrollContainer.new()
 	_prawy_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -111,7 +127,7 @@ func _buduj() -> void:
 	_prawy.add_child(_prawy_scroll)
 	# dół: podpowiedzi i pasek postępu
 	var dol := HBoxContainer.new()
-	dol.add_child(Motyw.etykieta("[LPM] przeciągnij (poza okno = wyrzuć, lek na ciało = lecz)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono()))
+	dol.add_child(Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono()))
 	kol.add_child(dol)
 	# tooltip i menu
 	_tooltip = PanelContainer.new()
@@ -158,6 +174,12 @@ func otworz_skrytke() -> void:
 func _pokaz() -> void:
 	otwarty = true
 	_root.visible = true
+	# otwarcie: rozpinany plecak wjeżdża od dołu
+	_root.modulate.a = 0.0
+	_root.position.y = 26.0
+	var tw := _root.create_tween().set_parallel(true)
+	tw.tween_property(_root, "modulate:a", 1.0, 0.14)
+	tw.tween_property(_root, "position:y", 0.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	Sterowanie.blokada = true
 	Sterowanie.przechwyc(false)
 	_przebuduj()
@@ -190,39 +212,45 @@ func _przebuduj() -> void:
 	_siatki.clear()
 	_sloty.clear()
 	# lewy panel
-	_lewy.add_child(Motyw.naglowek("Wyposażenie osobiste"))
-	var g1 := GridContainer.new()
-	g1.columns = 4
-	g1.add_theme_constant_override("h_separation", 8)
-	g1.add_theme_constant_override("v_separation", 4)
-	_lewy.add_child(g1)
-	for para in [["helm", Vector2i(2, 2)], ["pancerz", Vector2i(2, 2)], ["kamizelka", Vector2i(2, 2)], ["plecak", Vector2i(2, 2)]]:
-		g1.add_child(_slot(para[0], para[1]))
+	_lewy.add_child(Motyw.naszywka("Operator"))
+	# sylwetka w środku, wyposażenie po bokach – jak na rozłożonym oporządzeniu
+	var postac := HBoxContainer.new()
+	postac.add_theme_constant_override("separation", 10)
+	_lewy.add_child(postac)
+	var kol_l := VBoxContainer.new()
+	kol_l.add_theme_constant_override("separation", 10)
+	postac.add_child(kol_l)
+	kol_l.add_child(_slot("helm", Vector2i(2, 2)))
+	kol_l.add_child(_slot("pancerz", Vector2i(2, 3)))
+	_info_zdrowie = VBoxContainer.new()
+	postac.add_child(_info_zdrowie)
+	_panel_ciala = PanelCiala.new()
+	_panel_ciala.cialo = gracz.cialo if gracz else Cialo.new(Gra.zdrowie)
+	_info_zdrowie.add_child(_panel_ciala)
+	var kol_p := VBoxContainer.new()
+	kol_p.add_theme_constant_override("separation", 10)
+	postac.add_child(kol_p)
+	kol_p.add_child(_slot("kamizelka", Vector2i(2, 2)))
+	kol_p.add_child(_slot("plecak", Vector2i(2, 3)))
 	var bronie := HBoxContainer.new()
 	bronie.add_theme_constant_override("separation", 8)
 	_lewy.add_child(bronie)
 	bronie.add_child(_slot("glowna", Vector2i(6, 2)))
 	bronie.add_child(_slot("pistolet", Vector2i(3, 2)))
-	_lewy.add_child(Motyw.naglowek("Stan zdrowia – przeciągnij lek na część ciała"))
-	_info_zdrowie = VBoxContainer.new()
-	_lewy.add_child(_info_zdrowie)
-	_panel_ciala = PanelCiala.new()
-	_panel_ciala.cialo = gracz.cialo if gracz else Cialo.new(Gra.zdrowie)
-	_info_zdrowie.add_child(_panel_ciala)
 	_opis_ciala = Motyw.etykieta("", 12, Motyw.TEKST, Motyw.cond())
 	_opis_ciala.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_opis_ciala.custom_minimum_size = Vector2(300, 18)
-	_info_zdrowie.add_child(_opis_ciala)
+	_opis_ciala.custom_minimum_size = Vector2(320, 34)
+	_lewy.add_child(_opis_ciala)
 	_info_waga = Motyw.etykieta("", 14, Motyw.TEKST, Motyw.mono())
 	_lewy.add_child(_info_waga)
 	# środek
-	_srodek.add_child(Motyw.naglowek("Kieszenie"))
+	_srodek.add_child(Motyw.naszywka("Kieszenie"))
 	_srodek.add_child(_siatka_ui(ekw.kieszenie, "kieszenie"))
-	_srodek.add_child(Motyw.naglowek("Kamizelka" + _opis_red(ekw.sloty["kamizelka"])))
+	_srodek.add_child(Motyw.naszywka("Kamizelka" + _opis_red(ekw.sloty["kamizelka"])))
 	_srodek.add_child(_siatka_ui(ekw.siatka_kamizelki(), "kamizelka"))
-	_srodek.add_child(Motyw.naglowek("Plecak" + _opis_red(ekw.sloty["plecak"])))
+	_srodek.add_child(Motyw.naszywka("Plecak" + _opis_red(ekw.sloty["plecak"])))
 	_srodek.add_child(_siatka_ui(ekw.siatka_plecaka(), "plecak"))
-	_srodek.add_child(Motyw.naglowek("Kontener bezpieczny (przeżywa śmierć)"))
+	_srodek.add_child(Motyw.naszywka("Kontener bezpieczny"))
 	_srodek.add_child(_siatka_ui(ekw.bezpieczny, "bezpieczny"))
 	# prawy
 	if _prawa_siatka != null:
@@ -245,7 +273,7 @@ func _przebuduj() -> void:
 func _opis_red(p: Przedmiot) -> String:
 	if p == null:
 		return " (brak)"
-	return "  · redukcja wagi %d%%" % int(p.defn()["pojemnik"]["redukcja"] * 100)
+	return "  · -%d%% wagi" % int(p.defn()["pojemnik"]["redukcja"] * 100)
 
 
 func _slot(nazwa: String, rozmiar: Vector2i) -> SlotUI:
@@ -407,12 +435,8 @@ func _upusc_drag(anuluj: bool) -> void:
 			gracz.uzyj_leku(p, szybki, cz)
 			_odswiez()
 			return
-	# poza oknami: wyrzucenie na ziemię
-	var nad_panelem := false
-	for pn in _panele:
-		if pn.get_global_rect().has_point(mysz):
-			nad_panelem = true
-	if not nad_panelem:
+	# poza slotami i siatkami: wyrzucenie na ziemię
+	if not nad_celem(mysz):
 		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and d["z"]["siatka"] == _prawa_siatka):
 			_usun_ze_zrodla(p, d["z"])
 			gracz.upusc(p)
@@ -449,6 +473,19 @@ func _upusc_drag(anuluj: bool) -> void:
 			_po_zmianie()
 		return
 	_odswiez()
+
+
+## Czy pod kursorem jest coś, na co można upuścić przedmiot (slot, siatka, panel ciała).
+func nad_celem(mysz: Vector2) -> bool:
+	for s in _sloty:
+		if s.is_visible_in_tree() and s.get_global_rect().grow(4).has_point(mysz):
+			return true
+	for ui in _siatki:
+		if ui.is_visible_in_tree() and ui.get_global_rect().grow(4).has_point(mysz):
+			return true
+	if _panel_ciala and _panel_ciala.get_global_rect().has_point(mysz):
+		return true
+	return false
 
 
 func _po_zmianie() -> void:
@@ -865,3 +902,7 @@ class Duch:
 		modulate.a = 0.85
 		SiatkaUI.rysuj_przedmiot(self, p, r, true)
 		p.obrot = stary
+		if not ekran.tryb_bazy and not ekran.nad_celem(get_global_mouse_position()):
+			draw_rect(r, Color(0.8, 0.15, 0.1, 0.35))
+			draw_rect(r, Color(0.95, 0.3, 0.2), false, 2.0)
+			draw_string(Motyw.mono_b(), r.position + Vector2(0, -6), "WYRZUĆ NA ZIEMIĘ", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.45, 0.3))

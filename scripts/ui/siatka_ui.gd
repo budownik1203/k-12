@@ -46,11 +46,16 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.05, 0.05, 0.6))
 		draw_string(Motyw.cond(), Vector2(6, 22), "—", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Motyw.TEKST_CIEMNY)
 		return
-	draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Motyw.KOMORKA)
+	var kt := Motyw.tekstura("komorka")
+	if kt:
+		draw_texture_rect(kt, Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), true)
+	else:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Motyw.KOMORKA)
 	for x in siatka.w + 1:
 		draw_line(Vector2(x * KOM, 0), Vector2(x * KOM, siatka.h * KOM), Motyw.KOMORKA_LINIA)
 	for y in siatka.h + 1:
 		draw_line(Vector2(0, y * KOM), Vector2(siatka.w * KOM, y * KOM), Motyw.KOMORKA_LINIA)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), Color(0, 0, 0, 0.5), false, 2.0)
 	var przeciagany: Przedmiot = kontroler.przeciagany() if kontroler and kontroler.has_method("przeciagany") else null
 	for i in siatka.items.size():
 		var e: Dictionary = siatka.items[i]

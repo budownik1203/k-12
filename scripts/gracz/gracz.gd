@@ -47,6 +47,9 @@ var _biegnie := false
 var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
 var latarka_wlaczona := true
 var _kop := 0.0                 # kopnięcie kamery po strzale
+var latarka_poswiata: SpotLight3D   # szeroki, słaby snop wokół jasnego środka
+var latarka_odblask: OmniLight3D    # światło odbite na dłoniach
+var _latarka_t := 0.0
 var _bob_t := 0.0
 var _bob_amp := 0.0
 var _ladowanie := 0.0        # ugięcie kamery po wylądowaniu
@@ -97,14 +100,31 @@ func _ready() -> void:
 	glowa.add_child(kamera)
 	latarka = SpotLight3D.new()
 	latarka.position = Vector3(-0.08, -0.14, -0.15)
-	latarka.light_color = Color(1.0, 0.94, 0.8)
-	latarka.light_energy = 2.6
-	latarka.spot_range = 16.0
-	latarka.spot_angle = 26.0
-	latarka.spot_attenuation = 0.9
+	# żarówka latarki: ciepły, wąski jasny środek z cieniem + szeroka słaba poświata
+	latarka.light_color = Color(1.0, 0.9, 0.72)
+	latarka.light_energy = 3.4
+	latarka.spot_range = 22.0
+	latarka.spot_angle = 14.0
+	latarka.spot_angle_attenuation = 1.6
+	latarka.spot_attenuation = 1.1
 	latarka.shadow_enabled = true
+	latarka.shadow_bias = 0.04
 	latarka.visible = false
 	kamera.add_child(latarka)
+	latarka_poswiata = SpotLight3D.new()
+	latarka_poswiata.light_color = Color(1.0, 0.88, 0.68)
+	latarka_poswiata.light_energy = 0.9
+	latarka_poswiata.spot_range = 14.0
+	latarka_poswiata.spot_angle = 36.0
+	latarka_poswiata.spot_angle_attenuation = 0.7
+	latarka_poswiata.spot_attenuation = 1.3
+	latarka.add_child(latarka_poswiata)
+	latarka_odblask = OmniLight3D.new()
+	latarka_odblask.light_color = Color(1.0, 0.9, 0.75)
+	latarka_odblask.light_energy = 0.35
+	latarka_odblask.omni_range = 0.9
+	latarka_odblask.position = Vector3(0, 0, 0.25)
+	latarka.add_child(latarka_odblask)
 	bron = Bron.new()
 	bron.gracz = self
 	bron.kamera = kamera
@@ -147,6 +167,7 @@ func _wybierz_bron(slot: String) -> void:
 
 func _odswiez_latarke() -> void:
 	latarka.visible = latarka_w_rece and latarka_wlaczona and not tryb_bazy
+	bron.swiecenie_szkla(latarka.visible)
 	latarka.position = Vector3(-0.03, -0.17, -0.15) if bron.przedmiot != null else Vector3(-0.09, -0.14, -0.15)
 
 
@@ -210,9 +231,15 @@ func _physics_process(delta: float) -> void:
 			Dzwiek.graj("klik", -10.0)
 		else:
 			wez_latarke()
-	# latarka w dłoni kołysze się razem z bronią
+	# snop wychodzi z soczewki trzymanej latarki i podąża za ręką (kołysanie, odrzut, animacje)
 	if latarka.visible:
-		latarka.rotation = Vector3(-bron._sway.y * 3.0, -bron._sway.x * 3.0, 0) + Vector3(bron._kick_rot.x * 0.3, 0, 0)
+		_latarka_t += delta
+		# żarówka lekko pulsuje (słaba bateria)
+		var puls := 1.0 - 0.04 * sin(_latarka_t * 31.0) * sin(_latarka_t * 7.3)
+		if randf() < 0.002:
+			puls = 0.35
+		latarka.light_energy = 3.4 * puls
+		latarka_poswiata.light_energy = 0.9 * puls
 	# przerwanie akcji: X, strzał, zmiana broni
 	if not akcja.is_empty():
 		var przerwij := Input.is_action_just_pressed("przerwij")
@@ -395,6 +422,7 @@ func _bron(delta: float, aktywne: bool) -> void:
 		"tryb": aktywne and Input.is_action_just_pressed("tryb"),
 		"sprawdz": aktywne and Input.is_action_just_pressed("sprawdz"),
 		"moze": moze and not _biegnie,
+		"bieg": _biegnie and Vector2(velocity.x, velocity.z).length() > 2.0,
 		"ruch": ruch, "kucanie": kucanie, "celnosc": cialo.mnoznik_celnosci(),
 	})
 	if not aktywne or not akcja.is_empty():

@@ -80,12 +80,23 @@ static func bron(id: String) -> Dictionary:
 ## Ręce do widoku pierwszoosobowego (prawa na chwycie, lewa w punkcie "przod").
 ## Latarka (przód = -Z, początek w uchwycie dłoni).
 static func latarka() -> Array:
-	return [
-		[Vector3(0, 0, -0.03), Vector3(0.032, 0.032, 0.15), METAL_C],
-		[Vector3(0, 0, -0.12), Vector3(0.046, 0.046, 0.045), METAL],
-		[Vector3(0, 0, -0.145), Vector3(0.036, 0.036, 0.006), Color(1.0, 0.95, 0.72)],
-		[Vector3(0.018, 0.0, -0.01), Vector3(0.008, 0.012, 0.02), METAL],
+	var r := [
+		[Vector3(0, 0, 0.055), Vector3(0.034, 0.034, 0.02), METAL],                 # zakrętka
+		[Vector3(0, 0, -0.01), Vector3(0.031, 0.031, 0.12), Color(0.16, 0.18, 0.14)],  # korpus (lakier wojskowy)
+		[Vector3(0, 0, -0.08), Vector3(0.038, 0.038, 0.02), METAL_C],             # przejście
+		[Vector3(0, 0, -0.112), Vector3(0.05, 0.05, 0.046), Color(0.16, 0.18, 0.14)],  # głowica
+		[Vector3(0, 0, -0.137), Vector3(0.054, 0.054, 0.008), METAL],              # pierścień
+		[Vector3(0.0, 0.018, -0.02), Vector3(0.012, 0.01, 0.022), Color(0.5, 0.12, 0.08)],  # włącznik
+		[Vector3(0.0, -0.02, 0.03), Vector3(0.008, 0.012, 0.04), METAL_C],        # zaczep
 	]
+	for i in 3:
+		r.append([Vector3(0, 0, -0.045 + i * 0.03), Vector3(0.034, 0.034, 0.006), METAL_C])  # radełkowanie
+	return r
+
+
+## Szkło latarki (osobny węzeł: świeci, gdy latarka włączona).
+static func szklo_latarki() -> Array:
+	return [[Vector3(0, 0, -0.142), Vector3(0.042, 0.042, 0.004), Color(1.0, 0.96, 0.8)]]
 
 
 ## Lewa dłoń zaciśnięta na latarce i rękaw.

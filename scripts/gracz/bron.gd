@@ -55,6 +55,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		mag_node = null
 		_lat_node = null
 		_blysk = null
+		_lewa = null
+		_szklo = null
 	stan = "gotowa"
 	job = {}
 	latarka_w_rece = latarka and (p == null or p.defn()["bron"]["slot"] == "pistolet")
@@ -78,12 +80,19 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		model.add_child(mag_node)
 		if not md["mag"].is_empty():
 			mag_node.add_child(Kit.instancja(md["mag"]))
-		model.add_child(Kit.instancja(Modele.rece(md["przod"], bd["slot"] == "pistolet", latarka_w_rece)))
+		# prawa ręka na stałe przy chwycie, lewa jako osobny węzeł (animowana przy przeładowaniu)
+		var rece: Array = Modele.rece(md["przod"], bd["slot"] == "pistolet", latarka_w_rece)
+		model.add_child(Kit.instancja(rece.slice(0, 2)))
+		_lewa = null
+		if rece.size() > 2:
+			_lewa = Node3D.new()
+			_lewa.add_child(Kit.instancja(rece.slice(2)))
+			model.add_child(_lewa)
 		if latarka_w_rece:
 			# chwyt Harriesa: latarka pod pistoletem, nadgarstki skrzyżowane
 			_lat_node = _wezel_latarki()
 			_lat_node.position = Vector3(-0.02, -0.075, 0.02)
-			_lat_node.rotation = Vector3(0.05, 0.08, 0)
+			_lat_node.rotation = Vector3(0.03, 0.0, 0)
 			model.add_child(_lat_node)
 		# płomień wylotowy: dwa skrzyżowane czworokąty widoczne przez ułamek sekundy
 		_blysk = MeshInstance3D.new()
@@ -102,7 +111,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		_blysk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		model.add_child(_blysk)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
-		if mi == _blysk:
+		if mi == _blysk or mi == _szklo:
 			continue
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
@@ -113,10 +122,36 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 	zmiana.emit()
 
 
+var _szklo: MeshInstance3D
+var _lewa: Node3D
+var _bieg := 0.0
+var _byl_pusty := false
+
+
 func _wezel_latarki() -> Node3D:
 	var n := Node3D.new()
 	n.add_child(Kit.instancja(Modele.latarka() + Modele.reka_z_latarka()))
+	_szklo = Kit.instancja(Modele.szklo_latarki())
+	_szklo.name = "Szklo"
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color(1.0, 0.95, 0.78)
+	_szklo.material_override = m
+	n.add_child(_szklo)
 	return n
+
+
+## Punkt i kierunek snopu latarki w świecie (soczewka trzymanej latarki).
+func transform_latarki() -> Transform3D:
+	if _lat_node == null or not is_instance_valid(_lat_node):
+		return Transform3D(kamera.global_basis, kamera.global_position)
+	var b := _lat_node.global_basis.orthonormalized()
+	return Transform3D(b, _lat_node.global_transform * Vector3(0, 0, -0.15))
+
+
+func swiecenie_szkla(wl: bool) -> void:
+	if _szklo:
+		(_szklo.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.95, 0.78) if wl else Color(0.25, 0.25, 0.22)
 
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
@@ -125,6 +160,62 @@ func animacja_akcji(nazwa: String) -> void:
 		_zbuduj_rece_akcji(nazwa)
 	_anim_akcji = nazwa
 	_anim_akcji_t = 0.0
+
+
+## Przeładowanie magazynkiem: fazy ruchu lewej ręki i magazynka (współrzędne modelu broni).
+func _animuj_przeladowanie(f: float) -> void:
+	if md["mag"].is_empty():
+		return
+	var p_mag: Vector3 = Vector3(md["mag"][0][0])
+	var p_przod: Vector3 = Vector3(md["przod"])
+	var chwyt := p_mag + Vector3(0, -0.035, 0.0)           # dłoń na magazynku
+	var kamizelka := chwyt + Vector3(-0.06, -0.32, 0.12)    # poza kadrem, przy kamizelce
+	var reka := Vector3.ZERO
+	var mag := Vector3.ZERO
+	var szybkie: bool = job.get("szybkie", false)
+	if f < 0.18:
+		var e := smoothstep(0.0, 0.18, f)
+		reka = p_przod.lerp(chwyt, e)
+		mag = Vector3.ZERO
+	elif f < 0.42:
+		var e := smoothstep(0.18, 0.42, f)
+		reka = chwyt.lerp(kamizelka, e)
+		# przy szybkim przeładowaniu stary magazynek leci na ziemię, inaczej ręka go zabiera
+		mag = (Vector3(0, -0.6, 0.05) * e) if szybkie else (reka - chwyt)
+		if mag_node:
+			mag_node.visible = e < (0.4 if szybkie else 0.9)
+	elif f < 0.68:
+		var e := smoothstep(0.42, 0.68, f)
+		reka = kamizelka.lerp(chwyt + Vector3(0, -0.05, 0), e)
+		mag = reka - chwyt
+		if mag_node:
+			mag_node.visible = e > 0.15
+	elif f < 0.78:
+		var e := smoothstep(0.68, 0.78, f)
+		reka = (chwyt + Vector3(0, -0.05, 0)).lerp(chwyt + Vector3(0, 0.008, 0), e)
+		mag = reka - chwyt
+		if mag_node:
+			mag_node.visible = true
+		if e > 0.95 and not _wcisniety:
+			_wcisniety = true
+			Dzwiek.graj("klik", -6.0, 0.9)
+	else:
+		var e := smoothstep(0.78, 1.0, f)
+		mag = Vector3.ZERO
+		reka = chwyt.lerp(p_przod, e)
+		if _byl_pusty and f > 0.84 and f < 0.95:
+			# zamek: szarpnięcie broni przy przeładowaniu z pustą komorą
+			_kick_rot.z += 0.012
+			_kick.z += 0.002
+	if f < 0.7:
+		_wcisniety = false
+	if mag_node:
+		mag_node.position = mag
+	if _lewa:
+		_lewa.position = reka - p_przod if not jest_pistolet() else (reka - p_przod) * 0.7
+
+
+var _wcisniety := false
 
 
 func _odswiez_mag() -> void:
@@ -145,11 +236,17 @@ func zajeta() -> bool:
 ##      "sprawdz": bool (wciśnięty), "moze": bool, "ruch": float 0..1, "kucanie": float, "celnosc": float}
 func aktualizuj(delta: float, we: Dictionary) -> void:
 	_ruch = we.get("ruch", 0.0)
+	_bieg = move_toward(_bieg, 1.0 if we.get("bieg", false) else 0.0, delta * 5.0)
 	cooldown = maxf(0.0, cooldown - delta)
 	bloom = maxf(0.0, bloom - delta * 2.5)
 	var moze: bool = we.get("moze", true) and przedmiot != null
 	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0)
 	if przedmiot == null:
+		# sama latarka: tylko animacja wyjmowania
+		if stan != "gotowa":
+			stan_t += delta
+			if stan_t >= stan_total:
+				stan = "gotowa"
 		return
 	# stany czasowe
 	if stan != "gotowa":
@@ -324,6 +421,7 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 		t *= 0.7
 	if przedmiot.dane["komora"] == "":
 		t += 0.5
+	_byl_pusty = przedmiot.dane["komora"] == ""
 	job = {"nowy": z["p"], "siatka": z["siatka"], "szybkie": szybkie}
 	stan = "przeladowanie"
 	stan_t = 0.0
@@ -425,8 +523,8 @@ func _process(delta: float) -> void:
 	var celownik := float(md["celownik"])
 	var ads_poz := Vector3(0.0, -celownik, -0.24 if not pistolet else -0.3)
 	var t := ads * ads * (3.0 - 2.0 * ads)
-	_bob += delta * (6.5 * _ruch)
-	var bob := Vector3(sin(_bob) * 0.008, absf(cos(_bob)) * -0.01, 0) * _ruch * (1.0 - t * 0.85)
+	_bob += delta * (6.0 * _ruch + 2.5 * _bieg)
+	var bob := Vector3(sin(_bob) * 0.011, absf(cos(_bob)) * -0.014, 0) * _ruch * (1.0 - t * 0.85) * (1.0 + _bieg * 0.8)
 	_sway = _sway.lerp(Vector2.ZERO, delta * 8.0)
 	_kick = _kick.lerp(Vector3.ZERO, delta * 14.0)
 	_kick_rot = _kick_rot.lerp(Vector3.ZERO, delta * 12.0)
@@ -439,17 +537,11 @@ func _process(delta: float) -> void:
 	var dip := 0.0
 	match stan:
 		"przeladowanie":
-			dip = sin(f * PI)
-			rot += Vector3(-0.35, 0.25, 0.6) * dip
-			poz += Vector3(-0.03, -0.05, 0.03) * dip
-			if mag_node:
-				var m := 0.0
-				if f < 0.5:
-					m = f / 0.5
-				else:
-					m = 1.0 - (f - 0.5) / 0.5
-				mag_node.position = Vector3(0, -0.25 * m, 0.05 * m)
-				mag_node.visible = true
+			# broń przechylona do magazynka; lewa ręka: wyjmuje stary, sięga do kamizelki, wkłada nowy
+			var przechyl := smoothstep(0.0, 0.15, f) * (1.0 - smoothstep(0.85, 1.0, f))
+			rot += Vector3(0.18, 0.3, 0.55) * przechyl
+			poz += Vector3(-0.02, 0.0, 0.02) * przechyl
+			_animuj_przeladowanie(f)
 		"ladowanie_wewn":
 			dip = sin(f * PI) * 0.6
 			rot += Vector3(0.5, 0.0, 0.3) * dip
@@ -462,9 +554,17 @@ func _process(delta: float) -> void:
 			var w := 1.0 - f
 			rot += Vector3(-0.8, 0.0, 0.2) * w
 			poz += Vector3(0, -0.2, 0.05) * w
-	if stan != "przeladowanie" and mag_node:
-		mag_node.position = Vector3.ZERO
-		_odswiez_mag()
+	if stan != "przeladowanie":
+		if mag_node:
+			mag_node.position = Vector3.ZERO
+			_odswiez_mag()
+		if _lewa:
+			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
+	# bieg: broń opuszczona i odwrócona w bok
+	if _bieg > 0.0:
+		var eb := _bieg * _bieg * (3.0 - 2.0 * _bieg)
+		rot += Vector3(-0.38, 0.42, 0.22) * eb
+		poz += Vector3(0.0, -0.06, 0.04) * eb
 	# akcje gracza: broń opuszczona w bok, ręce pracują przy dole kadru
 	if _opusc > 0.0:
 		var e := _opusc * _opusc * (3.0 - 2.0 * _opusc)
@@ -476,6 +576,9 @@ func _process(delta: float) -> void:
 	model.position = poz
 	model.rotation = rot
 	model.visible = _opusc < 0.95
+	# snop latarki z soczewki, po ustawieniu modelu w tej klatce (bez opóźnienia)
+	if _lat_node and gracz and gracz.get("latarka") and gracz.latarka.visible:
+		gracz.latarka.global_transform = transform_latarki()
 
 
 var _opusc := 0.0

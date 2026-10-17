@@ -18,6 +18,7 @@ var _kolko: KolkoPostepu
 var _pasek: Control
 var _znacznik := 0.0          # znacznik trafienia przy celowniku
 var _znacznik_zabity := false
+var _pomoc: PanelContainer
 var _komunikaty: VBoxContainer
 var _napisy: VBoxContainer
 var _wyjscia: Label
@@ -142,7 +143,34 @@ func _ready() -> void:
 	if gracz:
 		gracz.komunikat.connect(komunikat)
 		gracz.trafiony_sygnal.connect(_trafiony)
-	komunikat("Kontrakt aktywny. Wyjścia: [O]. Ekwipunek: [Tab].")
+	_pomoc = PanelContainer.new()
+	_pomoc.set_anchors_preset(Control.PRESET_CENTER)
+	_pomoc.offset_left = -300
+	_pomoc.offset_right = 300
+	_pomoc.offset_top = -230
+	_pomoc.offset_bottom = 230
+	_pomoc.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
+	var lp := Motyw.etykieta("\n".join([
+		"STEROWANIE",
+		"WSAD · Shift bieg · Ctrl kucanie · Spacja skok · Q/E wychylenie",
+		"LPM strzał · PPM celowanie · R przeładowanie (przytrzymaj: szybkie)",
+		"B tryb ognia · T sprawdź magazynek",
+		"1 broń główna · 2 pistolet (2x: z latarką) · 3 sama latarka · L latarka wł/wył",
+		"4–9 leki z kamizelki i kieszeni · X przerwij leczenie/napełnianie",
+		"F interakcja · Tab ekwipunek · G napełnij magazynki · O wyjścia",
+		"",
+		"EKWIPUNEK",
+		"przeciągnij lek na część ciała – leczy ją",
+		"przeciągnij poza sloty albo Del – wyrzuca na ziemię",
+		"amunicja na magazynek – napełnia nabój po naboju",
+		"R obraca · Ctrl+LPM szybko przenosi · PPM menu",
+		"",
+		"F1 zamyka",
+	]), 15, Motyw.TEKST, Motyw.mono())
+	_pomoc.add_child(lp)
+	_pomoc.visible = false
+	_root.add_child(_pomoc)
+	komunikat("Kontrakt aktywny. Wyjścia: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
 
 
 func _lbl(pos: Vector2, rozm: int, kol: Color, preset: int) -> Label:
@@ -177,6 +205,8 @@ func _lbl_srodek(y: float, rozm: int, kol: Color) -> Label:
 func _process(delta: float) -> void:
 	if gracz == null:
 		return
+	if Input.is_action_just_pressed("pomoc"):
+		_pomoc.visible = not _pomoc.visible
 	var c := gracz.cialo
 	# stany
 	var st := []

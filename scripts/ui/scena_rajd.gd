@@ -67,6 +67,15 @@ func _ready() -> void:
 	elif args.has("--walka"):
 		_tryb_testu = "walka"
 		_test_walki.call_deferred()
+	elif args.has("--postacie"):
+		_tryb_testu = "postacie"
+		_zrzut_postaci.call_deferred(args[args.find("--postacie") + 1])
+	elif args.has("--vm"):
+		_tryb_testu = "vm"
+		_zrzut_vm.call_deferred(args[args.find("--vm") + 1])
+	elif args.has("--test_bron"):
+		_tryb_testu = "bron"
+		_test_broni.call_deferred()
 
 
 ## Wypieka siatkę nawigacji i sprawdza, czy meble nie dzielą pomieszczeń; jeśli tak – usuwa mebel i powtarza.
@@ -361,11 +370,147 @@ func _zrzuty(katalog: String) -> void:
 	get_tree().quit()
 
 
+## Zrzut przeciwników w różnych pozach (chód, celowanie, kucanie, przeładowanie, śmierć).
+func _zrzut_postaci(plik: String) -> void:
+	for f in 10:
+		await get_tree().physics_frame
+	var wrogowie := get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog)
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+		if not (w is Wrog):
+			w.queue_free()
+	gracz.sterowanie = false
+	gracz.global_position = info["start"]
+	gracz.rotation.y = info["start_rot"]
+	var przod := -gracz.global_basis.z
+	var bok := gracz.global_basis.x
+	for l in info["lampy"]:
+		(l as Node).set_process(false)
+		(l as Light3D).light_energy = 1.6
+	var swiatlo := OmniLight3D.new()
+	swiatlo.omni_range = 9.0
+	swiatlo.light_energy = 1.2
+	swiat.add_child(swiatlo)
+	swiatlo.global_position = gracz.global_position + przod * 2.0 + Vector3.UP * 2.4
+	var pozy := ["patrol", "walka", "kucanie", "przeladowanie", "szukanie"]
+	for i in mini(5, wrogowie.size()):
+		var w: Wrog = wrogowie[i]
+		w.global_position = gracz.global_position + przod * 4.2 + bok * (-2.2 + i * 1.1)
+		w.rotation.y = gracz.rotation.y + PI + (0.6 if i % 2 == 0 else -0.5)
+		w.ostatnia_pozycja = gracz.global_position
+		match pozy[i]:
+			"patrol":
+				w.stan = "patrol"
+				w.velocity = -w.global_basis.z * 1.5
+			"walka":
+				w.stan = "walka"
+				w.rotation.y = gracz.rotation.y + PI + 0.15
+			"kucanie":
+				w.stan = "walka"
+				w.kucanie = 1.0
+			"przeladowanie":
+				w.stan = "walka"
+				w._przeladowanie_max = 2.0
+				w._przeladowanie = 1.1
+			"szukanie":
+				w.stan = "szukanie"
+				w.velocity = -w.global_basis.z * 0.8
+		for f in 40:
+			w._animuj(1.0 / 60.0)
+	for f in 20:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(plik)
+	print("postacie: ", mini(5, wrogowie.size()))
+	get_tree().quit()
+
+
+## Zrzuty broni w rękach: fazy przeładowania i bieg.
+func _zrzut_vm(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.queue_free()
+	gracz.sterowanie = false
+	Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
+	Gra.ekw.kieszenie.dodaj(Gra.magazynek("mag_kb47", "a_762", 30))
+	gracz._wybierz_bron("glowna")
+	for f in 40:
+		await get_tree().physics_frame
+	gracz.bron._zacznij_przeladowanie(false)
+	var tot: float = gracz.bron.stan_total
+	var n := 0
+	for frac in [0.1, 0.3, 0.55, 0.74, 0.9]:
+		while gracz.bron.stan_t < tot * frac and gracz.bron.stan == "przeladowanie":
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_%d.png" % n))
+		n += 1
+	for f in 60:
+		await get_tree().process_frame
+	gracz.bron._bieg = 1.0
+	gracz.bron.aktualizuj(0.0, {"bieg": true, "moze": false})
+	for f in 10:
+		gracz.bron._bieg = 1.0
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_bieg.png"))
+	get_tree().quit()
+
+
+## Test przełączania broni i latarki symulowanymi klawiszami.
+func _test_broni() -> void:
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.queue_free()
+	if Gra.ekw.sloty["pistolet"] == null:
+		Gra.ekw.sloty["pistolet"] = Gra.nowy_naladowany("pw9", "a_9x18")
+	if Gra.ekw.sloty["glowna"] == null:
+		Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
+	if Gra.ekw.znajdz_id("latarka").is_empty():
+		Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("latarka"))
+	var bledy := 0
+	var gl: String = Gra.ekw.sloty["glowna"].id
+	var kroki := [["bron1", gl, false], ["bron3", "", true], ["bron2", "pw9", true], ["bron2", "pw9", false],
+		["bron3", "", true], ["bron1", gl, false], ["latarka", "pw9", true], ["bron3", "", true], ["bron3", gl, false],
+		["bron2", "pw9", false], ["latarka", "pw9", true], ["latarka", "pw9", true]]
+	for k in kroki:
+		for f in 40:
+			await get_tree().physics_frame
+		var ev := InputEventAction.new()
+		ev.action = k[0]
+		ev.pressed = true
+		Input.parse_input_event(ev)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var ev2 := InputEventAction.new()
+		ev2.action = k[0]
+		ev2.pressed = false
+		Input.parse_input_event(ev2)
+		for f in 5:
+			await get_tree().physics_frame
+		var p: Przedmiot = gracz.bron.przedmiot
+		var id := p.id if p else ""
+		var ok: bool = id == k[1] and gracz.latarka_w_rece == k[2]
+		print("  %s -> bron=%s latarka=%s %s" % [k[0], id, gracz.latarka_w_rece, "OK" if ok else "BLAD (oczekiwano %s/%s)" % [k[1], k[2]]])
+		if not ok:
+			bledy += 1
+	gracz.wez_latarke(true)
+	for f in 60:
+		await get_tree().process_frame
+	print("  kamera przod=%s latarka przod=%s poz=%s" % [-gracz.kamera.global_basis.z, -gracz.latarka.global_basis.z, gracz.latarka.global_position - gracz.kamera.global_position])
+	gracz.wez_latarke()
+	for f in 60:
+		await get_tree().process_frame
+	print("  z pistoletem: latarka przod=%s poz=%s" % [-gracz.latarka.global_basis.z, gracz.latarka.global_position - gracz.kamera.global_position])
+	print("TEST BRONI: bledy %d" % bledy)
+	get_tree().quit()
+
+
 ## Test walki: najbliższy oddział zostaje przeniesiony w pobliże gracza; gracz strzela do najbliższego wroga.
 func _test_walki() -> void:
 	for i in 20:
 		await get_tree().physics_frame
-	if gracz.ekw.sloty["glowna"] == null:
+	# test zawsze z tą samą bronią (zapis testowy bywa po zgonach)
+	if true:
 		gracz.ekw.sloty["glowna"] = Gra.nowy_naladowany("pm63", "a_9x18")
 		gracz.ekw.dodaj(Gra.magazynek("mag_pm63", "a_9x18", 25))
 		gracz.ekw.dodaj(Gra.magazynek("mag_pm63", "a_9x18", 25))
@@ -376,7 +521,7 @@ func _test_walki() -> void:
 	for w in wrogowie:
 		if n >= 2:
 			break
-		w.global_position = NavigationServer3D.map_get_closest_point(swiat.get_world_3d().navigation_map, start + Vector3(6.0 + n, 0, 0.8 * n))
+		w.global_position = NavigationServer3D.map_get_closest_point(swiat.get_world_3d().navigation_map, start + Vector3(3.6 + n * 0.8, 0, -0.8 + 1.6 * n))
 		n += 1
 	var t := 0.0
 	var strzaly := 0
@@ -409,6 +554,7 @@ func _test_walki() -> void:
 				b.spust_puszczony = true
 				b._sprobuj_strzal({"kucanie": 0.0, "celnosc": 1.0})
 				strzaly += 1
+	print("  bron=%s stan=%s komora=%s mag=%s" % [gracz.bron.przedmiot.id if gracz.bron.przedmiot else "-", gracz.bron.stan, gracz.bron.przedmiot.dane.get("komora") if gracz.bron.przedmiot else "", gracz.bron.przedmiot.dane.get("mag") if gracz.bron.przedmiot else ""])
 	var zywi := get_tree().get_nodes_in_group("wrogowie").filter(func(w): return not w.cialo.martwy).size()
 	for w in get_tree().get_nodes_in_group("wrogowie").slice(0, 3):
 		print("  wróg %s stan=%s widzi=%s wykrycie=%.2f hp=%.0f%% dyst=%.1f" % [w.nazwa_jednostki, w.stan, w.widzi, w.wykrycie, w.cialo.procent() * 100, w.global_position.distance_to(gracz.global_position)])
