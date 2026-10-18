@@ -208,7 +208,7 @@ static func _gwiazda(ziarno: int, pusty: bool) -> ImageTexture:
 			var platek := pow(maxf(0.0, 1.0 - absf(sek - 0.5) * 2.0), 2.2) * float(dl[idx])
 			var zasieg := 0.16 + 0.8 * platek
 			var v := clampf(1.0 - r / maxf(0.01, zasieg), 0.0, 1.0)
-			v = pow(v, 1.4)
+			v = pow(v, 0.9)
 			var rdzen := clampf(1.0 - r / 0.22, 0.0, 1.0)
 			var jas := maxf(v, rdzen)
 			if pusty:

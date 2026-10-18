@@ -76,6 +76,9 @@ func _ready() -> void:
 	elif args.has("--vm"):
 		_tryb_testu = "vm"
 		_zrzut_vm.call_deferred(args[args.find("--vm") + 1])
+	elif args.has("--mutant"):
+		_tryb_testu = "mutant"
+		_test_mutanta.call_deferred(args[args.find("--mutant") + 1] if args.size() > args.find("--mutant") + 1 else "")
 	elif args.has("--frakcje"):
 		_tryb_testu = "frakcje"
 		_test_frakcji.call_deferred()
@@ -310,8 +313,12 @@ func _zrzuty(katalog: String) -> void:
 	var pies := Fauna.new()
 	swiat.add_child(pies)
 	pies.global_position = gracz.global_position + przod * 2.6 + gracz.global_basis.x * -0.6
-	pies.rotation.y = gracz.rotation.y + 2.4
 	pies.set_physics_process(false)
+	pies._na_start()
+	pies._kier = -przod
+	for i in 30:
+		pies._ustaw_orientacje(0.1)
+		pies._animuj(0.05, 0.6)
 	var wr: Node3D = null
 	for w in get_tree().get_nodes_in_group("wrogowie"):
 		if w is Wrog:
@@ -557,7 +564,6 @@ func _zrzut_vm(katalog: String) -> void:
 		var przed: Variant = gracz.bron.przedmiot.dane.get("komora")
 		Engine.time_scale = 0.05
 		gracz.bron._sprobuj_strzal({})
-		print("STRZAL ", nazwa, " stan=", gracz.bron.stan, " komora przed=", przed, " dzieci=", gracz.bron.model.get_child_count(), " ", gracz.bron.model.get_child(gracz.bron.model.get_child_count()-1).name, " lay=", gracz.bron.model.get_child(0).get("layers"))
 		for kl in 4:
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + "_%d.png" % kl))
@@ -820,4 +826,44 @@ func _test_frakcji() -> void:
 	print("TEST FRAKCJI: czas %.1f, %s %s hp %.0f%% (cel %s), %s %s hp %.0f%% (cel %s)" % [t, a.frakcja, a.stan, a.cialo.procent() * 100.0, a.gracz.name if a.gracz else "-", b.frakcja, b.stan, b.cialo.procent() * 100.0, b.gracz.name if b.gracz else "-"])
 	var ok := a.cialo.procent() < 1.0 or b.cialo.procent() < 1.0
 	print("TEST FRAKCJI: ", "OK" if ok else "BRAK WALKI")
+	get_tree().quit(0 if ok else 1)
+
+
+## Test pełzacza: pojawia się pod sufitem kilka metrów od gracza, ma podpełznąć, zeskoczyć, gryźć i wrócić na ścianę.
+func _test_mutanta(katalog: String) -> void:
+	for i in 30:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.queue_free()
+	await get_tree().physics_frame
+	gracz.sterowanie = false
+	var m := Fauna.new()
+	swiat.add_child(m)
+	m.global_position = gracz.global_position - gracz.global_basis.z * 5.5 + gracz.global_basis.x * 0.5
+	var stany := {}
+	var hp0 := gracz.cialo.procent()
+	var t := 0.0
+	var zrzut := 0
+	if katalog != "":
+		DirAccess.make_dir_recursive_absolute(katalog)
+	while t < 25.0 and not gracz.cialo.martwy:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+		if m.stan != String(stany.get("_ost", "")):
+			stany["_ost"] = m.stan
+			stany[m.stan] = snappedf(t, 0.1)
+			print("  pełzacz: ", m.stan, " t=", snappedf(t, 0.1), " y=", snappedf(m.global_position.y, 0.01))
+			if katalog != "" and m.stan in ["sufit", "skok", "ziemia", "wspinaczka"]:
+				# kamera na pełzacza
+				var p: Vector3 = m.punkt_celu()
+				gracz.look_at(Vector3(p.x, gracz.global_position.y, p.z), Vector3.UP)
+				var dir := (p - gracz.kamera.global_position).normalized()
+				gracz._pitch = asin(clampf(dir.y, -1, 1))
+				gracz.glowa.rotation.x = gracz._pitch
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(katalog.path_join("mutant_%d_%s.png" % [zrzut, m.stan]))
+				zrzut += 1
+	print("TEST MUTANTA: stany %s, zdrowie gracza %.0f%% -> %.0f%%" % [stany, hp0 * 100.0, gracz.cialo.procent() * 100.0])
+	var ok := stany.has("skok") and stany.has("ziemia") and gracz.cialo.procent() < hp0
+	print("TEST MUTANTA: ", "OK" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)

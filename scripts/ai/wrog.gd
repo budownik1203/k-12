@@ -323,13 +323,18 @@ static func _swieci(n: Node) -> bool:
 
 
 func _wysokosc_celu(n: Node, gora: bool) -> float:
-	if n is Fauna:
-		return 0.5
 	return lerpf(1.45, 0.85, _kuc(n)) if gora else lerpf(1.12, 0.7, _kuc(n))
 
 
+## Punkt, w który patrzy/celuje (mutant pod sufitem ma własny środek ciała).
+func _punkt_celu(n: Node3D, gora: bool) -> Vector3:
+	if n.has_method("punkt_celu"):
+		return n.punkt_celu()
+	return n.global_position + Vector3.UP * _wysokosc_celu(n, gora)
+
+
 func _widze(n: Node3D, oko: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
-	var cel := n.global_position + Vector3.UP * _wysokosc_celu(n, true)
+	var cel := _punkt_celu(n, true)
 	var d := oko.distance_to(cel)
 	if d > 32.0:
 		return false
@@ -902,7 +907,7 @@ func _strzelaj(delta: float) -> void:
 	_w_magazynku -= 1
 	var ad: Dictionary = Dane.def(amunicja_id)["amunicja"]
 	var oko := _oko() + Vector3.UP * -0.1
-	var cel := gracz.global_position + Vector3.UP * _wysokosc_celu(gracz, false)
+	var cel := _punkt_celu(gracz, false)
 	var d := oko.distance_to(cel)
 	var celnosc := float(dane_frakcji.get("celnosc", 0.6))
 	var kat := (4.5 * (1.5 - celnosc)) * (1.0 + d / 25.0) * (1.0 + _halas_celu(gracz) * 0.8)
