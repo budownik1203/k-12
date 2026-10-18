@@ -36,6 +36,14 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			_rek["naboj"] = _model_naboju(amun)
 			lewa.ustaw_chwyt("magazynek")
 			prawa.ustaw_chwyt("szczypta")
+		"rozladowanie":
+			if id.begins_with("mag_"):
+				_rek["mag"] = _model_magazynka(id)
+				lewa.ustaw_chwyt("magazynek")
+			else:
+				lewa.visible = false
+			_rek["naboj"] = _model_naboju(amun)
+			prawa.ustaw_chwyt("szczypta")
 		"bandaz":
 			_rek["rolka"] = _wezel([Bryly.walec(Vector3(-0.018, 0, 0), Vector3(0.018, 0, 0), 0.02, 0.02, "bandaz", 10)])
 			lewa.ustaw_chwyt("piesc")
@@ -131,6 +139,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 	match typ:
 		"magazynek":
 			_magazynek(t, czas, kroki, zrobione, dol)
+		"rozladowanie":
+			_rozladowanie(t, czas, kroki, zrobione, dol)
 		"bandaz":
 			_bandaz(t, f, dol)
 		"opatrunek":
@@ -178,6 +188,50 @@ func _magazynek(t: float, czas: float, kroki: int, zrobione: int, dol: Vector3) 
 	# docisk sprężyny: magazynek lekko „siada” przy wciśnięciu
 	if p > 0.55 and p < 0.8:
 		mag.position.y -= 0.004
+
+
+func _rozladowanie(t: float, czas: float, kroki: int, zrobione: int, dol: Vector3) -> void:
+	# kciuk prawej zsuwa nabój do przodu z wargi magazynka, nabój wypada w dół do dłoni / kieszeni
+	var krok := czas / maxf(1.0, kroki)
+	var p := fmod(t, krok) / krok
+	if zrobione >= kroki:
+		p = 1.0
+	var naboj: Node3D = _rek["naboj"]
+	var gora := Vector3(-0.01, -0.035, -0.33) + dol
+	var b := Basis(Vector3(1, 0, 0), 0.35) * Basis(Vector3(0, 1, 0), 0.3) * Basis(Vector3(0, 0, 1), -0.12)
+	if _rek.has("mag"):
+		var mag: Node3D = _rek["mag"]
+		mag.position = gora + Vector3(0, sin(t * 2.0) * 0.002, 0)
+		mag.basis = b
+		var wys: float = mag.get_meta("wys", 0.12)
+		_uloz(lewa, gora + b * Vector3(-0.04, -wys * 0.55, 0.035), b * Vector3(0.6, 0.0, -1.0), b * Vector3(-1.0, 0.1, 0.2))
+	else:
+		# z komory / rury: nabój wyciągany palcami do tyłu i w bok
+		gora = Vector3(0.0, -0.06, -0.36) + dol
+	var tyl := gora + b * Vector3(0, 0.006, 0.02)
+	var przod := gora + b * Vector3(0, 0.008, -0.05)
+	var dol_k := gora + Vector3(0.1, -0.2, 0.03)
+	var np: Vector3
+	if p < 0.3:
+		np = tyl
+	elif p < 0.65:
+		np = tyl.lerp(przod, smoothstep(0.3, 0.65, p))
+	else:
+		np = przod.lerp(dol_k, smoothstep(0.65, 1.0, p))
+	naboj.visible = p > 0.08 and p < 0.97
+	naboj.position = np
+	naboj.basis = b * Basis(Vector3(1, 0, 0), deg_to_rad(-80.0 - smoothstep(0.65, 1.0, p) * 60.0))
+	# kciuk: z tyłu nad nabojem przesuwa się do przodu, potem wraca
+	var kc: Vector3
+	if p < 0.3:
+		kc = (przod + Vector3(0.02, 0.02, 0.0)).lerp(tyl, smoothstep(0.0, 0.3, p))
+	elif p < 0.65:
+		kc = tyl.lerp(przod, smoothstep(0.3, 0.65, p))
+	else:
+		kc = przod + Vector3(0.02, 0.02 * smoothstep(0.65, 1.0, p), 0.0)
+	# dłoń z prawej i od dołu: palce do góry w lewo, kciuk na wierzchu magazynka
+	var nadg := kc + Vector3(0.1, -0.085, 0.01)
+	_uloz(prawa, nadg, (kc - nadg).normalized() + Vector3(0, 0, -0.3), Vector3(1.0, 0.1, 0.4))
 
 
 func _bandaz(t: float, f: float, dol: Vector3) -> void:

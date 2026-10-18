@@ -733,13 +733,48 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--lup"):
+		# wszystkie przedmioty położone na ziemi w siatce przed graczem, kamera w dół
+		gracz.sterowanie = false
+		var ids: Array = Dane.przedmioty.keys()
+		var przod := -gracz.global_basis.z
+		przod.y = 0
+		przod = przod.normalized()
+		var bok := przod.cross(Vector3.UP)
+		var kol := 6
+		var grupy := [ids.slice(0, 18), ids.slice(18, 36), ids.slice(36, ids.size())]
+		for gi in grupy.size():
+			var ln: Array = []
+			for i in grupy[gi].size():
+				var pr := Przedmiot.nowy(String(grupy[gi][i]), 40 if Dane.def(String(grupy[gi][i])).get("typ", "") == "amunicja" else 1)
+				if pr.typ() == "bron":
+					pr = Gra.nowy_naladowany(pr.id, {"pw9": "a_9x18", "pm63": "a_9x18", "kb47": "a_762", "obrzyn": "a_12"}[pr.id])
+				var l := LupNaZiemi.new()
+				l.przedmiot = pr
+				swiat.add_child(l)
+				l.global_position = gracz.global_position + przod * (1.0 + (i / kol) * 0.45) + bok * ((i % kol) - kol * 0.5 + 0.5) * 0.42 + Vector3.UP * 0.3
+				ln.append(l)
+			gracz.kamera.rotation.x = -0.95
+			await _klatki(20)
+			await _zapisz(katalog, "lup_%d" % gi)
+			for l in ln:
+				l.queue_free()
+			await _klatki(3)
+		# rzut z dłoni
+		gracz.kamera.rotation.x = -0.5
+		gracz.upusc(Gra.nowy_naladowany("kb47", "a_762"))
+		await _klatki(8)
+		await _zapisz(katalog, "lup_rzut_lot")
+		await _klatki(40)
+		await _zapisz(katalog, "lup_rzut_lezy")
+		return
 	if OS.get_cmdline_user_args().has("--czynnosci"):
 		gracz.sterowanie = false
 		var tylko := ""
 		var ar := OS.get_cmdline_user_args()
 		if ar.has("--tylko"):
 			tylko = ar[ar.find("--tylko") + 1]
-		var lista := [["magazynek", "mag_kb47", "a_762", 3.0, 6], ["magazynek", "mag_pw9", "a_9x18", 2.4, 6],
+		var lista := [["rozladowanie", "mag_kb47", "a_762", 2.4, 8], ["rozladowanie", "obrzyn", "a_12", 1.6, 2], ["magazynek", "mag_kb47", "a_762", 3.0, 6], ["magazynek", "mag_pw9", "a_9x18", 2.4, 6],
 			["magazynek", "mag_pm63", "a_9x18", 2.4, 6],
 			["leczenie_bandaz", "bandaz", "", 3.0, 0], ["leczenie_opatrunek", "opatrunek", "", 5.0, 0],
 			["leczenie_szyna", "szyna", "", 6.0, 0], ["leczenie_bolostop", "bolostop", "", 2.0, 0], ["leczenie_apteczka", "apteczka", "", 2.5, 0]]

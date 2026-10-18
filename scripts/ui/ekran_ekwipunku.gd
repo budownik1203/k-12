@@ -1278,23 +1278,73 @@ func _rozladuj(p: Przedmiot) -> void:
 	if p.typ() == "magazynek":
 		amun = p.dane["amunicja"]
 		n = p.dane["naboje"]
-		p.dane["naboje"] = 0
 	elif p.typ() == "bron":
 		if p.dane["wewn"] > 0:
 			amun = p.dane["wewn_typ"]
 			n = p.dane["wewn"]
-			p.dane["wewn"] = 0
 		if p.dane["komora"] != "":
 			amun = p.dane["komora"]
 			n += 1
-			p.dane["komora"] = ""
 	if n <= 0 or amun == "":
 		return
-	var a := Przedmiot.nowy(amun, n)
-	if not ekw.dodaj(a) and not (_prawa_siatka and _prawa_siatka.dodaj(a)):
-		if gracz:
-			gracz.upusc(a)
-	Dzwiek.graj("klik", -10.0)
+	if tryb_bazy or gracz == null:
+		_wyjmij_naboje(p, n)
+		var a := Przedmiot.nowy(amun, n)
+		if not ekw.dodaj(a) and not (_prawa_siatka and _prawa_siatka.dodaj(a)):
+			if gracz:
+				gracz.upusc(a)
+		Dzwiek.graj("klik", -10.0)
+		_odswiez()
+		return
+	if not gracz.akcja.is_empty():
+		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]) + "  [X] przerywa")
+		return
+	# w rajdzie: nabój po naboju (kciuk zsuwa nabój z wargi magazynka), szybciej niż napełnianie;
+	# przerwanie zostawia resztę w magazynku. Naboje do ekwipunku, a gdy brak miejsca – pod nogi.
+	var stan := {"ziemia": null}
+	var prawa: Siatka = null
+	var na_krok := func():
+		var typ_n: String = amun
+		if p.typ() == "magazynek":
+			if int(p.dane["naboje"]) <= 0:
+				gracz.przerwij_akcje()
+				return
+			p.dane["naboje"] = int(p.dane["naboje"]) - 1
+			if int(p.dane["naboje"]) <= 0:
+				p.dane["amunicja"] = ""
+		else:
+			if p.dane["komora"] != "":
+				typ_n = p.dane["komora"]
+				p.dane["komora"] = ""
+			elif int(p.dane["wewn"]) > 0:
+				typ_n = p.dane["wewn_typ"]
+				p.dane["wewn"] = int(p.dane["wewn"]) - 1
+			else:
+				gracz.przerwij_akcje()
+				return
+		var a := Przedmiot.nowy(typ_n, 1)
+		if not ekw.dodaj(a) and not (prawa and prawa.dodaj(a)):
+			var lz = stan["ziemia"]
+			if lz != null and is_instance_valid(lz) and (lz as LupNaZiemi).przedmiot.id == typ_n:
+				(lz as LupNaZiemi).przedmiot.ilosc += 1
+			else:
+				stan["ziemia"] = gracz.upusc(a)
+		Dzwiek.graj("klik", -14.0, randf_range(1.3, 1.5))
+		ekw.zmieniony.emit()
+	var koniec := func():
+		Dzwiek.graj("klik", -10.0, 0.9)
+	var start := func():
+		gracz.zacznij_akcje("Rozładowywanie: " + p.nazwa(), 0.24 * n if p.typ() == "magazynek" else 0.4 * n, koniec, "rozladowanie", n, na_krok, {"id": p.id, "amun": amun})
+	_po_schowaniu(start)
+
+
+func _wyjmij_naboje(p: Przedmiot, _n: int) -> void:
+	if p.typ() == "magazynek":
+		p.dane["naboje"] = 0
+		p.dane["amunicja"] = ""
+	else:
+		p.dane["wewn"] = 0
+		p.dane["komora"] = ""
 
 
 # ------------------------------------------------------------------ podpowiedzi

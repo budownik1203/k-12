@@ -612,14 +612,21 @@ func _interakcje(aktywne: bool) -> void:
 
 
 ## Upuszcza przedmiot na ziemię przed graczem.
-func upusc(p: Przedmiot) -> void:
+func upusc(p: Przedmiot) -> LupNaZiemi:
 	var swiat := get_parent()
 	var lup := LupNaZiemi.new()
 	lup.przedmiot = p
+	# wypada z dłoni przed postacią: lekki rozrzut, żeby kolejne przedmioty nie leżały jeden na drugim
+	var przod := -kamera.global_basis.z
+	przod.y = 0.0
+	przod = przod.normalized() if przod.length() > 0.01 else -global_basis.z
+	var bok := przod.cross(Vector3.UP)
+	var cel := global_position + przod * randf_range(0.45, 0.75) + bok * randf_range(-0.25, 0.25) + Vector3.UP * 0.3
+	lup.rzut_z = kamera.global_position + przod * 0.3 + Vector3.DOWN * 0.25
 	swiat.add_child(lup)
-	var przod := -global_basis.z
-	lup.global_position = global_position + przod * 0.6 + Vector3.UP * 0.4
+	lup.global_position = cel
 	komunikat.emit("Upuszczono: " + p.nazwa())
+	return lup
 
 
 # ------------------------------------------------------------------ obrażenia
