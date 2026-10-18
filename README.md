@@ -35,6 +35,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz; z latarką taktyczną na broni włącza ją |
 | O | lista wyjść z kierunkiem i odległością |
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
+| H | spójrz na zegarek (zdrowie na tarczy) |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej) |
 | F1 | plansza ze sterowaniem |

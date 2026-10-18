@@ -558,6 +558,10 @@ func _zrzut_vm(katalog: String) -> void:
 	for w in get_tree().get_nodes_in_group("wrogowie"):
 		w.queue_free()
 	gracz.sterowanie = false
+	if OS.get_cmdline_user_args().has("--animacje"):
+		await _zrzut_animacji(katalog)
+		get_tree().quit()
+		return
 	if OS.get_cmdline_user_args().has("--tylko_bronie"):
 		await _zrzut_broni(katalog)
 		get_tree().quit()
@@ -652,6 +656,100 @@ func _zrzut_vm(katalog: String) -> void:
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_montaz.png"))
 	await _zrzut_broni(katalog)
 	get_tree().quit()
+
+
+func _zapisz(katalog: String, nazwa: String) -> void:
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + ".png"))
+
+
+func _klatki(n: int) -> void:
+	for f in n:
+		await get_tree().process_frame
+
+
+## Animacje broni: blokada zamka, przeładowanie z pustą komorą, łamanie obrzyna, zegarek, dodatki.
+func _zrzut_animacji(katalog: String) -> void:
+	var b := gracz.bron
+	if OS.get_cmdline_user_args().has("--tylko_zegarek"):
+		Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
+		gracz._wybierz_bron("glowna")
+		await _klatki(30)
+		Input.action_press("zegarek")
+		gracz.sterowanie = true
+		await _klatki(40)
+		await _zapisz(katalog, "an_zegarek")
+		return
+	# PW-9: ostatni nabój -> zamek w tyle, potem przeładowanie
+	var pw: Przedmiot = Gra.nowy_naladowany("pw9", "a_9x18")
+	pw.dane["mag"].dane["naboje"] = 0
+	Gra.ekw.sloty["pistolet"] = pw
+	Gra.ekw.kieszenie.dodaj(Gra.magazynek("mag_pw9", "a_9x18", 8))
+	gracz._wybierz_bron("pistolet")
+	await _klatki(40)
+	b.cooldown = 0.0
+	b.spust_puszczony = true
+	b._sprobuj_strzal({})
+	await _klatki(12)
+	await _zapisz(katalog, "an_pw9_zamek")
+	b._zacznij_przeladowanie(false)
+	var tot: float = b.stan_total
+	print("PW9: ", b.stan)
+	for fr in [0.3, 0.6, 0.95]:
+		while b.stan == "przeladowanie" and b.stan_t < tot * fr:
+			await get_tree().process_frame
+		await _zapisz(katalog, "an_pw9_%d" % int(fr * 100))
+	while b.stan != "gotowa":
+		await get_tree().process_frame
+	# KB-47: pusta komora -> rączka zamka
+	var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+	kb.dane["komora"] = ""
+	kb.dane["mag"].dane["naboje"] = 0
+	Gra.ekw.sloty["glowna"] = kb
+	Gra.ekw.dodaj(Gra.magazynek("mag_kb47", "a_762", 30))
+	gracz._wybierz_bron("glowna")
+	await _klatki(40)
+	b._zacznij_przeladowanie(false)
+	print("KB47 przeladowanie: ", b.stan)
+	tot = b.stan_total
+	for fr in [0.4, 0.86, 0.9]:
+		while b.stan == "przeladowanie" and b.stan_t < tot * fr:
+			await get_tree().process_frame
+		await _zapisz(katalog, "an_kb47_%d" % int(fr * 100))
+	while b.stan != "gotowa":
+		await get_tree().process_frame
+	# obrzyn: ładowanie naboju
+	var ob: Przedmiot = Gra.nowy_naladowany("obrzyn", "a_12")
+	ob.dane["wewn"] = 0
+	Gra.ekw.sloty["glowna"] = ob
+	Gra.ekw.dodaj(Przedmiot.nowy("a_12", 6))
+	gracz._wybierz_bron("glowna")
+	await _klatki(40)
+	b._zacznij_przeladowanie(false)
+	tot = b.stan_total
+	for fr in [0.3, 0.6, 0.85]:
+		while b.stan == "ladowanie_wewn" and b.stan_t < tot * fr:
+			await get_tree().process_frame
+		await _zapisz(katalog, "an_obrzyn_%d" % int(fr * 100))
+	await _klatki(90)
+	# zegarek (H)
+	Input.action_press("zegarek")
+	gracz.sterowanie = true
+	await _klatki(40)
+	await _zapisz(katalog, "an_zegarek")
+	Input.action_release("zegarek")
+	gracz.sterowanie = false
+	await _klatki(30)
+	# KB-47 z dodatkami
+	var kd: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+	kd.dane["dod_wylot"] = Przedmiot.nowy("tlumik_762")
+	kd.dane["dod_celownik"] = Przedmiot.nowy("kolimator")
+	kd.dane["dod_latarka"] = Przedmiot.nowy("latarka_taktyczna")
+	kd.dane["dod_chwyt"] = Przedmiot.nowy("chwyt")
+	Gra.ekw.sloty["glowna"] = kd
+	gracz._wybierz_bron("glowna")
+	await _klatki(40)
+	await _zapisz(katalog, "an_kb47_dodatki")
 
 
 ## Każda broń z biodra i przy celowaniu (ręce, modele).

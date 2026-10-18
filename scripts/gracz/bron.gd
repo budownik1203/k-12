@@ -59,6 +59,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		_szklo = null
 	_reka_p = null
 	_reka_l = null
+	_ruchome.clear()
+	_luska_reka = null
 	stan = "gotowa"
 	job = {}
 	latarka_w_rece = latarka and (p == null or p.defn()["bron"]["slot"] == "pistolet")
@@ -82,8 +84,31 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			model.add_child(Bryly.instancja(md["cialo3"]))
 		else:
 			model.add_child(Kit.instancja(md["cialo"]))
+		# części ruchome: zamek / rączka zamka (odskok, blokada w tyle), lufy obrzyna (łamane na zawiasie)
+		_ruchome.clear()
+		var ruch: Dictionary = md.get("ruchome", {})
+		for nazwa in ruch:
+			var r: Dictionary = ruch[nazwa]
+			var wezel := Node3D.new()
+			var zaw: Vector3 = r.get("zawias", Vector3.ZERO)
+			wezel.position = zaw
+			model.add_child(wezel)
+			var mi := Bryly.instancja(r["czesci"])
+			mi.position = -zaw
+			wezel.add_child(mi)
+			_ruchome[nazwa] = {"wezel": wezel, "dane": r}
+		_luska_reka = null
 		if not dod_bryly.is_empty():
-			model.add_child(Kit.instancja(dod_bryly))
+			model.add_child(Bryly.instancja(dod_bryly))
+		if _szklo_broni_poz != Vector3.ZERO and p.dodatek("latarka") != null:
+			# szkło latarki taktycznej: jasne, świeci przy włączonej latarce
+			var sz := Kit.instancja([[_szklo_broni_poz, Vector3(0.017, 0.017, 0.002), Color(1.0, 0.95, 0.8)]])
+			var szm := StandardMaterial3D.new()
+			szm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			szm.albedo_color = Color(1.0, 0.95, 0.8)
+			sz.material_override = szm
+			sz.set_meta("bryly", true)
+			model.add_child(sz)
 		if _kropka_poz != Vector3.ZERO:
 			# czerwona kropka kolimatora: świecąca, widoczna przez okienko
 			var kr := Kit.instancja([[_kropka_poz, Vector3(0.004, 0.004, 0.002), Color(1.0, 0.15, 0.1)]])
@@ -137,59 +162,93 @@ func _zastosuj_dodatki(p: Przedmiot) -> Array:
 	md = md.duplicate(true)
 	_kropka_poz = Vector3.ZERO
 	_lat_bron_poz = Vector3.ZERO
+	_szklo_broni_poz = Vector3.ZERO
 	_bez_plomienia = false
-	var bryly := []
+	var B := Bryly
+	var cz := []
+	var mont: Dictionary = md.get("montaz", {})
 	var lufa: Vector3 = Vector3(md["lufa"])
-	var ciemny := Color(0.13, 0.14, 0.13)
+	# wylot: tłumik (walec z pierścieniami i czołem) albo hamulec (krótki, z oknami)
 	var w := p.dodatek("wylot")
 	if w:
 		var dd: Dictionary = w.defn()["dodatek"]
 		var dl := float(dd.get("dl", 0.1))
-		var gr := float(dd.get("gr", 0.035))
-		bryly.append([lufa + Vector3(0, 0, -dl * 0.5), Vector3(gr, gr, dl), ciemny])
+		var r := float(dd.get("gr", 0.035)) * 0.5
+		var a := lufa + Vector3(0, 0, 0.012)
+		var b := lufa + Vector3(0, 0, -dl)
 		if w.id == "hamulec":
-			for z in [0.015, 0.035]:
-				bryly.append([lufa + Vector3(0, gr * 0.5, -z), Vector3(gr * 0.6, 0.006, 0.008), Color(0.05, 0.05, 0.05)])
+			cz.append(B.walec(a, b, r, r * 0.95, "metal", 10))
+			for zz in [0.02, 0.036]:
+				for sx in [-1.0, 1.0]:
+					cz.append(B.box(lufa + Vector3(sx * r * 0.8, 0.0, -zz), Vector3(r * 0.5, r * 0.9, 0.007), "czern", 0.0))
+			cz.append(B.walec(b, b + Vector3(0, 0, -0.002), r * 0.55, r * 0.55, "czern", 8))
 		else:
+			cz.append(B.walec(a, a + Vector3(0, 0, -0.025), r * 0.75, r, "metal", 12))
+			cz.append(B.walec(a + Vector3(0, 0, -0.025), b + Vector3(0, 0, 0.012), r, r, "metal", 12))
+			cz.append(B.walec(b + Vector3(0, 0, 0.012), b, r, r * 0.8, "metal", 12))
 			for i in 3:
-				bryly.append([lufa + Vector3(0, 0, -dl * (0.25 + i * 0.25)), Vector3(gr + 0.003, gr + 0.003, 0.006), Color(0.09, 0.09, 0.09)])
+				var zz := lerpf(a.z - 0.04, b.z + 0.03, float(i) / 2.0)
+				cz.append(B.walec(Vector3(a.x, a.y, zz + 0.003), Vector3(a.x, a.y, zz - 0.003), r + 0.0012, r + 0.0012, "metal", 12))
+			cz.append(B.walec(b, b + Vector3(0, 0, -0.002), r * 0.35, r * 0.35, "czern", 8))
 		_bez_plomienia = not bool(dd.get("plomien", true))
-		md["lufa"] = lufa + Vector3(0, 0, -dl)
+		md["lufa"] = b
+	# celownik na szynie bocznej/górnej: kolimator (okienko z kropką) albo luneta PSO (tuba z muszlą)
 	var c := p.dodatek("celownik")
-	if c:
+	if c and mont.has("celownik"):
 		var dd2: Dictionary = c.defn()["dodatek"]
-		var os_y := float(md["celownik"]) + float(dd2.get("wys", 0.04))
-		var z0 := -0.05 if p.id == "kb47" else -0.01
+		var baza: Vector3 = mont["celownik"]
+		var os_y := baza.y + float(dd2.get("wys", 0.04))
+		var z0 := baza.z
+		# montaż: płytka na pokrywie + słupek
+		cz.append(B.box(Vector3(0, baza.y + 0.004, z0), Vector3(0.03, 0.008, 0.07), "metal", 0.002))
 		if c.id == "kolimator":
-			bryly.append([Vector3(0, (float(md["celownik"]) + os_y) * 0.5 - 0.01, z0), Vector3(0.024, os_y - float(md["celownik"]), 0.05), ciemny])
-			# okienko: cztery cienkie ramki wokół osi optycznej
-			bryly.append([Vector3(0, os_y + 0.018, z0), Vector3(0.036, 0.005, 0.03), ciemny])
-			bryly.append([Vector3(0, os_y - 0.016, z0), Vector3(0.036, 0.005, 0.03), ciemny])
-			bryly.append([Vector3(-0.017, os_y, z0), Vector3(0.004, 0.036, 0.03), ciemny])
-			bryly.append([Vector3(0.017, os_y, z0), Vector3(0.004, 0.036, 0.03), ciemny])
-			_kropka_poz = Vector3(0, os_y, z0 - 0.01)
+			cz.append(B.profil([Vector2(z0 + 0.028, baza.y + 0.008), Vector2(z0 + 0.022, os_y - 0.012), Vector2(z0 - 0.022, os_y - 0.012), Vector2(z0 - 0.028, baza.y + 0.008)], 0.026, "metal", 0.004))
+			# okienko: ramka z czterech belek wokół osi
+			var rr := 0.017
+			cz.append(B.box(Vector3(0, os_y + rr, z0 - 0.008), Vector3(0.04, 0.005, 0.03), "metal", 0.002))
+			cz.append(B.box(Vector3(0, os_y - rr, z0 - 0.008), Vector3(0.04, 0.005, 0.03), "metal", 0.002))
+			cz.append(B.box(Vector3(-rr - 0.002, os_y, z0 - 0.008), Vector3(0.005, rr * 2.0 + 0.005, 0.03), "metal", 0.002))
+			cz.append(B.box(Vector3(rr + 0.002, os_y, z0 - 0.008), Vector3(0.005, rr * 2.0 + 0.005, 0.03), "metal", 0.002))
+			cz.append(B.walec(Vector3(rr + 0.004, os_y + 0.006, z0), Vector3(rr + 0.01, os_y + 0.006, z0), 0.005, 0.005, "metal_jasny", 8))
+			_kropka_poz = Vector3(0, os_y, z0 - 0.02)
 		else:
-			bryly.append([Vector3(0, (float(md["celownik"]) + os_y) * 0.5, z0), Vector3(0.018, os_y - float(md["celownik"]), 0.06), ciemny])
-			bryly.append([Vector3(0, os_y, z0), Vector3(0.026, 0.026, 0.17), Color(0.1, 0.11, 0.1)])
-			bryly.append([Vector3(0, os_y, z0 - 0.095), Vector3(0.036, 0.036, 0.03), Color(0.12, 0.12, 0.12)])
-			bryly.append([Vector3(0, os_y, z0 + 0.095), Vector3(0.032, 0.032, 0.025), Color(0.12, 0.12, 0.12)])
-			bryly.append([Vector3(0, os_y + 0.02, z0), Vector3(0.01, 0.014, 0.012), Modele.METAL])
+			cz.append(B.box(Vector3(0, (baza.y + os_y) * 0.5, z0 + 0.03), Vector3(0.012, os_y - baza.y, 0.014), "metal", 0.002))
+			cz.append(B.box(Vector3(0, (baza.y + os_y) * 0.5, z0 - 0.03), Vector3(0.012, os_y - baza.y, 0.014), "metal", 0.002))
+			cz.append(B.walec(Vector3(0, os_y, z0 + 0.06), Vector3(0, os_y, z0 - 0.07), 0.0135, 0.0135, "metal", 12))
+			cz.append(B.walec(Vector3(0, os_y, z0 - 0.07), Vector3(0, os_y, z0 - 0.1), 0.0135, 0.019, "metal", 12))
+			cz.append(B.walec(Vector3(0, os_y, z0 - 0.1), Vector3(0, os_y, z0 - 0.112), 0.019, 0.019, "metal", 12))
+			cz.append(B.walec(Vector3(0, os_y, z0 + 0.06), Vector3(0, os_y, z0 + 0.085), 0.0135, 0.017, "metal", 12))
+			cz.append(B.walec(Vector3(0, os_y, z0 + 0.085), Vector3(0, os_y, z0 + 0.105), 0.017, 0.017, "bakelit", 12))
+			cz.append(B.walec(Vector3(0, os_y + 0.012, z0), Vector3(0, os_y + 0.024, z0), 0.007, 0.007, "metal", 8))
+			cz.append(B.walec(Vector3(0.012, os_y, z0 - 0.01), Vector3(0.024, os_y, z0 - 0.01), 0.007, 0.007, "metal", 8))
 		md["celownik"] = os_y
 		md["luneta"] = c.id == "luneta"
+	# chwyt przedni pod łożem: lewa dłoń przechodzi na chwyt pionowy
 	var ch := p.dodatek("chwyt")
-	if ch:
-		var pz: Vector3 = Vector3(md["przod"])
-		bryly.append([pz + Vector3(0, -0.035, 0), Vector3(0.024, 0.07, 0.028), Color(0.27, 0.15, 0.09)])
-		bryly.append([pz + Vector3(0, 0.0, 0), Vector3(0.03, 0.012, 0.05), ciemny])
-		md["przod"] = pz + Vector3(0, -0.06, 0.0)
+	if ch and mont.has("chwyt"):
+		var pz: Vector3 = mont["chwyt"]
+		cz.append(B.box(pz + Vector3(0, -0.004, 0), Vector3(0.03, 0.012, 0.05), "metal", 0.003))
+		cz.append(B.profil([Vector2(pz.z + 0.018, pz.y - 0.008), Vector2(pz.z + 0.022, pz.y - 0.08), Vector2(pz.z + 0.008, pz.y - 0.092),
+			Vector2(pz.z - 0.018, pz.y - 0.088), Vector2(pz.z - 0.016, pz.y - 0.008)], 0.028, "bakelit", 0.009))
+		md["chwyt_pionowy"] = pz + Vector3(0, -0.05, 0.002)
+		md["przod"] = pz + Vector3(0, -0.05, 0.0)
+	# latarka taktyczna z boku łoża (albo pod szkieletem pistoletu / pod lufami)
 	var lt := p.dodatek("latarka")
 	if lt:
-		var lp := lufa + Vector3(0.024, -0.022, 0.12)
-		bryly.append([lp, Vector3(0.022, 0.022, 0.07), ciemny])
-		bryly.append([lp + Vector3(-0.012, 0.0, 0), Vector3(0.008, 0.016, 0.03), Modele.METAL_C])
-		bryly.append([lp + Vector3(0, 0, -0.036), Vector3(0.018, 0.018, 0.004), Color(0.95, 0.92, 0.75)])
-		_lat_bron_poz = lp + Vector3(0, 0, -0.04)
-	return bryly
+		var lp: Vector3 = mont.get("latarka", lufa + Vector3(0.024, -0.022, 0.12))
+		var pod: bool = mont.get("latarka_pod", false)
+		var uchwyt := Vector3(0, 0.014, 0) if pod else Vector3(-0.012, 0, 0)
+		cz.append(B.box(lp + uchwyt, Vector3(0.012 if not pod else 0.02, 0.01 if not pod else 0.008, 0.03), "metal", 0.002))
+		cz.append(B.walec(lp + Vector3(0, 0, 0.035), lp + Vector3(0, 0, -0.025), 0.0105, 0.0105, "latarka", 10))
+		cz.append(B.walec(lp + Vector3(0, 0, -0.025), lp + Vector3(0, 0, -0.04), 0.0105, 0.0135, "latarka", 10))
+		cz.append(B.walec(lp + Vector3(0, 0, -0.04), lp + Vector3(0, 0, -0.042), 0.011, 0.011, "metal_jasny", 10))
+		cz.append(B.box(lp + Vector3(0, 0.011, 0.02), Vector3(0.006, 0.004, 0.012), "bakelit", 0.001))
+		_lat_bron_poz = lp + Vector3(0, 0, -0.045)
+		_szklo_broni_poz = lp + Vector3(0, 0, -0.0425)
+	return cz
+
+
+var _szklo_broni_poz := Vector3.ZERO
 
 
 func ma_latarke_broni() -> bool:
@@ -242,6 +301,11 @@ func _zbuduj_dlonie(pistolet: bool, tylko_prawa: bool) -> void:
 	if pistolet:
 		_reka_l.chwyc(chw + Vector3(-0.024, -0.012, 0.014), os_dol, Vector3(1, 0.1, 0), 0.07)
 		_reka_l.celuj_lokiec(Vector3(-0.14, -0.34, 0.4), model)
+	elif md.has("chwyt_pionowy"):
+		# chwyt przedni: lewa dłoń obejmuje go jak rękojeść pistoletu
+		_reka_l.ustaw_chwyt("pistolet", true)
+		_reka_l.chwyc(md["chwyt_pionowy"], Vector3(0, -1, 0.1), Vector3(1, 0, 0), 0.07)
+		_reka_l.celuj_lokiec(Vector3(md["chwyt_pionowy"]) + Vector3(-0.2, -0.3, 0.3), model)
 	else:
 		var przod: Vector3 = md.get("lozysko", md["przod"])
 		_reka_l.chwyc(przod, Vector3(0, 0, 1), Vector3(0.15, 1.0, 0.0), 0.062, 0.042)
@@ -338,6 +402,7 @@ func _animuj_przeladowanie(f: float) -> void:
 				reka = chwyt.lerp(raczka, smoothstep(0.0, 0.35, t))
 			elif t < 0.6:
 				reka = raczka + Vector3(0, 0, 0.07) * smoothstep(0.35, 0.5, t)
+				_raczka = smoothstep(0.35, 0.5, t) if t < 0.56 else 0.0
 				if t > 0.5 and t < 0.56:
 					_kick_rot.z += 0.012
 					_kick.z += 0.002
@@ -349,13 +414,15 @@ func _animuj_przeladowanie(f: float) -> void:
 			_kick.z += 0.002
 	if f < 0.7:
 		_wcisniety = false
+	if f < 0.78 or f > 0.99:
+		_raczka = 0.0
 	if mag_node:
 		mag_node.position = mag
 	if _lewa:
 		_lewa.position = reka - p_przod if not jest_pistolet() else (reka - p_przod) * 0.7
 	# palce lewej dłoni: otwarta przy sięganiu, zaciśnięta na magazynku, chwyt rączki zamka, powrót na łoże
 	if _lewa and _reka_l and is_instance_valid(_reka_l):
-		var poza := "pistolet" if jest_pistolet() else "lozysko"
+		var poza := "pistolet" if (jest_pistolet() or md.has("chwyt_pionowy")) else "lozysko"
 		if f < 0.16:
 			poza = "otwarta"
 		elif f < 0.78:
@@ -368,6 +435,67 @@ func _animuj_przeladowanie(f: float) -> void:
 
 
 var _wcisniety := false
+
+
+func _animuj_ladowanie_naboju(f: float) -> void:
+	if _lewa == null:
+		return
+	var p_przod: Vector3 = Vector3(md["przod"])
+	var kieszen := p_przod + Vector3(-0.12, -0.36, 0.26)
+	var komora := Vector3(0.0, 0.075, -0.03)
+	var reka := p_przod
+	var poza := "otwarta"
+	var naboj := false
+	if f < 0.38:
+		reka = (p_przod if f < 0.05 else komora).lerp(kieszen, smoothstep(0.0, 0.38, f))
+	elif f < 0.78:
+		reka = kieszen.lerp(komora + Vector3(0, 0.03, 0.03), smoothstep(0.38, 0.78, f))
+		poza = "magazynek"
+		naboj = f > 0.42
+	elif f < 0.92:
+		reka = (komora + Vector3(0, 0.03, 0.03)).lerp(komora, smoothstep(0.78, 0.92, f))
+		poza = "magazynek"
+		naboj = true
+	else:
+		reka = komora
+	_lewa.position = reka - p_przod
+	if _reka_l and is_instance_valid(_reka_l):
+		_reka_l.ustaw_chwyt(poza)
+	if _luska_reka == null or not is_instance_valid(_luska_reka):
+		_luska_reka = Bryly.instancja([
+			Bryly.walec(Vector3(0, 0, 0.0), Vector3(0, 0, -0.05), 0.0105, 0.0105, "bakelit", 8),
+			Bryly.walec(Vector3(0, 0, 0.0), Vector3(0, 0, 0.012), 0.0112, 0.0112, "metal_jasny", 8),
+		])
+		_luska_reka.material_override = null
+		model.add_child(_luska_reka)
+	_luska_reka.visible = naboj
+	_luska_reka.position = reka + Vector3(0.0, 0.012, 0.0)
+	_luska_reka.rotation = Vector3(0.5, 0, 0)
+
+
+## H: spojrzenie na zegarek – broń w dół, lewy nadgarstek przed oczy (zdrowie na tarczy).
+func _animuj_zegarek(delta: float) -> void:
+	var chce: bool = Input.is_action_pressed("zegarek") and gracz != null and bool(gracz.get("sterowanie")) and not Sterowanie.blokada
+	_zegarek = move_toward(_zegarek, 1.0 if chce else 0.0, delta * 4.0)
+	if _zegarek <= 0.001:
+		if _reka_zeg and is_instance_valid(_reka_zeg):
+			_reka_zeg.visible = false
+		return
+	if _reka_zeg == null or not is_instance_valid(_reka_zeg):
+		_reka_zeg = Reka.new(false, true, "magazynek", 0.5)
+		add_child(_reka_zeg)
+		# wnętrze nadgarstka (z tarczą) do oczu, palce luźno w prawo
+		var zl := Vector3(-0.9, -0.38, -0.2).normalized()
+		var yl := Vector3(0.1, -0.15, -1).normalized()
+		yl = (yl - zl * yl.dot(zl)).normalized()
+		var xl := yl.cross(zl).normalized()
+		_reka_zeg.basis = Basis(xl, yl, zl)
+		_reka_zeg.celuj_lokiec(Vector3(-0.3, -0.5, 0.05), self)
+	_reka_zeg.visible = true
+	var e := _zegarek * _zegarek * (3.0 - 2.0 * _zegarek)
+	_reka_zeg.position = Vector3(-0.12, -0.42, -0.25).lerp(Vector3(-0.02, -0.1, -0.3), e)
+	if gracz and gracz.get("cialo"):
+		_reka_zeg.ustaw_zdrowie(gracz.cialo.procent(), gracz.cialo.krwawi() > 0)
 
 
 func _odswiez_mag() -> void:
@@ -507,6 +635,7 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	if _reka_p and is_instance_valid(_reka_p):
 		_reka_p.ustaw_chwyt("strzal")
 		_spust_t = 0.07
+	_odskok = 1.0
 	if ads < 0.5:
 		Efekty.dym_wylotu(gracz.get_parent(), wylot, -kamera.global_basis.z, 0.6 if _bez_plomienia else 1.0)
 	if not bd.has("wewnetrzny"):
@@ -667,10 +796,42 @@ func dodaj_sway(mysz: Vector2) -> void:
 
 
 var _spust_t := 0.0
+var _ruchome := {}
+var _odskok := 0.0           # 1 = zamek w tyle po strzale, maleje
+var _raczka := 0.0           # przeciąganie rączki zamka przez lewą dłoń (0..1)
+var _lufy_otw := 0.0
+var _luska_reka: MeshInstance3D   # nabój w lewej dłoni przy ładowaniu obrzyna
+var _zegarek := 0.0
+var _reka_zeg: Reka
+
+
+## Części ruchome i pokazywanie zegarka (H): zamek, rączka, lufy obrzyna.
+func _animuj_mechanizm(delta: float) -> void:
+	_odskok = maxf(0.0, _odskok - delta * 16.0)
+	var cel_lufy := 1.0 if stan == "ladowanie_wewn" else 0.0
+	_lufy_otw = move_toward(_lufy_otw, cel_lufy, delta * 4.5)
+	for nazwa in _ruchome:
+		var r: Dictionary = _ruchome[nazwa]
+		var w: Node3D = r["wezel"]
+		var d: Dictionary = r["dane"]
+		if nazwa == "lufy":
+			var e := _lufy_otw * _lufy_otw * (3.0 - 2.0 * _lufy_otw)
+			w.rotation.x = float(d["kat"]) * e
+			continue
+		var skok: float = d["skok"]
+		var otwarty := 0.0
+		if bool(d.get("blokada", false)) and przedmiot and przedmiot.dane.get("komora", "x") == "" and stan != "wyciaganie":
+			otwarty = 1.0      # zamek zablokowany w tylnym położeniu (pusta broń)
+		var o := maxf(maxf(sin(_odskok * PI * 0.5), otwarty), _raczka)
+		w.position = Vector3(0, 0, skok * o)
+
+
 
 
 func _process(delta: float) -> void:
 	_anim_akcji_t += delta
+	_animuj_mechanizm(delta)
+	_animuj_zegarek(delta)
 	if _spust_t > 0.0:
 		_spust_t -= delta
 		if _spust_t <= 0.0 and _reka_p and is_instance_valid(_reka_p):
@@ -716,9 +877,16 @@ func _process(delta: float) -> void:
 			poz += Vector3(-0.02, 0.0, 0.02) * przechyl
 			_animuj_przeladowanie(f)
 		"ladowanie_wewn":
-			dip = sin(f * PI) * 0.6
-			rot += Vector3(0.5, 0.0, 0.3) * dip
-			poz += Vector3(0, -0.04, 0.02) * dip
+			if _ruchome.has("lufy"):
+				# obrzyn złamany i przechylony komorami do oka; lewa dłoń: do kieszeni po nabój, do komory, wcisk
+				var ot := _lufy_otw * _lufy_otw * (3.0 - 2.0 * _lufy_otw)
+				rot += Vector3(0.45, 0.35, 0.35) * ot
+				poz += Vector3(-0.03, 0.02, 0.04) * ot
+				_animuj_ladowanie_naboju(f)
+			else:
+				dip = sin(f * PI) * 0.6
+				rot += Vector3(0.5, 0.0, 0.3) * dip
+				poz += Vector3(0, -0.04, 0.02) * dip
 		"sprawdzanie":
 			dip = sin(f * PI)
 			rot += Vector3(0.2, 0.0, -0.9) * dip
@@ -731,8 +899,13 @@ func _process(delta: float) -> void:
 		if mag_node:
 			mag_node.position = Vector3.ZERO
 			_odswiez_mag()
-		if _lewa:
+		if _lewa and stan != "ladowanie_wewn":
 			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
+	if stan != "ladowanie_wewn":
+		if _luska_reka and is_instance_valid(_luska_reka):
+			_luska_reka.visible = false
+		if _lewa and _reka_l and is_instance_valid(_reka_l) and _ruchome.has("lufy") and _reka_l._chwyt != "lozysko":
+			_reka_l.ustaw_chwyt("lozysko")
 	# bieg: broń opuszczona i odwrócona w bok
 	if _bieg > 0.0:
 		var eb := _bieg * _bieg * (3.0 - 2.0 * _bieg)
@@ -746,6 +919,12 @@ func _process(delta: float) -> void:
 		if _anim_akcji == "magazynek":
 			# rytm wciskania nabojów
 			poz.y += sin(_anim_akcji_t * 14.0) * 0.006 * e
+	if _zegarek > 0.0:
+		var ez := _zegarek * _zegarek * (3.0 - 2.0 * _zegarek)
+		rot += Vector3(-0.5, 0.35, 0.3) * ez
+		poz += Vector3(0.06, -0.12, 0.05) * ez
+		if _lewa:
+			_lewa.position = _lewa.position.lerp(Vector3(-0.1, -0.3, 0.15), ez)
 	if _montaz > 0.0:
 		var rp := _animuj_montaz(rot, poz)
 		rot = rp[0]
