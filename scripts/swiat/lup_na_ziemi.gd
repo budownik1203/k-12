@@ -40,8 +40,19 @@ func tekst_interakcji(_g) -> String:
 
 
 func interakcja(g) -> void:
-	if g.ekw.dodaj(przedmiot):
-		Dzwiek.graj("podnies", -6.0)
-		queue_free()
-	else:
-		g.komunikat.emit("Brak miejsca w ekwipunku")
+	if not g.akcja.is_empty() or _podnoszony:
+		return
+	# schylenie się i sięgnięcie po przedmiot (krótka czynność, przerywalna)
+	_podnoszony = true
+	g.zacznij_akcje("Podnoszenie: " + przedmiot.nazwa(), 0.75, func():
+		_podnoszony = false
+		if is_instance_valid(self) and g.ekw.dodaj(przedmiot):
+			Dzwiek.graj("podnies", -6.0)
+			queue_free()
+		elif is_instance_valid(self):
+			g.komunikat.emit("Brak miejsca w ekwipunku")
+	, "podnies")
+	get_tree().create_timer(1.2).timeout.connect(func(): _podnoszony = false)
+
+
+var _podnoszony := false

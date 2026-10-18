@@ -48,9 +48,18 @@ func _ready() -> void:
 
 ## Ustawia broń w rękach. latarka: lewa ręka trzyma latarkę (z pistoletem albo sama, gdy p == null).
 func ustaw(p: Przedmiot, latarka := false) -> void:
+	var chowaj := model != null and is_instance_valid(model) and model.visible and p != przedmiot and not ogladanie
 	przedmiot = p
 	if model:
-		model.queue_free()
+		if chowaj:
+			# zmiana broni: stara schodzi w dół poza kadr, nowa wyjmowana dopiero po chwili
+			var stary := model
+			var tw := stary.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			tw.tween_property(stary, "position", stary.position + Vector3(0.04, -0.32, 0.08), 0.22)
+			tw.tween_property(stary, "rotation", stary.rotation + Vector3(-0.9, 0.3, 0.4), 0.22)
+			tw.chain().tween_callback(stary.queue_free)
+		else:
+			model.queue_free()
 		model = null
 		mag_node = null
 		_lat_node = null
@@ -141,7 +150,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
 	_odswiez_mag()
 	stan = "wyciaganie"
-	stan_t = 0.0
+	stan_t = -0.2 if chowaj else 0.0
 	stan_total = 0.45
 	if ogladanie:
 		stan = "gotowa"
@@ -655,6 +664,15 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		spust_puszczony = not we.get("strzal", false)
 		return
 	# przeładowanie: krótkie wciśnięcie = zwykłe, przytrzymanie = szybkie z upuszczeniem magazynka
+	# zacięcie: R usuwa je (przeciągnięcie zamka) zamiast przeładowania
+	if przedmiot.dane.get("zaciecie", false) and we.get("przeladuj", false) and r_trzymany >= 0.0:
+		stan = "usuwanie"
+		stan_t = 0.0
+		stan_total = 1.3
+		_byl_pusty = true
+		r_trzymany = -99.0
+		Dzwiek.graj("przeladowanie", -6.0, 1.15)
+		return
 	if we.get("przeladuj", false):
 		r_trzymany += delta
 		r_aktywny = true
@@ -676,7 +694,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	if we.get("sprawdz", false):
 		stan = "sprawdzanie"
 		stan_t = 0.0
-		stan_total = 1.1
+		stan_total = 1.8
 		return
 	if we.get("strzal", false):
 		_sprobuj_strzal(we)
@@ -709,6 +727,13 @@ func _pobierz_naboj() -> String:
 
 func _sprobuj_strzal(we: Dictionary) -> void:
 	if cooldown > 0.0:
+		return
+	if przedmiot.dane.get("zaciecie", false):
+		if spust_puszczony:
+			Dzwiek.graj("sucho", -4.0, 0.8)
+			komunikat.emit("Zacięcie! [R] – przeciągnij zamek")
+		spust_puszczony = false
+		cooldown = 0.3
 		return
 	if _tryb() == "semi" and not spust_puszczony:
 		return
@@ -751,6 +776,11 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		_reka_p.ustaw_chwyt("strzal")
 		_spust_t = 0.07
 	_odskok = 1.0
+	# zacięcie: rzadkie, częstsze przy długich seriach (gorąca broń)
+	if not bd.has("wewnetrzny") and przedmiot.dane.get("komora", "") != "":
+		var szansa := 0.0035 + bloom * 0.002
+		if randf() < szansa:
+			przedmiot.dane["zaciecie"] = true
 	if ads < 0.5:
 		Efekty.dym_wylotu(gracz.get_parent(), wylot, -kamera.global_basis.z, 0.6 if _bez_plomienia else 1.0)
 	if not bd.has("wewnetrzny"):
@@ -856,6 +886,19 @@ func _koniec_stanu() -> void:
 					stan_t = 0.0
 		"sprawdzanie":
 			komunikat.emit(opis_amunicji())
+		"usuwanie":
+			przedmiot.dane["zaciecie"] = false
+			_byl_pusty = false
+			_raczka = 0.0
+			# zacięty nabój wypada, z magazynka wchodzi następny
+			var m: Przedmiot = przedmiot.dane.get("mag")
+			if m != null and m.dane["naboje"] > 0:
+				przedmiot.dane["komora"] = m.dane["amunicja"]
+				m.dane["naboje"] -= 1
+			else:
+				przedmiot.dane["komora"] = ""
+			Efekty.luska(gracz.get_parent(), model.global_transform * Vector3(0.03, 0.05, -0.06), kamera.global_basis.x)
+			komunikat.emit("Zacięcie usunięte")
 	zmiana.emit()
 
 
@@ -1008,19 +1051,58 @@ func _process(delta: float) -> void:
 				dip = sin(f * PI) * 0.6
 				rot += Vector3(0.5, 0.0, 0.3) * dip
 				poz += Vector3(0, -0.04, 0.02) * dip
+		"usuwanie":
+			# przechył broni i przeciągnięcie zamka lewą dłonią (pistolet: zamek do tyłu i puszczony)
+			var pr := smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.85, 1.0, f))
+			rot += Vector3(0.1, 0.25, 0.6) * pr
+			poz += Vector3(-0.02, 0.01, 0.02) * pr
+			if _lewa:
+				var p_przod: Vector3 = Vector3(md["przod"])
+				var raczka := Vector3(0.05, 0.075, -0.09) + (p_przod - Vector3(md.get("lozysko", p_przod)))
+				if jest_pistolet():
+					raczka = Vector3(-0.02, 0.06, 0.0) + (p_przod - Vector3(md.get("lozysko", p_przod)))
+				var r: Vector3
+				if f < 0.3:
+					r = p_przod.lerp(raczka, smoothstep(0.0, 0.3, f))
+				elif f < 0.6:
+					r = raczka + Vector3(0, 0, 0.07) * smoothstep(0.3, 0.45, f)
+					_raczka = smoothstep(0.3, 0.45, f) if f < 0.52 else 0.0
+				else:
+					_raczka = 0.0
+					r = (raczka + Vector3(0, 0, 0.07)).lerp(p_przod, smoothstep(0.6, 1.0, f))
+				_lewa.position = r - p_przod
+				if _reka_l and is_instance_valid(_reka_l):
+					_reka_l.ustaw_chwyt("piesc" if f > 0.25 and f < 0.6 else "otwarta")
 		"sprawdzanie":
 			dip = sin(f * PI)
-			rot += Vector3(0.2, 0.0, -0.9) * dip
-			poz += Vector3(-0.06, 0.02, 0.02) * dip
+			if mag_node and not md["mag"].is_empty() and przedmiot.dane.get("mag") != null:
+				# sprawdzenie magazynka: lewa dłoń wysuwa go do połowy, broń przechylona, rzut oka na naboje
+				rot += Vector3(0.15, 0.25, 0.75) * dip
+				poz += Vector3(-0.04, 0.03, 0.03) * dip
+				var wys := smoothstep(0.2, 0.4, f) * (1.0 - smoothstep(0.7, 0.88, f))
+				mag_node.position = Vector3(0, -0.055, 0.012) * wys
+				mag_node.rotation = Vector3(-0.15, 0, 0) * wys
+				if _lewa:
+					var p_mag: Vector3 = Vector3(md["mag"][0][0])
+					var cel := p_mag + Vector3(0, -0.05, 0) + mag_node.position
+					var p_przod: Vector3 = Vector3(md["przod"])
+					var r := p_przod.lerp(cel, smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.88, 1.0, f)))
+					_lewa.position = r - p_przod if not jest_pistolet() else (r - p_przod) * 0.7
+					if _reka_l and is_instance_valid(_reka_l):
+						_reka_l.ustaw_chwyt("magazynek" if f > 0.15 and f < 0.9 else ("pistolet" if jest_pistolet() else "lozysko"))
+			else:
+				rot += Vector3(0.2, 0.0, -0.9) * dip
+				poz += Vector3(-0.06, 0.02, 0.02) * dip
 		"wyciaganie":
 			var w := 1.0 - f
 			rot += Vector3(-0.8, 0.0, 0.2) * w
 			poz += Vector3(0, -0.2, 0.05) * w
-	if stan != "przeladowanie":
+	if stan != "przeladowanie" and stan != "sprawdzanie":
 		if mag_node:
 			mag_node.position = Vector3.ZERO
+			mag_node.rotation = Vector3.ZERO
 			_odswiez_mag()
-		if _lewa and stan != "ladowanie_wewn":
+		if _lewa and stan != "ladowanie_wewn" and stan != "sprawdzanie" and stan != "usuwanie":
 			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
 	if stan != "ladowanie_wewn":
 		if _luska_reka and is_instance_valid(_luska_reka):

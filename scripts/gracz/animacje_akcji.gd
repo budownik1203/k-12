@@ -53,6 +53,9 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			_rek["szyna"] = _wezel([Bryly.box(Vector3.ZERO, Vector3(0.1, 0.008, 0.36), "szyna", 0.003)])
 			lewa.ustaw_chwyt("magazynek")
 			prawa.ustaw_chwyt("magazynek")
+		"podnies":
+			prawa.ustaw_chwyt("otwarta")
+			lewa.visible = false
 		"bolostop":
 			_rek["strzykawka"] = _wezel([
 				Bryly.walec(Vector3(0, 0, 0.05), Vector3(0, 0, -0.06), 0.011, 0.011, "opakowanie", 10),
@@ -134,6 +137,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_opatrunek(t, f, dol)
 		"szyna":
 			_szyna(t, f, dol)
+		"podnies":
+			_podnies(f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
 		_:
@@ -284,3 +289,13 @@ func _apteczka(t: float, f: float, dol: Vector3) -> void:
 	gaza.position = gp
 	gaza.visible = f > 0.12
 	_uloz(prawa, gp + Vector3(0.06, 0.035, 0.06), Vector3(-0.6, -0.3, -0.7), Vector3(0.2, 1.0, 0.2))
+
+
+func _podnies(f: float, dol: Vector3) -> void:
+	# prawa dłoń sięga w dół przed siebie (ku ziemi), zaciska się i wraca
+	var gora := Vector3(0.12, -0.16, -0.32) + dol
+	var ziemia := Vector3(0.04, -0.42, -0.42)
+	var e := smoothstep(0.0, 0.5, f) * (1.0 - smoothstep(0.7, 1.0, f))
+	var p := gora.lerp(ziemia, e)
+	_uloz(prawa, p, Vector3(-0.2, -0.85, -0.45), Vector3(0.3, 0.3, 0.9))
+	prawa.ustaw_chwyt("piesc" if f > 0.48 else "otwarta")

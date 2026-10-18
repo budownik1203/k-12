@@ -25,7 +25,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | WSAD, Shift, Ctrl, Spacja | ruch, bieg, kucanie, skok |
 | Q / E | wychylenie zza osłony |
 | LPM / PPM | strzał / celowanie przez przyrządy |
-| R | przeładowanie (przytrzymaj: szybkie, magazynek leci na ziemię) |
+| R | przeładowanie (przytrzymaj: szybkie, magazynek leci na ziemię); przy zacięciu – usunięcie zacięcia |
 | B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
@@ -36,6 +36,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | O | lista wyjść z kierunkiem i odległością |
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
 | H | spójrz na zegarek (zdrowie na tarczy) |
+| J | obejrzyj broń z bliska, zakładanie i zdejmowanie dodatków |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej) |
 | F1 | plansza ze sterowaniem |

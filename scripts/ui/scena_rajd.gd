@@ -671,6 +671,26 @@ func _klatki(n: int) -> void:
 ## Animacje broni: blokada zamka, przeładowanie z pustą komorą, łamanie obrzyna, zegarek, dodatki.
 func _zrzut_animacji(katalog: String) -> void:
 	var b := gracz.bron
+	if OS.get_cmdline_user_args().has("--kontrola"):
+		var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+		Gra.ekw.sloty["glowna"] = kb
+		gracz._wybierz_bron("glowna")
+		await _klatki(40)
+		b.stan = "sprawdzanie"
+		b.stan_t = 0.0
+		b.stan_total = 1.8
+		await get_tree().create_timer(0.75).timeout
+		await _zapisz(katalog, "ko_sprawdzanie")
+		await get_tree().create_timer(1.4).timeout
+		kb.dane["zaciecie"] = true
+		b.stan = "usuwanie"
+		b.stan_t = 0.0
+		b.stan_total = 1.3
+		await get_tree().create_timer(0.5).timeout
+		await _zapisz(katalog, "ko_zaciecie")
+		await get_tree().create_timer(1.2).timeout
+		print("zaciecie po: ", kb.dane["zaciecie"])
+		return
 	if OS.get_cmdline_user_args().has("--ogladanie"):
 		var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
 		Gra.ekw.sloty["glowna"] = kb
