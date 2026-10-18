@@ -542,6 +542,34 @@ def twarz_maska():
     zapisz(img, "twarz_maska.png", 16)
 
 
+# ---------------------------------------------------------------- rekwizyty czynności
+
+def _jednolita(name, kol, seed, sila=0.12, rozm=16, wzor=None):
+    img = col(kol)[None, None] * (1 - sila + sila * 2 * fbm(rozm, rozm, 2, 2, seed)[..., None])
+    if wzor is not None:
+        wzor(img)
+    img += ziarno(rozm, rozm, seed + 1, 6)[..., None]
+    zapisz(img, name, 16)
+
+
+def rekwizyty():
+    def splot(img):
+        img[::2, :] *= 0.92
+        img[:, ::2] *= 0.95
+    _jednolita("bandaz.png", (226, 222, 210), 500, 0.06, 16, splot)
+    _jednolita("opakowanie.png", (86, 98, 64), 510, 0.1)
+    _jednolita("szyna.png", (200, 110, 40), 520, 0.08)
+    _jednolita("czerwony.png", (168, 36, 30), 530, 0.08)
+    _jednolita("mosiadz.png", (190, 150, 70), 540, 0.15)
+    _jednolita("miedz.png", (170, 96, 60), 550, 0.15)
+    # apteczka: biała z czerwonym krzyżem w środku kafla
+    w = h = 32
+    img = col((214, 210, 196))[None, None] * (0.92 + 0.1 * fbm(h, w, 2, 2, 560)[..., None])
+    img[12:20, 6:26] = (176, 36, 30)
+    img[6:26, 12:20] = (176, 36, 30)
+    zapisz(img, "apteczka.png", 16)
+
+
 if __name__ == "__main__":
     sciana_lamperia()
     tapeta("tapeta_zielona.png", (120, 134, 108), (82, 98, 76), 160)
@@ -571,3 +599,4 @@ if __name__ == "__main__":
     skora_npc()
     twarz()
     twarz_maska()
+    rekwizyty()

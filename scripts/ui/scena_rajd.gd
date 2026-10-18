@@ -671,6 +671,27 @@ func _klatki(n: int) -> void:
 ## Animacje broni: blokada zamka, przeładowanie z pustą komorą, łamanie obrzyna, zegarek, dodatki.
 func _zrzut_animacji(katalog: String) -> void:
 	var b := gracz.bron
+	if OS.get_cmdline_user_args().has("--czynnosci"):
+		gracz.sterowanie = false
+		var tylko := ""
+		var ar := OS.get_cmdline_user_args()
+		if ar.has("--tylko"):
+			tylko = ar[ar.find("--tylko") + 1]
+		var lista := [["magazynek", "mag_kb47", "a_762", 3.0, 6], ["magazynek", "mag_pw9", "a_9x18", 2.4, 6],
+			["magazynek", "mag_pm63", "a_9x18", 2.4, 6],
+			["leczenie_bandaz", "bandaz", "", 3.0, 0], ["leczenie_opatrunek", "opatrunek", "", 5.0, 0],
+			["leczenie_szyna", "szyna", "", 6.0, 0], ["leczenie_bolostop", "bolostop", "", 2.0, 0], ["leczenie_apteczka", "apteczka", "", 2.5, 0]]
+		for el in lista:
+			if tylko != "" and String(el[1]) != tylko:
+				continue
+			gracz.zacznij_akcje(String(el[0]), float(el[3]), func(): pass, String(el[0]), int(el[4]), func(): pass, {"id": el[1], "amun": el[2]})
+			for fr in [0.2, 0.5, 0.8]:
+				while not gracz.akcja.is_empty() and float(gracz.akcja["t"]) < float(el[3]) * fr:
+					await get_tree().process_frame
+				await _zapisz(katalog, "cz_%s_%s_%d" % [el[0], el[1], int(fr * 100)])
+			gracz.przerwij_akcje()
+			await _klatki(20)
+		return
 	if OS.get_cmdline_user_args().has("--tylko_zegarek"):
 		Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
 		gracz._wybierz_bron("glowna")

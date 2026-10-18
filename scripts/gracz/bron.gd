@@ -347,8 +347,18 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
-	if nazwa != "" and nazwa != "schowaj" and nazwa != "montaz" and nazwa != _rece_typ:
-		_zbuduj_rece_akcji(nazwa)
+	if nazwa != "" and nazwa != "schowaj" and nazwa != "montaz":
+		# osobna animacja dla każdej czynności (lek / magazynek), rekwizyty z modeli
+		if _anim_cz:
+			_anim_cz.queue_free()
+		_anim_cz = AnimacjeAkcji.new()
+		_anim_cz.gracz = gracz
+		add_child(_anim_cz)
+		var a: Dictionary = gracz.akcja if gracz else {}
+		var t := nazwa.trim_prefix("leczenie_") if nazwa.begins_with("leczenie") else nazwa
+		if t == "leczenie":
+			t = "apteczka"
+		_anim_cz.zbuduj(t, String(a.get("id", "")), String(a.get("amun", "")))
 	_anim_akcji = nazwa
 	_anim_akcji_t = 0.0
 
@@ -840,10 +850,16 @@ func _process(delta: float) -> void:
 		_reka_l.ustaw_zdrowie(gracz.cialo.procent(), gracz.cialo.krwawi() > 0)
 	_opusc = move_toward(_opusc, 1.0 if (_anim_akcji != "" and _anim_akcji != "montaz") else 0.0, delta * 4.0)
 	_montaz = move_toward(_montaz, 1.0 if _anim_akcji == "montaz" else 0.0, delta * 3.0)
-	if _rece_akcji:
-		_rece_akcji.visible = _opusc > 0.05 and _anim_akcji != "schowaj"
-		if _rece_akcji.visible:
-			_animuj_rece_akcji(delta)
+	if _anim_cz and is_instance_valid(_anim_cz):
+		var widac := _opusc > 0.05 and _anim_akcji != "schowaj" and _anim_akcji != ""
+		_anim_cz.visible = widac
+		if widac and gracz and not gracz.akcja.is_empty():
+			var a: Dictionary = gracz.akcja
+			var e := _opusc * _opusc * (3.0 - 2.0 * _opusc)
+			_anim_cz.aktualizuj(float(a["t"]), float(a["czas"]), int(a["kroki"]), int(a["zrobione"]), e)
+		elif not widac and _opusc <= 0.05 and _anim_akcji == "":
+			_anim_cz.queue_free()
+			_anim_cz = null
 	if model == null:
 		return
 	if _blysk and _blysk.visible:
@@ -940,6 +956,7 @@ func _process(delta: float) -> void:
 
 var _opusc := 0.0
 var _rece_akcji: Node3D
+var _anim_cz: AnimacjeAkcji
 var _rece_typ := ""
 
 

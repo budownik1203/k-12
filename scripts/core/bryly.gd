@@ -26,6 +26,14 @@ const MATERIALY := {
 	"tarcza": ["tarcza_zegarka", 0.034, 0.5, 0.5, 0.35],
 	"pasek": ["pasek_zegarka", 0.06, 0.9, 0.15, 0.12],
 	"latarka": ["metal_bron", 0.12, 0.55, 0.5, 0.14],
+	# rekwizyty czynności
+	"bandaz": ["bandaz", 0.05, 0.95, 0.05, 0.18],
+	"opakowanie": ["opakowanie", 0.08, 0.6, 0.4, 0.15],
+	"szyna": ["szyna", 0.12, 0.7, 0.3, 0.15],
+	"czerwony": ["czerwony", 0.05, 0.5, 0.4, 0.16],
+	"apteczka": ["apteczka", 0.14, 0.6, 0.3, 0.16],
+	"mosiadz": ["mosiadz", 0.03, 0.35, 0.8, 0.2],
+	"miedz": ["miedz", 0.03, 0.35, 0.7, 0.18],
 	# postacie (kolor nadaje "k" – odcień tkaniny frakcji)
 	"tkanina": ["tkanina_npc", 0.25, 0.95, 0.1, 0.0],
 	"skora_npc": ["skora_npc", 0.2, 0.8, 0.25, 0.0],

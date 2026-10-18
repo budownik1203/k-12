@@ -360,6 +360,67 @@ func _pokaz() -> void:
 	Dzwiek.graj("plecak", -8.0)
 
 
+var _chowanie := false
+
+
+## Zamknięcie z pakowaniem: najpierw trzeba zapiąć i założyć plecak, schować kontener, puścić kamizelkę
+## (tyle trwa, ile ich jest otwartych); dopiero potem ekran znika i rusza ewentualna czynność `po`.
+func zamknij_animowany(po := Callable()) -> void:
+	if not otwarty:
+		if po.is_valid():
+			po.call()
+		return
+	if _chowanie:
+		return
+	var czas := 0.0
+	if gracz and not tryb_bazy:
+		if "plecak" in otwarte:
+			czas += 0.95
+		if "bezpieczny" in otwarte:
+			czas += 0.55
+		if "kamizelka" in otwarte and czas == 0.0:
+			czas = 0.3
+		if _otwieranie != "":
+			czas = maxf(czas, 0.4)
+	if czas <= 0.0:
+		zamknij()
+		if po.is_valid():
+			po.call()
+		return
+	_chowanie = true
+	_upusc_drag(true)
+	_menu.hide()
+	_tooltip.visible = false
+	_root.visible = false
+	if gracz:
+		var co := []
+		if "bezpieczny" in otwarte:
+			co.append("kontener")
+		if "plecak" in otwarte:
+			co.append("plecak")
+		if not co.is_empty():
+			gracz.komunikat.emit("Pakujesz " + " i ".join(co) + "...")
+	if _r3d:
+		_r3d.zamknij_wszystko(czas * 0.9)
+		_r3d = null
+	if "plecak" in otwarte:
+		Dzwiek.graj("plecak", -8.0, 1.1)
+	get_tree().create_timer(czas).timeout.connect(func():
+		_chowanie = false
+		zamknij()
+		if po.is_valid():
+			po.call())
+
+
+## Czynność wymagająca obu rąk (napełnianie, leczenie) z otwartego ekwipunku: najpierw schowaj sprzęt.
+func _po_schowaniu(cb: Callable) -> void:
+	if otwarty and not tryb_bazy and gracz:
+		zamknij_animowany(cb)
+	else:
+		cb.call()
+		_odswiez()
+
+
 func zamknij() -> void:
 	if not otwarty:
 		return
@@ -657,11 +718,13 @@ func _odswiez() -> void:
 # ------------------------------------------------------------------ pętla
 
 func _process(delta: float) -> void:
+	if _chowanie:
+		return
 	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu() and Engine.get_process_frames() > Sterowanie.blokuj_tab_do:
 		if otwarty and not tryb_bazy and not _szybki and Time.get_ticks_msec() - _pokaz_ms < 320 and _pojemnik == null:
 			szybka_kamizelka()
 		elif otwarty:
-			zamknij()
+			zamknij_animowany()
 		elif gracz == null or not gracz.cialo.martwy:
 			if tryb_bazy or gracz == null:
 				otworz_skrytke()
@@ -793,10 +856,10 @@ func _klik_slot(ui: SlotUI, p: Przedmiot, przycisk: int, pos: Vector2) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not otwarty:
+	if not otwarty or _chowanie:
 		return
 	if event.is_action_pressed("pauza"):
-		zamknij()
+		zamknij_animowany()
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not _drag.is_empty():
@@ -821,8 +884,7 @@ func _upusc_drag(anuluj: bool) -> void:
 			var szybki := true
 			if d["z"]["typ"] == "siatka":
 				szybki = ekw.czy_szybka(d["z"]["siatka"])
-			gracz.uzyj_leku(p, szybki, cz)
-			_odswiez()
+			_po_schowaniu(func(): gracz.uzyj_leku(p, szybki, cz))
 			return
 	# poza slotami i siatkami: wyrzucenie na ziemię
 	if not nad_celem(mysz):
@@ -1046,7 +1108,7 @@ func _menu_akcja(id: int) -> void:
 	match id:
 		M_UZYJ:
 			var szybki: bool = not (z["typ"] == "siatka" and z["siatka"] == ekw.siatka_plecaka())
-			gracz.uzyj_leku(p, szybki)
+			_po_schowaniu(func(): gracz.uzyj_leku(p, szybki))
 		M_NAPELNIJ:
 			_seria_mag = false
 			_napelnij(p, null, {})
@@ -1155,7 +1217,9 @@ func _zaplanuj_ladowanie(mag: Przedmiot, amun: String, ile: int, zabierz: Callab
 		Dzwiek.graj("napelnianie", -10.0)
 		if _seria_mag:
 			napelnij_wszystkie()
-	gracz.zacznij_akcje(mag.nazwa(), 0.36 * ile, koniec, "magazynek", ile, na_krok)
+	var start := func():
+		gracz.zacznij_akcje(mag.nazwa(), 0.42 * ile, koniec, "magazynek", ile, na_krok, {"id": mag.id, "amun": amun})
+	_po_schowaniu(start)
 
 
 func napelnij_wszystkie() -> void:

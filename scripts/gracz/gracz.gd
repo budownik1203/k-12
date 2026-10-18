@@ -536,13 +536,14 @@ func uzyj_leku(med: Przedmiot, szybki := true, czesc := "") -> void:
 		# apteczka leczy dalej, dopóki jest co leczyć i gracz nie przerwał
 		if efekt == "leczenie" and med.dane["uzycia"] > 0 and cialo.potrzebuje("leczenie", czesc):
 			uzyj_leku(med, szybki, czesc)
-	, "leczenie")
+	, "leczenie_" + med.id, 0, Callable(), {"id": med.id, "czesc": czesc})
 
 
 ## Akcja z czasem (leczenie, napełnianie). typ: animacja rąk. kroki > 0: akcja krokowa – na_krok
 ## wołane co czas/kroki sekund (np. jeden nabój); przerwanie zostawia to, co już zrobione.
-func zacznij_akcje(nazwa: String, czas: float, koniec: Callable, typ := "leczenie", kroki := 0, na_krok := Callable()) -> void:
+func zacznij_akcje(nazwa: String, czas: float, koniec: Callable, typ := "leczenie", kroki := 0, na_krok := Callable(), dane := {}) -> void:
 	akcja = {"nazwa": nazwa, "t": 0.0, "czas": czas, "koniec": koniec, "typ": typ, "kroki": kroki, "zrobione": 0, "na_krok": na_krok}
+	akcja.merge(dane)
 	bron.animacja_akcji(typ)
 
 
