@@ -878,6 +878,7 @@ func _zrzut_animacji(katalog: String) -> void:
 		await _zapisz(katalog, "zw_1_kieszenie")
 		await get_tree().create_timer(4.0).timeout
 		await _zapisz(katalog, "zw_2_calosc")
+		print("pancerz na modelu: ", w0._czesci.get("pancerz_m").visible if w0._czesci.has("pancerz_m") else "brak")
 		# kolejka przekładania: wszystkie magazynki z ładownic Ctrl+klikiem
 		for c in pj2.lista_czesci():
 			if c["nazwa"] == "Ładownice":
@@ -897,6 +898,7 @@ func _zrzut_animacji(katalog: String) -> void:
 			await _zapisz(katalog, "zw_3_zdejmowanie")
 			while not gracz.akcja.is_empty():
 				await get_tree().process_frame
+			print("pancerz na modelu po zdjęciu: ", w0._czesci.get("pancerz_m").visible if w0._czesci.has("pancerz_m") else "brak")
 			print("po zdjeciu na ciele: ", (nc["siatka"] as Siatka).items.size(), " pancerz w ekw: ", Gra.ekw.siatki().any(func(s): return (s as Siatka).items.any(func(e): return (e["p"] as Przedmiot).typ() == "pancerz")))
 		return
 	if OS.get_cmdline_user_args().has("--meble"):
@@ -954,6 +956,11 @@ func _zrzut_animacji(katalog: String) -> void:
 				var pr := Przedmiot.nowy(String(grupy[gi][i]), 40 if Dane.def(String(grupy[gi][i])).get("typ", "") == "amunicja" else 1)
 				if pr.typ() == "bron":
 					pr = Gra.nowy_naladowany(pr.id, {"pw9": "a_9x18", "pm63": "a_9x18", "kb47": "a_762", "obrzyn": "a_12"}[pr.id])
+					if pr.id == "kb47":
+						pr.dane["dod_wylot"] = Przedmiot.nowy("tlumik_762")
+						pr.dane["dod_celownik"] = Przedmiot.nowy("luneta")
+						pr.dane["dod_latarka"] = Przedmiot.nowy("latarka_taktyczna")
+						pr.dane["dod_chwyt"] = Przedmiot.nowy("chwyt")
 				var l := LupNaZiemi.new()
 				l.przedmiot = pr
 				swiat.add_child(l)

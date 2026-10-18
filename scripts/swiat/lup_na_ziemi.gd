@@ -64,6 +64,7 @@ func _upadek() -> void:
 	var dz := "upadek_miekki" if miekki else "upadek_metal"
 	var wys := clampf(1.3 - w * 0.08, 0.6, 1.4)
 	Dzwiek.graj_3d(dz, global_position, get_parent(), clampf(-14.0 + w * 2.0, -14.0, -2.0), wys, 14.0)
+	Efekty.kurz(get_parent(), global_position, clampf(0.3 + w * 0.15, 0.3, 1.4))
 	# hałas słyszalny dla wrogów (cięższe dalej)
 	Gra.emituj_halas(global_position, clampf(4.0 + w * 1.5, 4.0, 14.0), get_tree().get_first_node_in_group("gracz"))
 

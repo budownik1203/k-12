@@ -167,12 +167,13 @@ func _buduj_model() -> void:
 		[Vector3(0, 0.55, 0.01), Vector3(0.22, 0.05, 0.19), ubr_c],
 		[Vector3(0, 0.03, -0.01), Vector3(0.38, 0.06, 0.24), ubr_c],
 	]
+	var panc := []
 	if pancerz != null:
 		var kp := Color(0.2, 0.24, 0.17) if frakcja != "szabrownik" else Color(0.16, 0.18, 0.26)
-		tul.append([Vector3(0, 0.35, 0), Vector3(0.41, 0.34, 0.3), kp])
+		panc.append([Vector3(0, 0.35, 0), Vector3(0.41, 0.34, 0.3), kp])
 		for i in 3:
-			tul.append([Vector3(-0.1 + i * 0.1, 0.24, -0.16), Vector3(0.075, 0.12, 0.05), kp.darkened(0.2)])
-		tul.append([Vector3(-0.14, 0.43, -0.16), Vector3(0.07, 0.08, 0.04), kp.darkened(0.25)])
+			panc.append([Vector3(-0.1 + i * 0.1, 0.24, -0.16), Vector3(0.075, 0.12, 0.05), kp.darkened(0.2)])
+		panc.append([Vector3(-0.14, 0.43, -0.16), Vector3(0.07, 0.08, 0.04), kp.darkened(0.25)])
 	else:
 		# kamizelka wędkarska z kieszeniami
 		tul.append([Vector3(0, 0.33, -0.005), Vector3(0.44, 0.3, 0.26), Color(0.32, 0.3, 0.2)])
@@ -182,6 +183,10 @@ func _buduj_model() -> void:
 		tul.append([Vector3(0, 0.33, 0.2), Vector3(0.3, 0.36, 0.15), Color(0.3, 0.22, 0.14)])   # tobołek
 		tul.append([Vector3(0, 0.53, 0.2), Vector3(0.24, 0.06, 0.13), Color(0.25, 0.18, 0.11)])
 	_czesci["tulow"].add_child(_bryly(tul))
+	if not panc.is_empty():
+		# osobny węzeł: zdjęty z ciała pancerz znika z modelu
+		_czesci["pancerz_m"] = _bryly(panc)
+		_czesci["tulow"].add_child(_czesci["pancerz_m"])
 	# głowa
 	_czesci["glowa"] = _czesc(_czesci["tulow"], Vector3(0, 0.58, 0))
 	var glowa_bryly := [
@@ -198,11 +203,13 @@ func _buduj_model() -> void:
 		glowa_bryly.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])         # kominiarka
 		glowa_bryly.append([Vector3(0, 0.19, -0.119), Vector3(0.15, 0.045, 0.01), skora.darkened(0.2)])
 		glowa_bryly.append([Vector3(0, 0.19, -0.125), Vector3(0.14, 0.026, 0.01), Color(0.06, 0.05, 0.05)])
-	if helm != null:
-		glowa_bryly.append([Vector3(0, 0.29, 0.0), Vector3(0.27, 0.12, 0.29), Color(0.22, 0.26, 0.18)])
-		glowa_bryly.append([Vector3(0, 0.24, 0.0), Vector3(0.31, 0.03, 0.33), Color(0.2, 0.24, 0.16)])
 	var gm := _bryly(glowa_bryly)
 	_czesci["glowa"].add_child(gm)
+	if helm != null:
+		_czesci["helm_m"] = _bryly([[Vector3(0, 0.29, 0.0), Vector3(0.27, 0.12, 0.29), Color(0.22, 0.26, 0.18)],
+			[Vector3(0, 0.24, 0.0), Vector3(0.31, 0.03, 0.33), Color(0.2, 0.24, 0.16)],
+			[Vector3(0, 0.33, 0.0), Vector3(0.2, 0.04, 0.22), Color(0.24, 0.28, 0.2)]])
+		_czesci["glowa"].add_child(_czesci["helm_m"])
 	# twarz z teksturą (oczy, brwi, zarost) albo kominiarka najemnika
 	var tw := Bryly.instancja([Bryly.quad(Vector3(0, 0.165, -0.1112 if frakcja != "najemnik" else -0.1185), Vector2(0.18, 0.21),
 		Vector3(0, 0, -1), "twarz" if frakcja != "najemnik" else "twarz_maska")], false)
@@ -1223,6 +1230,14 @@ func _smierc(_przyczyna: String) -> void:
 	_zwloki.call_deferred()
 	zginal.emit(self)
 	get_tree().call_group("ui_rajdu", "zabity_wrog", self)
+
+
+## Z ciała zdjęto przedmiot (przeszukiwanie): znika z modelu.
+func zdjeto(p: Przedmiot) -> void:
+	if p == pancerz and _czesci.has("pancerz_m"):
+		(_czesci["pancerz_m"] as Node3D).visible = false
+	if p == helm and _czesci.has("helm_m"):
+		(_czesci["helm_m"] as Node3D).visible = false
 
 
 func _zwloki() -> void:

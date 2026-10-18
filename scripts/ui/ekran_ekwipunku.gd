@@ -1164,6 +1164,8 @@ func _zdejmij_z_ciala(p: Przedmiot, s: Siatka) -> void:
 		if not s.zawiera(p):
 			return
 		s.usun(p)
+		if is_instance_valid(poj) and poj.get_parent().has_method("zdjeto"):
+			poj.get_parent().zdjeto(p)
 		if not ekw.dodaj(p):
 			# brak miejsca: kładzie obok zwłok
 			var l := LupNaZiemi.new()

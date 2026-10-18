@@ -13,7 +13,8 @@ var mebel := {}              # ModeleMebli: ruchome części (drzwi, szuflady, w
 var otwarty_mebel := false
 var _start: Array = []
 var _tw: Tween
-var wys_wnetrza := -1.0      # bez modelu ruchomego: wysokość punktu, na który się patrzy
+var wys_wnetrza := -1.0
+var _kurz_byl := false      # bez modelu ruchomego: wysokość punktu, na który się patrzy
 
 
 func _init() -> void:
@@ -138,9 +139,16 @@ func _wylam(g) -> void:
 	g.zacznij_akcje(("Wyłamywanie kłódki" if narzedzie else "Wyłamywanie kłódki (kolbą)") + ": " + nazwa, czas, func():
 		zamkniety_kluczem = ""
 		var kl = mebel.get("klodka")
-		if kl and is_instance_valid(kl):
-			(kl as Node3D).queue_free()
 		Dzwiek.graj_3d("upadek_metal", global_position + Vector3.UP * 0.3, get_parent(), -6.0, 1.2)
+		var kp: Vector3 = (kl as Node3D).global_position if kl and is_instance_valid(kl) else global_position + Vector3.UP * 0.4
+		Efekty.iskry(get_parent(), kp, global_basis.z + Vector3.UP * 0.5)
+		Efekty.kurz(get_parent(), Vector3(kp.x, global_position.y, kp.z), 0.6)
+		if kl and is_instance_valid(kl):
+			# kłódka spada na ziemię
+			var kn := kl as Node3D
+			var tk := kn.create_tween()
+			tk.tween_property(kn, "global_position", Vector3(kp.x, global_position.y + 0.02, kp.z) + global_basis.z * 0.12, 0.3).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+			tk.parallel().tween_property(kn, "rotation", kn.rotation + Vector3(1.4, 0.6, 0.3), 0.3)
 		g.komunikat.emit("Kłódka puściła")
 		, "otwieranie")
 
@@ -177,6 +185,11 @@ func otworz_mebel() -> float:
 	_tw = create_tween()
 	var czas := 0.0
 	var dz: String = mebel.get("dzwiek", "drzwi")
+	if not _kurz_byl:
+		# pierwsze otwarcie od lat: kurz z zawiasów i szczelin
+		_kurz_byl = true
+		var pk := punkt_wnetrza() + global_basis.z * 0.25
+		get_tree().create_timer(0.15).timeout.connect(func(): Efekty.kurz(get_parent(), Vector3(pk.x, global_position.y + (0.3 if niski else 0.8), pk.z), 0.7))
 	for krok in kroki:
 		var dl := 0.0
 		for zm in krok:

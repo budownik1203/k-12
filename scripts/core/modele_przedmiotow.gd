@@ -29,6 +29,7 @@ static func wezel(p: Przedmiot, vm := false) -> Node3D:
 			cz = (md.get("cialo3", []) as Array).duplicate()
 			if p.dane.get("mag") != null:
 				cz.append_array(md.get("mag3", []))
+			cz.append_array(_dodatki_broni(p, md))
 			# broń leży na boku (prawą stroną do góry)
 			piv.rotation = Vector3(0, 0, deg_to_rad(90))
 		"magazynek":
@@ -57,6 +58,56 @@ static func wezel(p: Przedmiot, vm := false) -> Node3D:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	piv.add_child(mi)
 	return _wysrodkuj(n, piv)
+
+
+static func _przesun(cz: Array, o: Vector3) -> Array:
+	var out := []
+	for c in cz:
+		var d: Dictionary = (c as Dictionary).duplicate()
+		if d.has("c"):
+			d["c"] = Vector3(d["c"]) + o
+		if d.has("a"):
+			d["a"] = Vector3(d["a"]) + o
+			d["b"] = Vector3(d["b"]) + o
+		out.append(d)
+	return out
+
+
+## Dodatki założone na broń leżącą w świecie (tłumik na wylocie, celownik na pokrywie, latarka, chwyt).
+static func _dodatki_broni(p: Przedmiot, md: Dictionary) -> Array:
+	var out := []
+	var mont: Dictionary = md.get("montaz", {})
+	for slot in Przedmiot.SLOTY_DODATKOW:
+		var d: Przedmiot = p.dodatek(slot)
+		if d == null:
+			continue
+		var cz := _dodatek(d.id)
+		match slot:
+			"wylot":
+				var lufa: Vector3 = md.get("lufa", Vector3.ZERO)
+				var dl := 0.14 if d.id == "tlumik_9" else (0.18 if d.id == "tlumik_762" else 0.06)
+				var r := 0.017 if d.id == "tlumik_9" else (0.019 if d.id == "tlumik_762" else 0.016)
+				out.append_array(_przesun(cz, lufa + Vector3(0, -r, -dl * 0.5 + 0.01)))
+			"celownik":
+				if mont.has("celownik"):
+					out.append_array(_przesun(cz, Vector3(mont["celownik"])))
+			"chwyt":
+				if mont.has("chwyt"):
+					# chwyt pionowy pod łożem
+					var cc := []
+					for c in cz:
+						var dd: Dictionary = (c as Dictionary).duplicate()
+						if dd.has("c"):
+							var v: Vector3 = dd["c"]
+							dd["c"] = Vector3(v.x, -v.z * 0.6 - 0.04, v.y)
+							var sz: Vector3 = dd["s"]
+							dd["s"] = Vector3(sz.x, sz.z, sz.y)
+						cc.append(dd)
+					out.append_array(_przesun(cc, Vector3(mont["chwyt"])))
+			"latarka":
+				if mont.has("latarka"):
+					out.append_array(_przesun(cz, Vector3(mont["latarka"]) + Vector3(0, -0.014, 0)))
+	return out
 
 
 static func _bez_vm(w: Node, vm: bool) -> void:

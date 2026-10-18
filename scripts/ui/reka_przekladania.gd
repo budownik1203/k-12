@@ -17,6 +17,8 @@ var aktywna := false
 var _powrot := 0.0          # po odłożeniu: dłoń wraca w dół kadru
 var _koniec_dloni := SPOCZYNEK
 var gracz: Node
+var _ciezar := 0.0
+var _skala := 1.0
 
 
 func _ready() -> void:
@@ -32,6 +34,7 @@ func zacznij(p: Przedmiot, od: Vector3, do_: Vector3, czas: float) -> void:
 	if _model:
 		_model.queue_free()
 		_model = null
+	_skala = 1.0
 	_model = ModelePrzedmiotow.wezel(p, true)
 	add_child(_model)
 	_model.visible = false
@@ -39,9 +42,10 @@ func zacznij(p: Przedmiot, od: Vector3, do_: Vector3, czas: float) -> void:
 	var ab: AABB = _model.get_meta("aabb", AABB())
 	var najw := maxf(ab.size.x, maxf(ab.size.y, ab.size.z))
 	if najw > 0.35:
-		_model.scale = Vector3.ONE * (0.35 / najw) * 1.4
+		_skala = (0.35 / najw) * 1.4
 	_od = od
 	_do = do_
+	_ciezar = p.waga()
 	_start_dloni = reka.position if visible and _powrot > 0.0 else SPOCZYNEK
 	_t = 0.0
 	_czas = maxf(0.3, czas)
@@ -102,17 +106,28 @@ func _process(delta: float) -> void:
 		trzyma = true
 	else:
 		poz = _do.lerp(nad_do + Vector3(0.03, 0.02, 0.05), smoothstep(0.92, 1.0, f))
-	# nadgarstek za dłonią: palce w stronę punktu chwytu, grzbiet do góry; lekkie drżenie przy wysiłku
-	var kier := (poz - Vector3(0.05, 0.08, 0.15)).normalized()
-	kier = (kier + Vector3(0, -0.6, 0)).normalized()
-	AnimacjeAkcji._uloz(reka, poz - kier * 0.1, kier, Vector3(0.1, 1.0, 0.2))
+	# ręka wyprostowana od barku: palce w linii bark → dłoń, przy chwycie i odkładaniu nadgarstek
+	# zgina się w dół (dłoń nad przedmiotem); łokieć w połowie drogi, nisko – przedramię w prawym dolnym
+	# rogu kadru zamiast przez cały ekran
+	var bark := Vector3(0.26, -0.34, 0.1)
+	var kier := (poz - bark).normalized()
+	var blisko_celu := 1.0 - smoothstep(0.0, 0.12, minf(poz.distance_to(_od), poz.distance_to(_do)))
+	kier = (kier + Vector3(0, -0.9, 0) * blisko_celu + Vector3(0, -0.25, 0)).normalized()
+	var nadg := poz - kier * 0.085
+	var lokiec := bark.lerp(nadg, 0.5) + Vector3(0.07, -0.13, 0.04)
+	reka.celuj_lokiec(lokiec, self)
+	# drobne drżenie przy ciężkich przedmiotach
+	if trzyma and _ciezar > 2.0:
+		nadg += Vector3(sin(_t * 23.0), cos(_t * 19.0), 0) * 0.0015 * minf(4.0, _ciezar)
+	AnimacjeAkcji._uloz(reka, nadg, kier, Vector3(0.15, 1.0, 0.25).normalized())
 	reka.ustaw_chwyt("piesc" if trzyma else "otwarta")
 	if _model:
 		_model.visible = trzyma
 		if trzyma:
 			# przedmiot trzymany pod palcami (widać go spod dłoni)
-			_model.position = poz + kier * 0.035 + Vector3(0, -0.035, 0)
-			_model.rotation = Vector3(0.25, 0.4, 0.0)
+			_model.position = poz + kier * 0.02 + Vector3(0, -0.03, 0)
+			# przedmiot trzymany przechyla się z dłonią, cięższy zwisa
+			_model.basis = Basis.looking_at(Vector3(kier.x, 0.0, kier.z).normalized() if absf(kier.x) + absf(kier.z) > 0.01 else Vector3.FORWARD, Vector3.UP) * Basis(Vector3.RIGHT, 0.2 + minf(0.4, _ciezar * 0.05)) * Basis.from_scale(Vector3.ONE * _skala)
 	if f >= 1.0:
 		aktywna = false
 		if _model:

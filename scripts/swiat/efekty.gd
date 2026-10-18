@@ -332,3 +332,76 @@ static func dym_wylotu(rodzic: Node3D, pos: Vector3, kier: Vector3, sila := 1.0)
 	t.tween_property(mi, "global_position", mi.global_position + kier * 0.35 + Vector3(0, 0.25, 0), 0.9)
 	t.tween_property(m, "albedo_color:a", 0.0, 0.9)
 	t.chain().tween_callback(mi.queue_free)
+
+
+## Kurz: kilka miękkich kłębów przy podłodze (upadek przedmiotu, otwarcie starej szafy, wyłamanie kłódki).
+static func kurz(rodzic: Node3D, pos: Vector3, sila := 1.0, kolor := Color(0.55, 0.5, 0.42)) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	_przygotuj_plomien()
+	var n := int(clampf(2.0 + sila * 3.0, 2.0, 7.0))
+	for i in n:
+		var mi := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(0.1, 0.1) * (0.7 + sila * 0.3)
+		mi.mesh = q
+		var m: StandardMaterial3D = _mat_dym.duplicate()
+		m.albedo_color = Color(kolor.r, kolor.g, kolor.b, 0.0)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rodzic.add_child(mi)
+		var kat := randf() * TAU
+		var r := randf_range(0.02, 0.1) * sila
+		mi.global_position = pos + Vector3(cos(kat) * r, 0.03 + randf() * 0.04, sin(kat) * r)
+		var cel := mi.global_position + Vector3(cos(kat), 0.0, sin(kat)) * randf_range(0.08, 0.25) * sila + Vector3(0, randf_range(0.05, 0.18), 0)
+		var dl := randf_range(0.9, 1.6)
+		var t := mi.create_tween().set_parallel(true)
+		t.tween_property(m, "albedo_color:a", 0.28 * minf(1.0, sila), 0.12)
+		t.tween_property(mi, "scale", Vector3.ONE * randf_range(2.5, 4.0), dl).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		t.tween_property(mi, "global_position", cel, dl).set_ease(Tween.EASE_OUT)
+		t.tween_property(m, "albedo_color:a", 0.0, dl * 0.8).set_delay(dl * 0.2)
+		t.chain().tween_callback(mi.queue_free)
+
+
+## Iskry (metal o metal: wyłamana kłódka, łom, rykoszet): świecące odpryski z grawitacją.
+static func iskry(rodzic: Node3D, pos: Vector3, kier: Vector3, ile := 14) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.emitting = false
+	p.amount = ile
+	p.lifetime = 0.5
+	p.explosiveness = 0.95
+	p.direction = kier
+	p.spread = 55.0
+	p.initial_velocity_min = 1.2
+	p.initial_velocity_max = 3.2
+	p.gravity = Vector3(0, -9.8, 0)
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.0
+	var box := BoxMesh.new()
+	box.size = Vector3(0.006, 0.006, 0.02)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(1.0, 0.75, 0.35)
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.6, 0.2)
+	m.emission_energy_multiplier = 3.0
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box.material = m
+	p.mesh = box
+	p.particle_flag_align_y = true
+	rodzic.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var sw := OmniLight3D.new()
+	sw.light_color = Color(1.0, 0.7, 0.35)
+	sw.light_energy = 1.2
+	sw.omni_range = 1.2
+	rodzic.add_child(sw)
+	sw.global_position = pos
+	sw.create_tween().tween_property(sw, "light_energy", 0.0, 0.18)
+	p.finished.connect(func():
+		p.queue_free()
+		if is_instance_valid(sw):
+			sw.queue_free())
