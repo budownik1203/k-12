@@ -15,8 +15,8 @@ const MATERIALY := {
 	"paznokiec": ["skora", 0.09, 0.4, 0.5, 0.18],
 	"rekaw": ["rekaw", 0.12, 0.95, 0.1, 0.12],
 	"mankiet": ["rekaw", 0.08, 0.95, 0.1, 0.1],
-	"metal": ["metal_bron", 0.2, 0.45, 0.7, 0.14],
-	"metal_jasny": ["metal_jasny", 0.12, 0.35, 0.8, 0.16],
+	"metal": ["metal_bron", 0.2, 0.62, 0.35, 0.14],
+	"metal_jasny": ["metal_jasny", 0.12, 0.5, 0.45, 0.16],
 	"drewno": ["drewno_bron", 0.2, 0.6, 0.4, 0.14],
 	"bakelit": ["bakelit", 0.12, 0.7, 0.35, 0.13],
 	"okladzina": ["okladzina", 0.05, 0.8, 0.25, 0.13],
@@ -26,13 +26,19 @@ const MATERIALY := {
 	"tarcza": ["tarcza_zegarka", 0.034, 0.5, 0.5, 0.35],
 	"pasek": ["pasek_zegarka", 0.06, 0.9, 0.15, 0.12],
 	"latarka": ["metal_bron", 0.12, 0.55, 0.5, 0.14],
+	# postacie (kolor nadaje "k" – odcień tkaniny frakcji)
+	"tkanina": ["tkanina_npc", 0.25, 0.95, 0.1, 0.0],
+	"skora_npc": ["skora_npc", 0.2, 0.8, 0.25, 0.0],
+	"twarz": ["twarz", 1.0, 0.8, 0.25, 0.0],
+	"twarz_maska": ["twarz_maska", 1.0, 0.9, 0.1, 0.0],
+	"but": ["bakelit", 0.2, 0.7, 0.3, 0.0],
 }
 
 static var _mat := {}
 
 
-static func material(nazwa: String, vm := true) -> ShaderMaterial:
-	var k := "%s|%s" % [nazwa, vm]
+static func material(nazwa: String, vm := true, tint := Color.WHITE) -> ShaderMaterial:
+	var k := "%s|%s|%s" % [nazwa, vm, tint.to_html()]
 	if _mat.has(k):
 		return _mat[k]
 	var d: Array = MATERIALY.get(nazwa, MATERIALY["metal"])
@@ -41,6 +47,7 @@ static func material(nazwa: String, vm := true) -> ShaderMaterial:
 	m.set_shader_parameter("albedo_tex", load("res://assets/textures/%s.png" % d[0]))
 	m.set_shader_parameter("chropowatosc", d[2])
 	m.set_shader_parameter("polysk", d[3])
+	m.set_shader_parameter("tint", tint)
 	if vm:
 		# broń i ręce lekko podświetlone, żeby były czytelne w ciemności (jak w Iron Blight)
 		m.set_shader_parameter("use_emission", true)
@@ -57,23 +64,48 @@ static func skala_uv(nazwa: String) -> float:
 ## Buduje siatkę z listy części; jedna powierzchnia na materiał.
 static func siatka(czesci: Array, vm := true) -> ArrayMesh:
 	var grupy := {}
+	var mat_grup := {}
 	for c in czesci:
 		var m: String = c.get("m", "metal")
-		if not grupy.has(m):
+		var tint: Color = c.get("k", Color.WHITE)
+		var klucz := m + "|" + tint.to_html()
+		if not grupy.has(klucz):
 			var st := SurfaceTool.new()
 			st.begin(Mesh.PRIMITIVE_TRIANGLES)
-			grupy[m] = st
+			grupy[klucz] = st
+			mat_grup[klucz] = material(m, vm, tint)
 		match String(c.get("t", "box")):
 			"box":
-				_box(grupy[m], c, skala_uv(m))
+				_box(grupy[klucz], c, skala_uv(m))
 			"walec":
-				_walec(grupy[m], c, skala_uv(m))
+				_walec(grupy[klucz], c, skala_uv(m))
+			"quad":
+				_quad_uv(grupy[klucz], c)
 	var mesh := ArrayMesh.new()
-	for m in grupy:
-		var st: SurfaceTool = grupy[m]
+	for klucz in grupy:
+		var st: SurfaceTool = grupy[klucz]
 		st.commit(mesh)
-		mesh.surface_set_material(mesh.get_surface_count() - 1, material(m, vm))
+		mesh.surface_set_material(mesh.get_surface_count() - 1, mat_grup[klucz])
 	return mesh
+
+
+## Czworokąt z pełnym UV 0..1 (twarz, naszywki): środek c, rozmiar s (szer, wys), zwrócony w stronę n.
+static func quad(c: Vector3, s: Vector2, n: Vector3, m: String, k := Color.WHITE) -> Dictionary:
+	return {"t": "quad", "c": c, "s": s, "n": n, "m": m, "k": k}
+
+
+static func _quad_uv(st: SurfaceTool, c: Dictionary) -> void:
+	var n: Vector3 = (c["n"] as Vector3).normalized()
+	var gora := Vector3.UP if absf(n.y) < 0.95 else Vector3.FORWARD
+	var prawo := gora.cross(n).normalized()
+	gora = n.cross(prawo).normalized()
+	var s: Vector2 = c["s"]
+	var o: Vector3 = c["c"]
+	var p := [o - prawo * s.x * 0.5 - gora * s.y * 0.5, o + prawo * s.x * 0.5 - gora * s.y * 0.5,
+		o + prawo * s.x * 0.5 + gora * s.y * 0.5, o - prawo * s.x * 0.5 + gora * s.y * 0.5]
+	var uv := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
+	_tri(st, [p[0], p[1], p[2]], [uv[0], uv[1], uv[2]], n)
+	_tri(st, [p[0], p[2], p[3]], [uv[0], uv[2], uv[3]], n)
 
 
 static func instancja(czesci: Array, vm := true) -> MeshInstance3D:

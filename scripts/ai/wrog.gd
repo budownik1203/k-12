@@ -154,7 +154,7 @@ func _buduj_model() -> void:
 	add_child(_model)
 	# miednica i pas
 	_czesci["biodra"] = _czesc(_model, Vector3(0, 0.95, 0))
-	_czesci["biodra"].add_child(Kit.instancja([
+	_czesci["biodra"].add_child(_bryly([
 		[Vector3(0, 0.04, 0), Vector3(0.34, 0.2, 0.22), spod],
 		[Vector3(0, 0.13, 0), Vector3(0.36, 0.05, 0.24), ciemny],
 		[Vector3(0.12, 0.1, -0.12), Vector3(0.07, 0.08, 0.04), ubr_c],
@@ -181,14 +181,13 @@ func _buduj_model() -> void:
 	if frakcja == "szabrownik" and randf() < 0.6:
 		tul.append([Vector3(0, 0.33, 0.2), Vector3(0.3, 0.36, 0.15), Color(0.3, 0.22, 0.14)])   # tobołek
 		tul.append([Vector3(0, 0.53, 0.2), Vector3(0.24, 0.06, 0.13), Color(0.25, 0.18, 0.11)])
-	_czesci["tulow"].add_child(Kit.instancja(tul))
+	_czesci["tulow"].add_child(_bryly(tul))
 	# głowa
 	_czesci["glowa"] = _czesc(_czesci["tulow"], Vector3(0, 0.58, 0))
 	var glowa_bryly := [
 		[Vector3(0, 0.04, 0), Vector3(0.1, 0.08, 0.1), skora],
 		[Vector3(0, 0.17, 0), Vector3(0.2, 0.24, 0.22), skora],
-		[Vector3(0, 0.19, -0.111), Vector3(0.14, 0.028, 0.01), Color(0.06, 0.05, 0.05)],   # oczy w cieniu
-		[Vector3(0, 0.13, -0.113), Vector3(0.03, 0.05, 0.02), skora.darkened(0.1)],        # nos
+		[Vector3(0, 0.135, -0.113), Vector3(0.032, 0.05, 0.022), skora.darkened(0.05)],    # nos
 	]
 	if frakcja == "szabrownik":
 		glowa_bryly.append([Vector3(0, 0.2, 0.025), Vector3(0.26, 0.3, 0.24), gl])           # kaptur
@@ -202,22 +201,27 @@ func _buduj_model() -> void:
 	if helm != null:
 		glowa_bryly.append([Vector3(0, 0.29, 0.0), Vector3(0.27, 0.12, 0.29), Color(0.22, 0.26, 0.18)])
 		glowa_bryly.append([Vector3(0, 0.24, 0.0), Vector3(0.31, 0.03, 0.33), Color(0.2, 0.24, 0.16)])
-	_czesci["glowa"].add_child(Kit.instancja(glowa_bryly))
+	var gm := _bryly(glowa_bryly)
+	_czesci["glowa"].add_child(gm)
+	# twarz z teksturą (oczy, brwi, zarost) albo kominiarka najemnika
+	var tw := Bryly.instancja([Bryly.quad(Vector3(0, 0.165, -0.1112 if frakcja != "najemnik" else -0.1185), Vector2(0.18, 0.21),
+		Vector3(0, 0, -1), "twarz" if frakcja != "najemnik" else "twarz_maska")], false)
+	_czesci["glowa"].add_child(tw)
 	# ręce: ramię -> łokieć -> dłoń (ustawiane kinematyką odwrotną na chwyt broni)
 	for strona in [-1, 1]:
 		var ramie := _czesc(_czesci["tulow"], Vector3(0.25 * strona, 0.5, 0))
-		ramie.add_child(Kit.instancja([[Vector3(0, -0.13, 0), Vector3(0.12, 0.29, 0.12), ubr], [Vector3(0, 0.0, 0), Vector3(0.14, 0.08, 0.14), ubr_c]]))
+		ramie.add_child(_bryly([[Vector3(0, -0.13, 0), Vector3(0.12, 0.29, 0.12), ubr], [Vector3(0, 0.0, 0), Vector3(0.14, 0.08, 0.14), ubr_c]]))
 		var lokiec := _czesc(ramie, Vector3(0, -RAMIE, 0))
-		lokiec.add_child(Kit.instancja([[Vector3(0, -0.12, 0), Vector3(0.095, 0.25, 0.095), ubr], [Vector3(0, -0.26, 0), Vector3(0.1, 0.04, 0.1), ubr_c],
+		lokiec.add_child(_bryly([[Vector3(0, -0.12, 0), Vector3(0.095, 0.25, 0.095), ubr], [Vector3(0, -0.26, 0), Vector3(0.1, 0.04, 0.1), ubr_c],
 			[Vector3(0, -RAMIE, -0.01), Vector3(0.075, 0.095, 0.085), rek]]))
 		var s := "_l" if strona < 0 else "_p"
 		_czesci["ramie" + s] = ramie
 		_czesci["lokiec" + s] = lokiec
 		# nogi: udo -> kolano -> stopa
 		var noga := _czesc(_czesci["biodra"], Vector3(0.1 * strona, 0.0, 0))
-		noga.add_child(Kit.instancja([[Vector3(0, -0.22, 0), Vector3(0.15, 0.46, 0.16), spod], [Vector3(0.08 * strona, -0.25, -0.02), Vector3(0.04, 0.1, 0.09), spod.darkened(0.2)]]))
+		noga.add_child(_bryly([[Vector3(0, -0.22, 0), Vector3(0.15, 0.46, 0.16), spod], [Vector3(0.08 * strona, -0.25, -0.02), Vector3(0.04, 0.1, 0.09), spod.darkened(0.2)]]))
 		var kolano := _czesc(noga, Vector3(0, -0.45, 0))
-		kolano.add_child(Kit.instancja([[Vector3(0, -0.2, 0), Vector3(0.135, 0.4, 0.145), spod],
+		kolano.add_child(_bryly([[Vector3(0, -0.2, 0), Vector3(0.135, 0.4, 0.145), spod],
 			[Vector3(0, -0.38, 0), Vector3(0.14, 0.1, 0.15), ciemny], [Vector3(0, -0.455, -0.045), Vector3(0.13, 0.09, 0.26), ciemny]]))
 		_czesci["noga" + s] = noga
 		_czesci["kolano" + s] = kolano
@@ -225,8 +229,11 @@ func _buduj_model() -> void:
 	var md := Modele.bron(bron.id)
 	_md = md
 	_czesci["bron"] = _czesc(_czesci["tulow"], Vector3(0.1, 0.25, -0.25))
-	_czesci["bron"].add_child(Kit.instancja(md["cialo"]))
-	_mag_node = Kit.instancja(md["mag"]) if not md["mag"].is_empty() else Node3D.new()
+	_czesci["bron"].add_child(Bryly.instancja(md["cialo3"], false) if md.has("cialo3") else Kit.instancja(md["cialo"]))
+	if md.has("mag3") and not (md["mag3"] as Array).is_empty():
+		_mag_node = Bryly.instancja(md["mag3"], false)
+	else:
+		_mag_node = Kit.instancja(md["mag"]) if not md["mag"].is_empty() else Node3D.new()
 	_czesci["bron"].add_child(_mag_node)
 	_czesci["wylot"] = Vector3(md["lufa"])
 	# latarka na broni najemnika: włączana przy czujności i walce (zdradza pozycję)
@@ -258,6 +265,29 @@ func _buduj_model() -> void:
 
 func _kolor(a: Array) -> Color:
 	return Color(a[0], a[1], a[2])
+
+
+## Bryły postaci w stylu Iron Blight: fazowane, z teksturą tkaniny barwioną kolorem frakcji
+## (skóra i buty osobnymi materiałami).
+func _bryly(boxes: Array) -> MeshInstance3D:
+	var cz := []
+	for bx in boxes:
+		var c: Color = bx[2]
+		var s3: Vector3 = bx[1]
+		var faza := minf(s3.x, minf(s3.y, s3.z)) * 0.22
+		var rot: Vector3 = bx[3] if bx.size() > 3 else Vector3.ZERO
+		var m := "tkanina"
+		var k := Color(minf(1.0, c.r / 0.75), minf(1.0, c.g / 0.75), minf(1.0, c.b / 0.75))
+		if absf(c.r - 0.6) < 0.08 and absf(c.g - 0.46) < 0.08 and absf(c.b - 0.38) < 0.08:
+			m = "skora_npc"
+			k = Color(c.r / 0.69, c.g / 0.53, c.b / 0.44).clamp()
+		elif c.r < 0.11 and c.g < 0.11 and c.b < 0.11:
+			m = "but"
+			k = Color.WHITE
+		cz.append({"t": "box", "c": bx[0], "s": s3, "m": m, "k": k, "f": faza, "r": rot})
+	var mi := Bryly.instancja(cz, false)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	return mi
 
 
 func _czesc(rodzic: Node3D, poz: Vector3) -> Node3D:

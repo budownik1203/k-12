@@ -485,6 +485,63 @@ def pasek_zegarka():
     zapisz(img, "pasek_zegarka.png", 12)
 
 
+# ---------------------------------------------------------------- postacie
+
+def tkanina_npc():
+    """Jasnoszara tkanina (barwiona odcieniem frakcji w shaderze): splot, przetarcia, plamy brudu."""
+    w = h = 32
+    yy, xx = np.mgrid[0:h, 0:w]
+    splot = (((xx // 2 + yy) % 3) == 0).astype(float)
+    img = np.zeros((h, w, 3)) + 200
+    img *= (0.9 - 0.08 * splot[..., None]) * (0.82 + 0.26 * fbm(h, w, 3, 3, 400)[..., None])
+    img += ziarno(h, w, 401, 10)[..., None]
+    zapisz(img, "tkanina_npc.png", 24)
+
+
+def skora_npc():
+    w = h = 16
+    img = col((176, 136, 112))[None, None] * (0.9 + 0.14 * fbm(h, w, 2, 2, 410)[..., None])
+    zapisz(img, "skora_npc.png", 16)
+
+
+def twarz():
+    """Twarz 32x32 w stylu Iron Blight: zmęczona, zarost, oczy w cieniu, krwawe zacieki (frakcje ludzkie)."""
+    w = h = 32
+    img = col((178, 136, 112))[None, None] * (0.9 + 0.12 * fbm(h, w, 3, 3, 420)[..., None])
+    # brwi, oczodoły, oczy
+    for x0 in (8, 19):
+        img[10:12, x0:x0 + 6] = (64, 48, 40)
+        img[12:16, x0:x0 + 6] *= 0.72
+        img[13:15, x0 + 1:x0 + 5] = (220, 214, 200)
+        img[13:15, x0 + 2:x0 + 4] = (40, 34, 30)
+    # nos z cieniem, usta
+    img[14:21, 15:17] *= 0.88
+    img[20:22, 13:19] *= 0.7
+    img[24:26, 11:21] = (110, 60, 54)
+    img[26, 12:20] *= 0.8
+    # zarost
+    r = rng(421)
+    for _ in range(90):
+        y, x = r.integers(20, 32), r.integers(4, 28)
+        img[y, x] *= 0.72
+    # cienie po bokach (zaokrąglenie)
+    for x in range(4):
+        img[:, x] *= 0.7 + x * 0.07
+        img[:, w - 1 - x] *= 0.7 + x * 0.07
+    zapisz(img, "twarz.png", 32)
+
+
+def twarz_maska():
+    """Kominiarka z wycięciem na oczy (najemnicy)."""
+    w = h = 32
+    img = col((40, 40, 38))[None, None] * (0.85 + 0.25 * fbm(h, w, 6, 6, 430)[..., None])
+    img[11:17, 6:26] = col((176, 134, 110))
+    for x0 in (9, 19):
+        img[13:15, x0:x0 + 4] = (220, 214, 200)
+        img[13:15, x0 + 1:x0 + 3] = (40, 34, 30)
+    zapisz(img, "twarz_maska.png", 16)
+
+
 if __name__ == "__main__":
     sciana_lamperia()
     tapeta("tapeta_zielona.png", (120, 134, 108), (82, 98, 76), 160)
@@ -510,3 +567,7 @@ if __name__ == "__main__":
     bakelit()
     tarcza_zegarka()
     pasek_zegarka()
+    tkanina_npc()
+    skora_npc()
+    twarz()
+    twarz_maska()
