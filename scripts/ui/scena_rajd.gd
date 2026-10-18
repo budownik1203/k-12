@@ -671,6 +671,21 @@ func _klatki(n: int) -> void:
 ## Animacje broni: blokada zamka, przeładowanie z pustą komorą, łamanie obrzyna, zegarek, dodatki.
 func _zrzut_animacji(katalog: String) -> void:
 	var b := gracz.bron
+	if OS.get_cmdline_user_args().has("--plecaki"):
+		for pid in ["worek", "plecak_turystyczny", "plecak_szturmowy", "chlebak", "plecak_wojskowy", "napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska"]:
+			var pr := Przedmiot.nowy(pid)
+			var slot: String = pr.defn()["pojemnik"]["slot"]
+			Gra.ekw.sloty[slot] = pr
+			ekran_ekw.otworz(null)
+			await _klatki(5)
+			ekran_ekw.przelacz_pojemnik(slot)
+			await _klatki(25)
+			await _zapisz(katalog, "pl_%s_a" % pid)
+			await get_tree().create_timer(2.4).timeout
+			await _zapisz(katalog, "pl_%s_b" % pid)
+			ekran_ekw.zamknij()
+			await get_tree().create_timer(1.0).timeout
+		return
 	if OS.get_cmdline_user_args().has("--czynnosci"):
 		gracz.sterowanie = false
 		var tylko := ""

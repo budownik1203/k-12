@@ -57,71 +57,56 @@ func _zbuduj(co: String, s: Siatka) -> Dictionary:
 	var wym := _wymiary(s)
 	var w := wym.x
 	var d := wym.y
-	var wezel := Node3D.new()
-	add_child(wezel)
-	var bryly := []
-	var wieko_bryly := []
-	var h := 0.1
-	match co:
-		"plecak":
-			var tk := Color(0.27, 0.3, 0.2)
-			var ciem := Color(0.12, 0.12, 0.09)
-			h = 0.11
-			# rozpięty worek: dno, niskie ściany, ciemne wnętrze, klamry
-			bryly.append([Vector3(0, 0.02, 0), Vector3(w, 0.04, d), tk])
-			bryly.append([Vector3(-w * 0.5 + 0.02, h * 0.5, 0), Vector3(0.04, h, d), tk])
-			bryly.append([Vector3(w * 0.5 - 0.02, h * 0.5, 0), Vector3(0.04, h, d), tk])
-			bryly.append([Vector3(0, h * 0.5, d * 0.5 - 0.02), Vector3(w, h, 0.04), tk])
-			bryly.append([Vector3(0, h * 0.5, -d * 0.5 + 0.02), Vector3(w, h, 0.04), tk])
-			bryly.append([Vector3(0, h * 0.5 - 0.02, 0), Vector3(w - 0.08, 0.01, d - 0.08), ciem])
-			bryly.append([Vector3(-w * 0.5 - 0.02, h * 0.45, 0.0), Vector3(0.05, h * 0.6, d * 0.5), tk.darkened(0.15)])
-			bryly.append([Vector3(w * 0.5 + 0.02, h * 0.45, 0.0), Vector3(0.05, h * 0.6, d * 0.5), tk.darkened(0.15)])
-			# klapa: od zawiasu na dalszej krawędzi w stronę gracza
-			wieko_bryly.append([Vector3(0, 0.015, d * 0.5), Vector3(w + 0.02, 0.03, d), tk.lightened(0.05)])
-			wieko_bryly.append([Vector3(-w * 0.22, 0.034, d * 0.55), Vector3(0.04, 0.01, d * 0.9), ciem])
-			wieko_bryly.append([Vector3(w * 0.22, 0.034, d * 0.55), Vector3(0.04, 0.01, d * 0.9), ciem])
-			wieko_bryly.append([Vector3(-w * 0.22, 0.04, d * 0.95), Vector3(0.06, 0.02, 0.05), Color(0.5, 0.48, 0.4)])
-			wieko_bryly.append([Vector3(w * 0.22, 0.04, d * 0.95), Vector3(0.06, 0.02, 0.05), Color(0.5, 0.48, 0.4)])
-		"bezpieczny":
-			var met := Color(0.33, 0.35, 0.31)
-			h = 0.09
-			bryly.append([Vector3(0, h * 0.5, 0), Vector3(w, h, d), met])
-			bryly.append([Vector3(0, h - 0.004, 0), Vector3(w - 0.03, 0.01, d - 0.03), Color(0.09, 0.09, 0.08)])
-			wieko_bryly.append([Vector3(0, 0.012, d * 0.5), Vector3(w + 0.01, 0.024, d + 0.01), met.lightened(0.08)])
-			wieko_bryly.append([Vector3(0, 0.03, d * 0.9), Vector3(0.06, 0.02, 0.03), Color(0.6, 0.55, 0.3)])
-		"kamizelka":
-			var oliw := Color(0.3, 0.32, 0.22)
-			# przód kamizelki przyciągnięty przed kamerę: płyta z ładownicami, szelki u góry
-			w = s.w * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
-			d = s.h * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
-			bryly.append([Vector3(0, 0, -0.01), Vector3(w, d, 0.03), oliw])
-			bryly.append([Vector3(0, 0, 0.006), Vector3(w - 0.03, d - 0.03, 0.006), Color(0.1, 0.1, 0.08)])
-			bryly.append([Vector3(0, d * 0.5 + 0.012, -0.012), Vector3(w + 0.01, 0.025, 0.035), oliw.darkened(0.15)])
-			bryly.append([Vector3(-w * 0.5 - 0.01, 0, -0.015), Vector3(0.02, d * 0.9, 0.03), oliw.darkened(0.15)])
-			bryly.append([Vector3(w * 0.5 + 0.01, 0, -0.015), Vector3(0.02, d * 0.9, 0.03), oliw.darkened(0.15)])
-	var mi := Kit.instancja(bryly)
-	mi.material_override = Kit.material_kolor_vm()
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	wezel.add_child(mi)
-	var wieko: Node3D = null
-	if not wieko_bryly.is_empty():
-		wieko = Node3D.new()
-		wieko.position = Vector3(0, h, -d * 0.5)
-		wezel.add_child(wieko)
-		var wm := Kit.instancja(wieko_bryly)
-		wm.material_override = Kit.material_kolor_vm()
-		wm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		wieko.add_child(wm)
+	var id := "kontener"
+	if co in ["plecak", "kamizelka"] and gracz.ekw.sloty.get(co) != null:
+		id = (gracz.ekw.sloty[co] as Przedmiot).id
 	if co == "kamizelka":
-		# czołówka / poświata na ładownicach, żeby szybki dostęp działał też w ciemności
+		w = s.w * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
+		d = s.h * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
+	# osobny model dla każdego pojemnika z własną sekwencją otwierania
+	var m := ModeleOporzadzenia.zbuduj(id, w, d)
+	var wezel: Node3D = m["wezel"]
+	add_child(wezel)
+	for mi in wezel.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# wartości początkowe części ruchomych (do zamykania w odwrotnej kolejności)
+	var start := []
+	for krok in m["kroki"]:
+		var st := []
+		for zm in krok:
+			st.append((zm[0] as Node3D).get_indexed(NodePath(String(zm[1]))))
+		start.append(st)
+	if co == "kamizelka":
 		var sw := OmniLight3D.new()
 		sw.light_color = Color(1.0, 0.9, 0.75)
 		sw.light_energy = 0.6
 		sw.omni_range = 0.9
 		sw.position = Vector3(0, 0.12, 0.3)
 		wezel.add_child(sw)
-	var gora := Vector3(0, h, 0) if co != "kamizelka" else Vector3(0, 0, 0.01)
-	return {"wezel": wezel, "wieko": wieko, "gora": gora, "w": w, "d": d, "tw": null}
+	return {"wezel": wezel, "wieko": null, "gora": m["gora"], "w": w, "d": d, "tw": null, "kroki": m["kroki"], "start": start, "id": id}
+
+
+## Sekwencja otwierania (po kolei kroki, w kroku równolegle), dźwięki rzepów / zamka / klamer.
+func _otworz_kroki(tw: Tween, m: Dictionary) -> void:
+	for krok in m["kroki"]:
+		var dl := 0.0
+		for zm in krok:
+			dl = maxf(dl, float(zm[3]))
+		tw.tween_callback(func(): Dzwiek.graj("plecak", -14.0, randf_range(1.2, 1.6)))
+		for zm in krok:
+			tw.parallel().tween_property(zm[0], NodePath(String(zm[1])), zm[2], float(zm[3])).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(0.02)
+
+
+func _zamknij_kroki(tw: Tween, m: Dictionary, skala: float) -> void:
+	var kroki: Array = m.get("kroki", [])
+	var start: Array = m.get("start", [])
+	for i in range(kroki.size() - 1, -1, -1):
+		var krok: Array = kroki[i]
+		for j in krok.size():
+			var zm: Array = krok[j]
+			var tg := tw.parallel() if j > 0 else tw
+			tg.tween_property(zm[0], NodePath(String(zm[1])), start[i][j], float(zm[3]) * skala).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 
 
 ## Wyjęcie i rozłożenie pojemnika w czasie `czas` (zdjęcie z pleców / wyjęcie, położenie, otwarcie).
@@ -140,9 +125,9 @@ func otworz(co: String, s: Siatka, czas: float) -> void:
 		_kam.add_child(wezel)
 		wezel.position = Vector3(0.0, -0.42, -0.3)
 		wezel.rotation = Vector3(-0.9, 0, 0)
-		tw.set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(wezel, "position", Vector3(0.0, -0.17, -0.44), czas)
-		tw.tween_property(wezel, "rotation", Vector3(-0.12, 0, 0), czas)
+		tw.tween_property(wezel, "position", Vector3(0.0, -0.17, -0.44), czas * 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(wezel, "rotation", Vector3(-0.12, 0, 0), czas * 0.6)
+		_otworz_kroki(tw, m)
 		return
 	var cel := _poza_podlogi(co)
 	var start := Transform3D(Basis.from_euler(Vector3(1.2, 0.6, -0.4)) * _kam.global_basis.orthonormalized(),
@@ -150,11 +135,10 @@ func otworz(co: String, s: Siatka, czas: float) -> void:
 	wezel.global_transform = start
 	if wieko:
 		wieko.rotation.x = 0.0
-	var t1 := czas * (0.6 if co == "plecak" else 0.5)
+	var t1 := czas * (0.45 if co == "plecak" else 0.4)
 	tw.tween_property(wezel, "global_transform", cel, t1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(func(): Dzwiek.graj("odloz", -10.0, 0.8))
-	if wieko:
-		tw.tween_property(wieko, "rotation:x", -2.75, czas - t1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_otworz_kroki(tw, m)
 	if _swiatlo.light_energy < 0.6:
 		create_tween().tween_property(_swiatlo, "light_energy", 0.7, czas)
 
@@ -170,14 +154,12 @@ func zamknij(co: String, czas: float) -> void:
 	var wieko: Node3D = m["wieko"]
 	var tw := create_tween()
 	m["tw"] = tw
+	_zamknij_kroki(tw, m, 0.6)
 	if co == "kamizelka":
-		tw.set_parallel(true)
-		tw.tween_property(wezel, "position", Vector3(0.0, -0.45, -0.3), czas)
-		tw.tween_property(wezel, "rotation", Vector3(-0.9, 0, 0), czas)
-		tw.chain().tween_callback(_usun.bind(co))
+		tw.tween_property(wezel, "position", Vector3(0.0, -0.45, -0.3), czas * 0.5)
+		tw.parallel().tween_property(wezel, "rotation", Vector3(-0.9, 0, 0), czas * 0.5)
+		tw.tween_callback(_usun.bind(co))
 		return
-	if wieko:
-		tw.tween_property(wieko, "rotation:x", 0.0, czas * 0.35)
 	var cel := Transform3D(_kam.global_basis.orthonormalized(), _kam.global_position + _kam.global_basis.x * 0.45 - _kam.global_basis.y * 0.5 - _kam.global_basis.z * 0.2)
 	tw.tween_property(wezel, "global_transform", cel, czas * 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_usun.bind(co))

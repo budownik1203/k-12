@@ -230,7 +230,7 @@ func _buduj() -> void:
 
 const NAZWY_POJ := {"kieszenie": "Kieszenie", "kamizelka": "Kamizelka", "plecak": "Plecak", "bezpieczny": "Kontener bezpieczny"}
 ## Czas otwarcia w rajdzie: sięgnięcie do kieszeni, spojrzenie w dół na ładownice, zdjęcie i rozpięcie plecaka.
-const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.35, "plecak": 1.7, "bezpieczny": 1.1}
+const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.4, "plecak": 1.9, "bezpieczny": 1.2}
 
 
 func _siatka_pojemnika(co: String) -> Siatka:
