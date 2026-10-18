@@ -382,6 +382,109 @@ def szum():
     zapisz(img, "szum.png", 32)
 
 
+# ---------------------------------------------------------------- ręce i broń (widok z pierwszej osoby)
+
+def skora():
+    """Skóra dłoni: ciepły ton, delikatne przebarwienia i pory (bez wyraźnego wzoru)."""
+    w = h = 32
+    img = col((206, 160, 132))[None, None] * (0.9 + 0.12 * fbm(h, w, 3, 3, 300)[..., None])
+    img += (fbm(h, w, 16, 16, 301, 2)[..., None] - 0.5) * 14
+    img[..., 0] += (fbm(h, w, 4, 4, 302)[...] - 0.5) * 14
+    img += ziarno(h, w, 303, 4)[..., None]
+    zapisz(img, "skora.png", 48)
+
+
+def rekaw():
+    """Kurtka wojskowa / robocza: oliwkowa tkanina w skośny splot, przetarcia."""
+    w = h = 32
+    yy, xx = np.mgrid[0:h, 0:w]
+    splot = (((xx + yy) % 4) < 2).astype(float)
+    img = col((78, 84, 58))[None, None] * (0.86 + 0.08 * splot[..., None]) * (0.88 + 0.18 * fbm(h, w, 3, 3, 310)[..., None])
+    img += ziarno(h, w, 311, 6)[..., None]
+    zapisz(img, "rekaw.png", 32)
+
+
+def metal_bron():
+    """Oksydowana stal jak w Iron Blight: ciemny grafit w drobne piksele, wytarte jasne łaty i rysy."""
+    w = h = 64
+    r = rng(320)
+    img = col((50, 52, 58))[None, None] * (0.8 + 0.3 * fbm(h, w, 4, 4, 321)[..., None])
+    img += (fbm(h, w, 32, 32, 323, 2)[..., None] - 0.5) * 18
+    wyt = fbm(h, w, 6, 6, 324)
+    img[wyt > 0.66] = img[wyt > 0.66] * 0.5 + col((128, 130, 134)) * 0.5
+    for _ in range(40):
+        y, x = r.integers(0, h), r.integers(0, w)
+        for i in range(r.integers(2, 9)):
+            img[(y + i // 3) % h, (x + i) % w] = col((150, 152, 156)) * r.uniform(0.75, 1.0)
+    img += ziarno(h, w, 322, 10)[..., None]
+    zapisz(img, "metal_bron.png", 40)
+
+
+def okladzina():
+    """Okładziny chwytu: brązowy bakelit w kratkę (radełkowanie), z wytartymi szczytami."""
+    w = h = 32
+    yy, xx = np.mgrid[0:h, 0:w]
+    krata = (((xx + yy) % 4 == 0) | ((xx - yy) % 4 == 0)).astype(float)
+    img = col((70, 46, 34))[None, None] * (0.95 - 0.35 * krata[..., None]) * (0.85 + 0.25 * fbm(h, w, 3, 3, 380)[..., None])
+    img += ziarno(h, w, 381, 8)[..., None]
+    zapisz(img, "okladzina.png", 24)
+
+
+def metal_jasny():
+    w = h = 32
+    img = col((168, 168, 164))[None, None] * (0.85 + 0.2 * fbm(h, w, 3, 3, 330)[..., None])
+    img += ziarno(h, w, 331, 10)[..., None]
+    zapisz(img, "metal_jasny.png", 32)
+
+
+def drewno_bron():
+    """Kolba i łoże: rudy orzech z ciemnymi, wyraźnymi słojami i jaśniejszymi przetarciami (jak w Iron Blight)."""
+    w, h = 32, 64
+    yy, xx = np.mgrid[0:h, 0:w].astype(float)
+    n = fbm(h, w, 2, 2, 340)
+    sl = np.sin(xx * 1.1 + n * 7.0 + yy * 0.04)
+    ciemne = (sl > 0.72).astype(float)
+    img = col((150, 72, 38)) * (0.86 + 0.14 * fbm(h, w, 6, 3, 341)[..., None])
+    img = img * (1 - 0.45 * ciemne[..., None])
+    img += (fbm(h, w, 16, 8, 343, 2)[..., None] - 0.5) * 20
+    jasne = fbm(h, w, 4, 3, 344) > 0.7
+    img[jasne] = img[jasne] * 0.75 + col((196, 120, 70)) * 0.25
+    img += ziarno(h, w, 342, 8)[..., None]
+    zapisz(img, "drewno_bron.png", 40)
+
+
+def bakelit():
+    w = h = 32
+    r = rng(350)
+    img = col((46, 34, 28))[None, None] * (0.85 + 0.25 * fbm(h, w, 4, 4, 351)[..., None])
+    for _ in range(60):
+        y, x = r.integers(0, h), r.integers(0, w)
+        img[y, x] *= 1.35
+    zapisz(img, "bakelit.png", 24)
+
+
+def tarcza_zegarka():
+    """Tarcza zegarka: jasna, z podziałką; środek zostawiony na wskaźnik zdrowia (krzyżyk rysowany bryłą)."""
+    w = h = 32
+    img = np.zeros((h, w, 3)) + col((214, 212, 200))
+    yy, xx = np.mgrid[0:h, 0:w].astype(float)
+    d = np.sqrt((yy - 15.5) ** 2 + (xx - 15.5) ** 2)
+    a = np.arctan2(yy - 15.5, xx - 15.5)
+    kres = (np.abs(((a / (2 * np.pi) * 60) % 1) - 0.5) > 0.38) & (d > 12.5) & (d < 15)
+    gruby = (np.abs(((a / (2 * np.pi) * 12) % 1) - 0.5) > 0.42) & (d > 10.5) & (d < 15)
+    img[kres] = (60, 60, 58)
+    img[gruby] = (30, 30, 30)
+    img[d >= 15.4] = (90, 90, 86)
+    zapisz(img, "tarcza_zegarka.png", 16)
+
+
+def pasek_zegarka():
+    w = h = 16
+    img = col((40, 36, 32))[None, None] * (0.85 + 0.2 * fbm(h, w, 2, 2, 360)[..., None])
+    img[::4] *= 0.8
+    zapisz(img, "pasek_zegarka.png", 12)
+
+
 if __name__ == "__main__":
     sciana_lamperia()
     tapeta("tapeta_zielona.png", (120, 134, 108), (82, 98, 76), 160)
@@ -398,3 +501,12 @@ if __name__ == "__main__":
     dywan()
     szafka()
     szum()
+    skora()
+    rekaw()
+    metal_bron()
+    okladzina()
+    metal_jasny()
+    drewno_bron()
+    bakelit()
+    tarcza_zegarka()
+    pasek_zegarka()

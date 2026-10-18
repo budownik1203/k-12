@@ -57,6 +57,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		_blysk = null
 		_lewa = null
 		_szklo = null
+	_reka_p = null
+	_reka_l = null
 	stan = "gotowa"
 	job = {}
 	latarka_w_rece = latarka and (p == null or p.defn()["bron"]["slot"] == "pistolet")
@@ -76,7 +78,10 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		var dod_bryly := _zastosuj_dodatki(p)
 		model = Node3D.new()
 		add_child(model)
-		model.add_child(Kit.instancja(md["cialo"]))
+		if md.has("cialo3"):
+			model.add_child(Bryly.instancja(md["cialo3"]))
+		else:
+			model.add_child(Kit.instancja(md["cialo"]))
 		if not dod_bryly.is_empty():
 			model.add_child(Kit.instancja(dod_bryly))
 		if _kropka_poz != Vector3.ZERO:
@@ -90,16 +95,13 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			model.add_child(kr)
 		mag_node = Node3D.new()
 		model.add_child(mag_node)
-		if not md["mag"].is_empty():
+		if md.has("mag3") and not (md["mag3"] as Array).is_empty():
+			mag_node.add_child(Bryly.instancja(md["mag3"]))
+		elif not md["mag"].is_empty():
 			mag_node.add_child(Kit.instancja(md["mag"]))
-		# prawa ręka na stałe przy chwycie, lewa jako osobny węzeł (animowana przy przeładowaniu)
-		var rece: Array = Modele.rece(md["przod"], bd["slot"] == "pistolet", latarka_w_rece)
-		model.add_child(Kit.instancja(rece.slice(0, 2)))
-		_lewa = null
-		if rece.size() > 2:
-			_lewa = Node3D.new()
-			_lewa.add_child(Kit.instancja(rece.slice(2)))
-			model.add_child(_lewa)
+		# dłonie z palcami (jak w Iron Blight): prawa na chwycie z palcem przy spuście,
+		# lewa w osobnym węźle (animowana przy przeładowaniu), z zegarkiem pokazującym zdrowie
+		_zbuduj_dlonie(bd["slot"] == "pistolet", latarka_w_rece)
 		if latarka_w_rece:
 			# chwyt Harriesa: latarka pod pistoletem, nadgarstki skrzyżowane
 			_lat_node = _wezel_latarki()
@@ -110,7 +112,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		if mi == _blysk or mi == _szklo:
 			continue
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
+		if not mi.has_meta("bryly"):
+			(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
 	_odswiez_mag()
 	stan = "wyciaganie"
 	stan_t = 0.0
@@ -215,9 +218,44 @@ func _animuj_montaz(rot: Vector3, poz: Vector3) -> Array:
 	return [rot, poz]
 
 
+var _reka_p: Reka
+var _reka_l: Reka
+
+
+## Dłonie przy broni: prawa obejmuje chwyt pistoletowy, lewa łoże (karabin) albo prawą dłoń (pistolet).
+func _zbuduj_dlonie(pistolet: bool, tylko_prawa: bool) -> void:
+	var chw: Vector3 = md.get("chwyt", Vector3(0, -0.04, 0.02))
+	var kat: float = md.get("kat_chwytu", 14.0)
+	var os_dol := Basis.from_euler(Vector3(deg_to_rad(kat), 0, 0)) * Vector3(0, -1, 0)
+	_reka_p = Reka.new(true, false, "spust", 0.5)
+	model.add_child(_reka_p)
+	_reka_p.chwyc(chw, os_dol, Vector3(-1, 0, 0), 0.072)
+	_reka_p.celuj_lokiec(Vector3(0.16, -0.34, 0.42), model)
+	_lewa = null
+	_reka_l = null
+	if tylko_prawa:
+		return
+	_lewa = Node3D.new()
+	model.add_child(_lewa)
+	_reka_l = Reka.new(false, true, "pistolet" if pistolet else "lozysko", 0.5)
+	_lewa.add_child(_reka_l)
+	if pistolet:
+		_reka_l.chwyc(chw + Vector3(-0.024, -0.012, 0.014), os_dol, Vector3(1, 0.1, 0), 0.07)
+		_reka_l.celuj_lokiec(Vector3(-0.14, -0.34, 0.4), model)
+	else:
+		var przod: Vector3 = md.get("lozysko", md["przod"])
+		_reka_l.chwyc(przod, Vector3(0, 0, 1), Vector3(0.15, 1.0, 0.0), 0.062, 0.042)
+		_reka_l.celuj_lokiec(przod + Vector3(-0.22, -0.3, 0.28), model)
+
+
 func _wezel_latarki() -> Node3D:
 	var n := Node3D.new()
-	n.add_child(Kit.instancja(Modele.latarka() + Modele.reka_z_latarka()))
+	n.add_child(Kit.instancja(Modele.latarka()))
+	var rl := Reka.new(false, true, "latarka", 0.5)
+	n.add_child(rl)
+	rl.chwyc(Vector3(0, 0, 0.0), Vector3(0, 0, 1), Vector3(1, 0.3, 0), 0.07)
+	rl.celuj_lokiec(Vector3(-0.1, -0.3, 0.32), n)
+	_reka_l = rl
 	_szklo = Kit.instancja(Modele.szklo_latarki())
 	_szklo.name = "Szklo"
 	var m := StandardMaterial3D.new()
@@ -602,6 +640,8 @@ func dodaj_sway(mysz: Vector2) -> void:
 
 func _process(delta: float) -> void:
 	_anim_akcji_t += delta
+	if _reka_l and is_instance_valid(_reka_l) and gracz and gracz.get("cialo"):
+		_reka_l.ustaw_zdrowie(gracz.cialo.procent(), gracz.cialo.krwawi() > 0)
 	_opusc = move_toward(_opusc, 1.0 if (_anim_akcji != "" and _anim_akcji != "montaz") else 0.0, delta * 4.0)
 	_montaz = move_toward(_montaz, 1.0 if _anim_akcji == "montaz" else 0.0, delta * 3.0)
 	if _rece_akcji:
@@ -615,7 +655,7 @@ func _process(delta: float) -> void:
 		if _blysk_t <= 0.0:
 			_blysk.visible = false
 	var pistolet := jest_pistolet()
-	var hip := Vector3(0.16, -0.18, -0.42) if not pistolet else Vector3(0.13, -0.15, -0.4)
+	var hip := Vector3(0.14, -0.165, -0.37) if not pistolet else Vector3(0.085, -0.125, -0.3)
 	if przedmiot == null:
 		hip = Vector3(-0.07, -0.17, -0.36)
 	var celownik := float(md["celownik"])

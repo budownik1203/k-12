@@ -15,6 +15,12 @@ const RUKAWICA := Color(0.24, 0.21, 0.18)
 
 
 static func bron(id: String) -> Dictionary:
+	var d := _bron_bryly(id)
+	d.merge(ModeleIB.bron(id), true)
+	return d
+
+
+static func _bron_bryly(id: String) -> Dictionary:
 	match id:
 		"kb47":
 			return {

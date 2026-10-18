@@ -558,6 +558,10 @@ func _zrzut_vm(katalog: String) -> void:
 	for w in get_tree().get_nodes_in_group("wrogowie"):
 		w.queue_free()
 	gracz.sterowanie = false
+	if OS.get_cmdline_user_args().has("--tylko_bronie"):
+		await _zrzut_broni(katalog)
+		get_tree().quit()
+		return
 	Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
 	Gra.ekw.kieszenie.dodaj(Gra.magazynek("mag_kb47", "a_762", 30))
 	gracz._wybierz_bron("glowna")
@@ -646,7 +650,20 @@ func _zrzut_vm(katalog: String) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_montaz.png"))
+	await _zrzut_broni(katalog)
 	get_tree().quit()
+
+
+## Każda broń z biodra i przy celowaniu (ręce, modele).
+func _zrzut_broni(katalog: String) -> void:
+	for bid in [["pw9", "a_9x18", "pistolet"], ["pm63", "a_9x18", "glowna"], ["kb47", "a_762", "glowna"], ["obrzyn", "a_12", "glowna"]]:
+		Gra.ekw.sloty[bid[2]] = Gra.nowy_naladowany(bid[0], bid[1])
+		gracz._wybierz_bron(bid[2])
+		gracz.bron.ads = 0.0
+		for f in 30:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("vm_%s.png" % bid[0]))
 
 
 ## Test przełączania broni i latarki symulowanymi klawiszami.
