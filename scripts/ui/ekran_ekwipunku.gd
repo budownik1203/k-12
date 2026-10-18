@@ -63,6 +63,8 @@ var _pojemnik: Pojemnik = null
 var _szukanie_t := 0.0
 var _prawa_siatka: Siatka = null
 var _prawa_ui: SiatkaUI = null
+var _ramka_poj: PanelContainer = null   # rajd: siatka przeszukiwanego pojemnika nad jego wnętrzem w świecie
+var _etyk_szuk: Label = null
 
 
 func _ready() -> void:
@@ -329,6 +331,8 @@ func otworz(pojemnik: Pojemnik = null) -> void:
 	_prawa_siatka = pojemnik.siatka if pojemnik else null
 	_szukanie_t = 0.0
 	_pokaz()
+	if pojemnik != null and gracz and not tryb_bazy:
+		gracz.bron.animacja_akcji("schowaj")   # obie ręce w szafce / przy zwłokach
 
 
 func otworz_skrytke() -> void:
@@ -437,7 +441,12 @@ func zamknij() -> void:
 	_tooltip.visible = false
 	Sterowanie.blokada = false
 	Sterowanie.przechwyc(true)
+	if _pojemnik != null and is_instance_valid(_pojemnik):
+		_pojemnik.zamknij_mebel()
+		if gracz and not tryb_bazy:
+			gracz.widok_ekwipunku("")
 	_pojemnik = null
+	_ramka_poj = null
 	_warsztat = false
 	if gracz and not tryb_bazy and ("kamizelka" in otwarte or "plecak" in otwarte or "bezpieczny" in otwarte or _otwieranie != ""):
 		gracz.widok_ekwipunku("")
@@ -604,8 +613,32 @@ func _przebuduj() -> void:
 		_prawa_ui = _siatka_ui(_prawa_siatka, "prawy")
 		if _pojemnik != null:
 			_prawa_ui.widoczne = _pojemnik.odkryte
-		_prawy_scroll.add_child(_prawa_ui)
-		_pp.visible = true
+		if _warstwa and _pojemnik != null:
+			# rajd: kafelki we wnętrzu otwartego mebla / przy zwłokach, bez okna
+			_ramka_poj = PanelContainer.new()
+			_ramka_poj.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+			var wn := VBoxContainer.new()
+			wn.add_theme_constant_override("separation", 3)
+			_ramka_poj.add_child(wn)
+			var lt := Motyw.etykieta(naz.to_upper(), 11, Color(0.86, 0.8, 0.62, 0.85), Motyw.mono_b())
+			lt.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+			lt.add_theme_constant_override("shadow_offset_x", 1)
+			lt.add_theme_constant_override("shadow_offset_y", 1)
+			wn.add_child(lt)
+			_etyk_szuk = Motyw.etykieta("", 11, Color(0.75, 0.72, 0.6, 0.8), Motyw.cond())
+			_etyk_szuk.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+			_etyk_szuk.add_theme_constant_override("shadow_offset_x", 1)
+			_etyk_szuk.add_theme_constant_override("shadow_offset_y", 1)
+			wn.add_child(_etyk_szuk)
+			_prawa_ui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			wn.add_child(_prawa_ui)
+			_ramka_poj.set_meta("siatka_ui", _prawa_ui)
+			_ramka_poj.visible = false
+			_warstwa.add_child(_ramka_poj)
+			_pp.visible = false
+		else:
+			_prawy_scroll.add_child(_prawa_ui)
+			_pp.visible = true
 	else:
 		_prawy_tytul.text = ""
 		_prawa_ui = null
@@ -788,6 +821,25 @@ func _process(delta: float) -> void:
 				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
 				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
 				c.position = cc - (c as Control).size * 0.5
+	# rajd: siatka przeszukiwanego pojemnika nad jego wnętrzem w świecie
+	if _ramka_poj and is_instance_valid(_ramka_poj) and _pojemnik != null and is_instance_valid(_pojemnik):
+		var pk3: Variant = _rzut(_pojemnik.punkt_wnetrza())
+		if pk3 == null:
+			_ramka_poj.visible = false
+		else:
+			var g3: Control = _ramka_poj.get_meta("siatka_ui", null)
+			var off3 := _ramka_poj.size * 0.5
+			if g3 and is_instance_valid(g3):
+				off3 = g3.global_position - _ramka_poj.global_position + g3.size * 0.5
+			var cel3: Vector2 = (pk3 as Vector2) - off3
+			cel3.x = clampf(cel3.x, 380.0, maxf(380.0, _root.size.x - _ramka_poj.size.x - 4.0))
+			cel3.y = clampf(cel3.y, 4.0, maxf(4.0, _root.size.y - _ramka_poj.size.y - 30.0))
+			if not _ramka_poj.visible:
+				_ramka_poj.visible = true
+				_ramka_poj.position = cel3
+			_ramka_poj.position = _ramka_poj.position.lerp(cel3, 0.5)
+		if _etyk_szuk and is_instance_valid(_etyk_szuk):
+			_etyk_szuk.text = "przeszukujesz..." if not _pojemnik.przeszukany() else ("pusto" if _pojemnik.siatka.items.is_empty() else "")
 	# przeszukiwanie: stopniowe odkrywanie zawartości
 	if _pojemnik != null and _prawa_ui != null and not _pojemnik.przeszukany():
 		_szukanie_t += delta
@@ -830,6 +882,22 @@ func _process(delta: float) -> void:
 		_tooltip.position.x -= _tooltip.size.x + 36
 	if _tooltip.position.y + _tooltip.size.y > _root.size.y:
 		_tooltip.position.y = _root.size.y - _tooltip.size.y - 4
+
+
+## Punkt świata na ekranie (piksele okna) albo null, gdy za kamerą.
+func _rzut(p: Vector3) -> Variant:
+	if gracz == null:
+		return null
+	var kam: Camera3D = gracz.kamera
+	if kam.is_position_behind(p):
+		return null
+	var vp := kam.get_viewport()
+	var skala := Vector2(Widok3D.POMNIEJSZENIE, Widok3D.POMNIEJSZENIE)
+	if vp is SubViewport:
+		var kont := vp.get_parent() as Control
+		if kont:
+			skala = kont.size / Vector2((vp as SubViewport).size)
+	return kam.unproject_position(p) * skala
 
 
 func przeciagany() -> Przedmiot:

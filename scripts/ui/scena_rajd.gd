@@ -733,6 +733,45 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--meble"):
+		gracz.sterowanie = false
+		var ar2 := OS.get_cmdline_user_args()
+		var lista_m := ["szafa", "szafka_metalowa", "meblosciana", "szafka_kuchenna", "lodowka", "biurko", "skrzynia_wojskowa", "skrzynia", "apteczka_scienna"]
+		if ar2.has("--tylko"):
+			lista_m = [ar2[ar2.find("--tylko") + 1]]
+		var przod2 := -gracz.global_basis.z
+		przod2.y = 0
+		przod2 = przod2.normalized()
+		for mid in lista_m:
+			var pj := Pojemnik.new()
+			pj.nazwa = String(mid)
+			pj.mebel_id = mid
+			pj.siatka = Siatka.new(5, 3)
+			var rng2 := RandomNumberGenerator.new()
+			rng2.seed = 3
+			pj.wypelnij("szafa", 4, rng2)
+			var mm := ModeleMebli.zbuduj(mid)
+			pj.mebel = mm
+			pj.niski = mid in ["meblosciana", "szafka_kuchenna", "biurko", "skrzynia_wojskowa", "skrzynia"]
+			pj.add_child(mm["wezel"])
+			swiat.add_child(pj)
+			var odl := 1.25 if mid != "apteczka_scienna" else 0.9
+			pj.global_position = gracz.global_position + przod2 * odl + (Vector3.UP * 1.2 if mid == "apteczka_scienna" else Vector3.ZERO)
+			pj.look_at(gracz.global_position + Vector3.UP * pj.global_position.y, Vector3.UP, true)
+			gracz.rotation.y += 0.6
+			await _klatki(5)
+			pj.interakcja(gracz)
+			await get_tree().create_timer(0.25).timeout
+			await _zapisz(katalog, "mb_%s_a" % mid)
+			while not gracz.akcja.is_empty():
+				await get_tree().process_frame
+			await get_tree().create_timer(2.6).timeout
+			await _zapisz(katalog, "mb_%s_b" % mid)
+			ekran_ekw.zamknij()
+			await get_tree().create_timer(0.8).timeout
+			pj.queue_free()
+			await _klatki(3)
+		return
 	if OS.get_cmdline_user_args().has("--lup"):
 		# wszystkie przedmioty położone na ziemi w siatce przed graczem, kamera w dół
 		gracz.sterowanie = false

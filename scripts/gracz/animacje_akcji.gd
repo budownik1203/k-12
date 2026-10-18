@@ -64,6 +64,9 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 		"podnies":
 			prawa.ustaw_chwyt("otwarta")
 			lewa.visible = false
+		"otwieranie":
+			prawa.ustaw_chwyt("otwarta")
+			lewa.visible = false
 		"bolostop":
 			_rek["strzykawka"] = _wezel([
 				Bryly.walec(Vector3(0, 0, 0.05), Vector3(0, 0, -0.06), 0.011, 0.011, "opakowanie", 10),
@@ -149,6 +152,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_szyna(t, f, dol)
 		"podnies":
 			_podnies(f, dol)
+		"otwieranie":
+			_siegnij(f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
 		_:
@@ -353,3 +358,15 @@ func _podnies(f: float, dol: Vector3) -> void:
 	var p := gora.lerp(ziemia, e)
 	_uloz(prawa, p, Vector3(-0.2, -0.85, -0.45), Vector3(0.3, 0.3, 0.9))
 	prawa.ustaw_chwyt("piesc" if f > 0.48 else "otwarta")
+
+
+func _siegnij(f: float, dol: Vector3) -> void:
+	# prawa dłoń sięga przed siebie do uchwytu / wieka, chwyta i ciągnie do siebie, potem puszcza
+	var gora := Vector3(0.12, -0.16, -0.3) + dol
+	var uchwyt := Vector3(0.05, -0.1, -0.6)
+	var e := smoothstep(0.0, 0.35, f)
+	var ciag := smoothstep(0.35, 0.8, f)
+	var p := gora.lerp(uchwyt, e) + Vector3(0.04, 0.0, 0.22) * ciag
+	p = p.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
+	_uloz(prawa, p, Vector3(-0.15, -0.1, -1.0), Vector3(0.3, 1.0, 0.2))
+	prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")

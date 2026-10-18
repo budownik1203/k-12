@@ -220,6 +220,26 @@ func widok_ekwipunku(tryb: String) -> float:
 	return czas
 
 
+## Zwrócenie się ku punktowi (mebel, zwłoki): obrót ciała, spojrzenie, opcjonalny przyklęk.
+## Cofa to widok_ekwipunku("").
+func patrz_na(punkt: Vector3, czas: float, przysiad := 0.0) -> void:
+	if _ekw_tw and _ekw_tw.is_valid():
+		_ekw_tw.kill()
+	var oko := glowa.global_position - Vector3.UP * (przysiad - ekw_glowa)
+	var d := punkt - oko
+	var poz := Vector2(d.x, d.z)
+	if poz.length() < 0.05:
+		return
+	var yaw := atan2(-d.x, -d.z)
+	var dy := wrapf(yaw - rotation.y, -PI, PI)
+	var pitch := clampf(atan2(d.y, poz.length()), deg_to_rad(-80), deg_to_rad(60))
+	_ekw_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_ekw_tw.tween_property(self, "rotation:y", rotation.y + dy, czas)
+	_ekw_tw.tween_property(self, "ekw_pitch", pitch - _pitch, czas)
+	_ekw_tw.tween_property(self, "ekw_glowa", przysiad, czas)
+	_ekw_tw.tween_property(self, "ekw_roll", 0.0, czas)
+
+
 ## Ogłuszenie (trafienie w hełm): biały błysk, pisk w uszach, przytłumiony dźwięk, drżenie i spowolnienie.
 func ogluszenie(sila: float, tekst: String) -> void:
 	oglusz = maxf(oglusz, 1.0 + sila * 3.0)

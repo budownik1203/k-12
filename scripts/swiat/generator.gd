@@ -1233,6 +1233,14 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 		pj.wypelnij(info["pojemnik"], rng.randi_range(1, 4), rng)
 		if id in MONTOWANE_NA_SCIANIE:
 			pj.collision_layer = Balistyka.WARSTWA_INTERAKCJE   # nie blokuje przejść
+		pj.mebel_id = id
+		pj.niski = float(roz[1]) < 1.0
+		if ModeleMebli.ma(id):
+			# mebel z ruchomymi drzwiami / szufladami / wiekiem zamiast statycznego modelu
+			inst.free()
+			var mm := ModeleMebli.zbuduj(id)
+			inst = mm["wezel"]
+			pj.mebel = mm
 		korzen = pj
 	elif z_kolizja and id not in BEZ_KOLIZJI:
 		var sb := StaticBody3D.new()

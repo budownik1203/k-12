@@ -61,7 +61,7 @@ func _na_podloge() -> void:
 func _upadek() -> void:
 	var w := przedmiot.waga()
 	var miekki := przedmiot.typ() in ["pojemnik", "pancerz", "med"]
-	var dz := "plecak" if miekki else "odloz"
+	var dz := "upadek_miekki" if miekki else "upadek_metal"
 	var wys := clampf(1.3 - w * 0.08, 0.6, 1.4)
 	Dzwiek.graj_3d(dz, global_position, get_parent(), clampf(-14.0 + w * 2.0, -14.0, -2.0), wys, 14.0)
 	# hałas słyszalny dla wrogów (cięższe dalej)

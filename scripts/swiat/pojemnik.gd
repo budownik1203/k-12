@@ -7,6 +7,13 @@ var siatka: Siatka
 var odkryte := 0             # ile pierwszych przedmiotów już widać
 var czas_na_przedmiot := 0.7
 var zamkniety_kluczem := ""  # id klucza wymagany do otwarcia (puste = otwarty)
+var mebel_id := ""
+var niski := false           # niski mebel / zwłoki: przyklęk przy przeszukiwaniu
+var mebel := {}              # ModeleMebli: ruchome części (drzwi, szuflady, wieko)
+var otwarty_mebel := false
+var _start: Array = []
+var _tw: Tween
+var wys_wnetrza := -1.0      # bez modelu ruchomego: wysokość punktu, na który się patrzy
 
 
 func _init() -> void:
@@ -48,5 +55,72 @@ func tekst_interakcji(_g) -> String:
 	return "Przeszukaj: " + nazwa + stan
 
 
-func interakcja(_g) -> void:
-	get_tree().call_group("ui_rajdu", "otworz_pojemnik", self)
+## Punkt wnętrza w świecie (tam patrzy postać i tam rzutowane są kafelki siatki).
+func punkt_wnetrza() -> Vector3:
+	if mebel.has("wnetrze"):
+		return global_transform * Vector3(mebel["wnetrze"])
+	var h := wys_wnetrza if wys_wnetrza >= 0.0 else (0.45 if niski else 1.1)
+	return global_position + Vector3.UP * h
+
+
+## Otwiera drzwi / szuflady / wieko kolejnymi krokami; zwraca czas trwania.
+func otworz_mebel() -> float:
+	if mebel.is_empty() or otwarty_mebel:
+		return 0.0
+	otwarty_mebel = true
+	var kroki: Array = mebel["kroki"]
+	if _start.is_empty():
+		_start = ModeleMebli.wartosci_startowe(kroki)
+	if _tw and _tw.is_valid():
+		_tw.kill()
+	_tw = create_tween()
+	var czas := 0.0
+	var dz: String = mebel.get("dzwiek", "drzwi")
+	for krok in kroki:
+		var dl := 0.0
+		for zm in krok:
+			dl = maxf(dl, float(zm[3]))
+		czas += dl + 0.04
+		_tw.tween_callback(func(): _dzwiek(dz, true))
+		for zm in krok:
+			_tw.parallel().tween_property(zm[0], NodePath(String(zm[1])), zm[2], float(zm[3])).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_tw.tween_interval(0.04)
+	return czas
+
+
+func zamknij_mebel() -> void:
+	if mebel.is_empty() or not otwarty_mebel:
+		return
+	otwarty_mebel = false
+	if _tw and _tw.is_valid():
+		_tw.kill()
+	_tw = create_tween()
+	var kroki: Array = mebel["kroki"]
+	var dz: String = mebel.get("dzwiek", "drzwi")
+	for i in range(kroki.size() - 1, -1, -1):
+		var krok: Array = kroki[i]
+		for j in krok.size():
+			var zm: Array = krok[j]
+			var tg := _tw.parallel() if j > 0 else _tw
+			tg.tween_property(zm[0], NodePath(String(zm[1])), _start[i][j], float(zm[3]) * 0.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_tw.tween_callback(func(): _dzwiek(dz, false))
+
+
+func _dzwiek(dz: String, otw: bool) -> void:
+	var nazwa: String = {"drzwi": "drzwi", "szuflada": "szuflada", "wieko": "wieko"}.get(dz, "drzwi")
+	Dzwiek.graj_3d(nazwa, global_position + Vector3.UP * 0.5, get_parent(), -10.0 if otw else -8.0, randf_range(0.95, 1.1) * (1.0 if otw else 1.15), 18.0)
+	Gra.emituj_halas(global_position, 6.0 if dz != "wieko" else 8.0, get_tree().get_first_node_in_group("gracz"))
+
+
+## Podejście do mebla: postać zwraca się w stronę wnętrza (przy niskich przyklęka), sięga ręką,
+## otwiera drzwi / szufladę / wieko – dopiero wtedy widać zawartość.
+func interakcja(g) -> void:
+	if not g.akcja.is_empty():
+		return
+	var czas := otworz_mebel()
+	if g.has_method("patrz_na"):
+		g.patrz_na(punkt_wnetrza(), 0.45, 0.35 if niski else 0.0)
+	var otw := func(): get_tree().call_group("ui_rajdu", "otworz_pojemnik", self)
+	if czas <= 0.05:
+		czas = 0.45 if niski else 0.3
+	g.zacznij_akcje("Otwieranie: " + nazwa, czas, otw, "otwieranie")

@@ -34,6 +34,16 @@ const MATERIALY := {
 	"apteczka": ["apteczka", 0.14, 0.6, 0.3, 0.16],
 	"mosiadz": ["mosiadz", 0.03, 0.35, 0.8, 0.2],
 	"miedz": ["miedz", 0.03, 0.35, 0.7, 0.18],
+	# meble świata (UV w metrach jak w .glb; "_q" – czworokąt z pełną teksturą)
+	"fornir_m": ["fornir", 1.0, 0.7, 0.3, 0.0],
+	"emalia_m": ["emalia", 0.6, 0.45, 0.5, 0.0],
+	"metal_zielony_m": ["metal_zielony", 0.6, 0.6, 0.35, 0.0],
+	"metal_ciemny_m": ["metal_ciemny", 0.4, 0.55, 0.4, 0.0],
+	"lastryko_m": ["lastryko", 1.0, 0.5, 0.4, 0.0],
+	"drewno_m": ["drewno", 0.6, 0.85, 0.15, 0.0],
+	"szafka_m": ["szafka", 0.5, 0.6, 0.35, 0.0],
+	"regal_polki_q": ["regal_polki", 1.0, 0.8, 0.2, 0.0],
+	"apteczka_sciana_q": ["apteczka_sciana", 1.0, 0.5, 0.4, 0.0],
 	# postacie (kolor nadaje "k" – odcień tkaniny frakcji)
 	"tkanina": ["tkanina_npc", 0.25, 0.95, 0.1, 0.0],
 	"skora_npc": ["skora_npc", 0.2, 0.8, 0.25, 0.0],
