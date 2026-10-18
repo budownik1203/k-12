@@ -671,6 +671,33 @@ func _klatki(n: int) -> void:
 ## Animacje broni: blokada zamka, przeładowanie z pustą komorą, łamanie obrzyna, zegarek, dodatki.
 func _zrzut_animacji(katalog: String) -> void:
 	var b := gracz.bron
+	if OS.get_cmdline_user_args().has("--ogladanie"):
+		var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+		Gra.ekw.sloty["glowna"] = kb
+		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_wojskowy")
+		print("dodano: ", Gra.ekw.siatka_plecaka().dodaj(Przedmiot.nowy("tlumik_762")), " ", Gra.ekw.siatka_plecaka().dodaj(Przedmiot.nowy("latarka_taktyczna")))
+		gracz._wybierz_bron("glowna")
+		await _klatki(30)
+		var ogl = ekran_ekw._ogl_ui
+		ogl.otworz()
+		await get_tree().create_timer(0.8).timeout
+		await _zapisz(katalog, "og_0")
+		for el in ogl._dostepne("wylot", ["tlumik_762"]):
+			ekran_ekw._montuj(kb, el[0], {"typ": "siatka", "siatka": el[1]})
+		await get_tree().create_timer(1.2).timeout
+		await _zapisz(katalog, "og_1_nakladanie")
+		await get_tree().create_timer(1.7).timeout
+		await _zapisz(katalog, "og_2_nakrecanie")
+		await get_tree().create_timer(1.6).timeout
+		for el in ogl._dostepne("latarka", ["latarka_taktyczna"]):
+			ekran_ekw._montuj(kb, el[0], {"typ": "siatka", "siatka": el[1]})
+		await get_tree().create_timer(1.2).timeout
+		await _zapisz(katalog, "og_3_latarka")
+		await get_tree().create_timer(2.5).timeout
+		gracz.bron.ogl_obrot = Vector2(0.9, 0.25)
+		await get_tree().create_timer(0.6).timeout
+		await _zapisz(katalog, "og_4_obrot")
+		return
 	if OS.get_cmdline_user_args().has("--plecaki"):
 		for pid in ["worek", "plecak_turystyczny", "plecak_szturmowy", "chlebak", "plecak_wojskowy", "napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska"]:
 			var pr := Przedmiot.nowy(pid)

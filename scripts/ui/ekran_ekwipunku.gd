@@ -71,6 +71,10 @@ func _ready() -> void:
 	_buduj()
 	_root.visible = false
 	ekw.zmieniony.connect(_odswiez)
+	_ogl_ui = load("res://scripts/ui/ogladanie_broni.gd").new()
+	_ogl_ui.ekran = self
+	_ogl_ui.gracz = gracz
+	add_child(_ogl_ui)
 
 
 func _buduj() -> void:
@@ -361,6 +365,7 @@ func _pokaz() -> void:
 
 
 var _chowanie := false
+var _ogl_ui
 
 
 ## Zamknięcie z pakowaniem: najpierw trzeba zapiąć i założyć plecak, schować kontener, puścić kamizelkę
@@ -720,6 +725,12 @@ func _odswiez() -> void:
 func _process(delta: float) -> void:
 	if _chowanie:
 		return
+	if not otwarty and gracz and not _ogl_ui.otwarty and not Sterowanie.blokada and Input.is_action_just_pressed("ogladaj") \
+			and gracz.bron.przedmiot != null and gracz.akcja.is_empty():
+		_ogl_ui.otworz()
+		return
+	if _ogl_ui and _ogl_ui.otwarty:
+		return
 	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu() and Engine.get_process_frames() > Sterowanie.blokuj_tab_do:
 		if otwarty and not tryb_bazy and not _szybki and Time.get_ticks_msec() - _pokaz_ms < 320 and _pojemnik == null:
 			szybka_kamizelka()
@@ -1058,7 +1069,7 @@ func _szybkie_przeniesienie(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ }
 const M_DOD := 100
 
 
@@ -1075,6 +1086,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 		_menu.add_item("Napełnij", M_NAPELNIJ)
 		if p.dane["naboje"] > 0:
 			_menu.add_item("Rozładuj", M_ROZLADUJ)
+	if t == "bron" and gracz:
+		_menu.add_item("Oglądaj / dodatki", M_OGLADAJ)
 	if t == "bron":
 		if p.dane.get("mag") != null:
 			_menu.add_item("Wyjmij magazynek", M_WYJMIJ_MAG)
@@ -1121,6 +1134,17 @@ func _menu_akcja(id: int) -> void:
 			_rozladuj(p)
 		M_DOD, M_DOD + 1, M_DOD + 2, M_DOD + 3:
 			_zdejmij_dodatek(p, Przedmiot.SLOTY_DODATKOW[id - M_DOD])
+			return
+		M_OGLADAJ:
+			# broń do rąk (jeśli jest w slocie), schowanie sprzętu, potem podgląd z bliska
+			for sl in ["glowna", "pistolet"]:
+				if ekw.sloty[sl] == p and gracz.bron.przedmiot != p:
+					gracz.latarka_w_rece = false
+					gracz._wybierz_bron(sl)
+			if gracz.bron.przedmiot == p:
+				zamknij_animowany(func(): _ogl_ui.otworz())
+			else:
+				_komunikat("Załóż broń na slot, żeby ją obejrzeć")
 			return
 		M_WYJMIJ_MAG:
 			var m: Przedmiot = p.dane["mag"]
@@ -1409,13 +1433,16 @@ func _montuj(bron: Przedmiot, dod: Przedmiot, z: Dictionary) -> bool:
 		_komunikat("Zamontowano: " + dod.nazwa())
 		_po_montazu(bron)
 	var czas := float(dd.get("czas", 0.0))
-	if tryb_bazy or gracz == null or czas <= 0.0:
+	var podglad := gracz != null and gracz.bron.ogladanie and gracz.bron.przedmiot == bron
+	if podglad:
+		czas = maxf(czas if not tryb_bazy else 0.0, 1.6)     # w podglądzie montaż zawsze z animacją
+	if gracz == null or (czas <= 0.0) or (tryb_bazy and not podglad):
 		wykonaj.call()
 		return true
 	if not gracz.akcja.is_empty():
 		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]))
 		return true
-	gracz.zacznij_akcje("Montaż: " + dod.nazwa(), czas, wykonaj, "montaz")
+	gracz.zacznij_akcje("Montaż: " + dod.nazwa(), czas, wykonaj, "montaz", 0, Callable(), {"dod": dod, "zdejmij": false})
 	Dzwiek.graj("klik", -8.0, 0.7)
 	return true
 
@@ -1438,13 +1465,16 @@ func _zdejmij_dodatek(bron: Przedmiot, slot: String) -> void:
 		Dzwiek.graj("klik", -8.0, 0.8)
 		_po_montazu(bron)
 	var czas := float(dd.get("czas", 0.0)) * 0.8
-	if tryb_bazy or gracz == null or czas <= 0.0:
+	var podglad := gracz != null and gracz.bron.ogladanie and gracz.bron.przedmiot == bron
+	if podglad:
+		czas = maxf(czas if not tryb_bazy else 0.0, 1.4)
+	if gracz == null or czas <= 0.0 or (tryb_bazy and not podglad):
 		wykonaj.call()
 		return
 	if not gracz.akcja.is_empty():
 		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]))
 		return
-	gracz.zacznij_akcje("Demontaż: " + dod.nazwa(), czas, wykonaj, "montaz")
+	gracz.zacznij_akcje("Demontaż: " + dod.nazwa(), czas, wykonaj, "montaz", 0, Callable(), {"dod": dod, "zdejmij": true})
 
 
 ## Po zmianie dodatków: broń w rękach przebudowana (model, celownik, latarka), ekran odświeżony.

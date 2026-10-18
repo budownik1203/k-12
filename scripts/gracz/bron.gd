@@ -143,6 +143,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 	stan = "wyciaganie"
 	stan_t = 0.0
 	stan_total = 0.45
+	if ogladanie:
+		stan = "gotowa"
 	zmiana.emit()
 
 
@@ -158,6 +160,105 @@ var _byl_pusty := false
 
 ## Dodatki zamontowane na broni: zmieniają punkty modelu (wylot, linia celowania, chwyt lewej ręki)
 ## i zwracają bryły do dorysowania.
+var ogladanie := false            # podgląd broni z bliska (dodatki, montaż)
+var ogl_obrot := Vector2.ZERO      # obrót podglądu myszą
+var _ogl := 0.0
+var _ukryj_slot := ""              # dodatek chwilowo niewidoczny (zdejmowany w animacji)
+var _mont := {}                    # animacja montażu w podglądzie: {"wezel", "punkt", "slot", "zdejmij", "start"}
+
+
+func _dod(p: Przedmiot, slot: String) -> Przedmiot:
+	return null if slot == _ukryj_slot else p.dodatek(slot)
+
+
+## Punkt montażu slotu na bazowym modelu broni (bez dodatków).
+func _punkt_montazu(slot: String) -> Vector3:
+	var baza := Modele.bron(przedmiot.id)
+	var mont: Dictionary = baza.get("montaz", {})
+	match slot:
+		"wylot":
+			return Vector3(baza["lufa"])
+		"celownik":
+			return mont.get("celownik", Vector3(0, 0.08, -0.1))
+		"chwyt":
+			return mont.get("chwyt", Vector3(0, 0.0, -0.3))
+	return mont.get("latarka", Vector3(0.03, 0.03, -0.3))
+
+
+## Bryły jednego dodatku (do animacji montażu) – liczone na świeżym modelu, bez zmiany stanu broni.
+func _bryly_dodatku(dod: Przedmiot) -> Array:
+	var kopia := [md, _kropka_poz, _lat_bron_poz, _szklo_broni_poz, _bez_plomienia, _ukryj_slot]
+	var slot: String = dod.defn()["dodatek"]["slot"]
+	var fake := Przedmiot.nowy(przedmiot.id)
+	fake.dane["dod_" + slot] = dod
+	md = Modele.bron(przedmiot.id)
+	_ukryj_slot = ""
+	var cz := _zastosuj_dodatki(fake)
+	md = kopia[0]
+	_kropka_poz = kopia[1]
+	_lat_bron_poz = kopia[2]
+	_szklo_broni_poz = kopia[3]
+	_bez_plomienia = kopia[4]
+	_ukryj_slot = kopia[5]
+	return cz
+
+
+func _zacznij_montaz_podglad(dod: Przedmiot, zdejmij: bool) -> void:
+	_konczy_montaz_podglad()
+	var slot: String = dod.defn()["dodatek"]["slot"]
+	if zdejmij:
+		# zdejmowany dodatek znika z modelu – zastępuje go ruchoma kopia w dłoni
+		_ukryj_slot = slot
+		ustaw(przedmiot, latarka_w_rece)
+	var punkt := _punkt_montazu(slot)
+	var piv := Node3D.new()
+	piv.position = punkt
+	model.add_child(piv)
+	var mi := Bryly.instancja(_bryly_dodatku(dod))
+	mi.position = -punkt
+	piv.add_child(mi)
+	var start: Vector3 = {"wylot": Vector3(0.0, -0.12, 0.12), "celownik": Vector3(-0.02, 0.16, 0.08), "chwyt": Vector3(0.0, -0.18, 0.06)}.get(slot, Vector3(0.12, -0.1, 0.06))
+	_mont = {"wezel": piv, "punkt": punkt, "slot": slot, "zdejmij": zdejmij, "start": start}
+
+
+func _konczy_montaz_podglad() -> void:
+	if not _mont.is_empty() and is_instance_valid(_mont["wezel"]):
+		(_mont["wezel"] as Node3D).queue_free()
+	_mont = {}
+	if _ukryj_slot != "":
+		_ukryj_slot = ""
+		if przedmiot:
+			ustaw(przedmiot, latarka_w_rece)
+
+
+func _animuj_montaz_podglad() -> void:
+	if _mont.is_empty() or gracz == null or gracz.akcja.is_empty():
+		return
+	var a: Dictionary = gracz.akcja
+	var f := clampf(float(a["t"]) / maxf(0.01, float(a["czas"])), 0.0, 1.0)
+	if _mont["zdejmij"]:
+		f = 1.0 - f
+	var piv: Node3D = _mont["wezel"]
+	var slot: String = _mont["slot"]
+	var off := Vector3.ZERO
+	var obr := 0.0
+	if f < 0.55:
+		off = (_mont["start"] as Vector3) * (1.0 - smoothstep(0.0, 0.55, f))
+	elif f < 0.92:
+		var t := (f - 0.55) / 0.37
+		if slot == "wylot":
+			obr = (1.0 - t) * TAU * 1.5            # nakręcanie gwintu
+		else:
+			off = Vector3(0, 0, 0.04) * (1.0 - smoothstep(0.0, 1.0, t))   # wsuwanie na szynę / zatrzask
+	piv.position = Vector3(_mont["punkt"]) + off
+	piv.rotation = Vector3(0, 0, obr)
+	if _lewa:
+		var loz: Vector3 = md.get("lozysko", md["przod"])
+		_lewa.position = piv.position - loz + Vector3(-0.01, -0.03, 0.03)
+	if _reka_l and is_instance_valid(_reka_l):
+		_reka_l.ustaw_chwyt("szczypta" if slot == "wylot" else "magazynek")
+
+
 func _zastosuj_dodatki(p: Przedmiot) -> Array:
 	md = md.duplicate(true)
 	_kropka_poz = Vector3.ZERO
@@ -169,7 +270,7 @@ func _zastosuj_dodatki(p: Przedmiot) -> Array:
 	var mont: Dictionary = md.get("montaz", {})
 	var lufa: Vector3 = Vector3(md["lufa"])
 	# wylot: tłumik (walec z pierścieniami i czołem) albo hamulec (krótki, z oknami)
-	var w := p.dodatek("wylot")
+	var w := _dod(p, "wylot")
 	if w:
 		var dd: Dictionary = w.defn()["dodatek"]
 		var dl := float(dd.get("dl", 0.1))
@@ -193,7 +294,7 @@ func _zastosuj_dodatki(p: Przedmiot) -> Array:
 		_bez_plomienia = not bool(dd.get("plomien", true))
 		md["lufa"] = b
 	# celownik na szynie bocznej/górnej: kolimator (okienko z kropką) albo luneta PSO (tuba z muszlą)
-	var c := p.dodatek("celownik")
+	var c := _dod(p, "celownik")
 	if c and mont.has("celownik"):
 		var dd2: Dictionary = c.defn()["dodatek"]
 		var baza: Vector3 = mont["celownik"]
@@ -224,7 +325,7 @@ func _zastosuj_dodatki(p: Przedmiot) -> Array:
 		md["celownik"] = os_y
 		md["luneta"] = c.id == "luneta"
 	# chwyt przedni pod łożem: lewa dłoń przechodzi na chwyt pionowy
-	var ch := p.dodatek("chwyt")
+	var ch := _dod(p, "chwyt")
 	if ch and mont.has("chwyt"):
 		var pz: Vector3 = mont["chwyt"]
 		cz.append(B.box(pz + Vector3(0, -0.004, 0), Vector3(0.03, 0.012, 0.05), "metal", 0.003))
@@ -233,7 +334,7 @@ func _zastosuj_dodatki(p: Przedmiot) -> Array:
 		md["chwyt_pionowy"] = pz + Vector3(0, -0.05, 0.002)
 		md["przod"] = pz + Vector3(0, -0.05, 0.0)
 	# latarka taktyczna z boku łoża (albo pod szkieletem pistoletu / pod lufami)
-	var lt := p.dodatek("latarka")
+	var lt := _dod(p, "latarka")
 	if lt:
 		var lp: Vector3 = mont.get("latarka", lufa + Vector3(0.024, -0.022, 0.12))
 		var pod: bool = mont.get("latarka_pod", false)
@@ -347,6 +448,10 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
+	if nazwa == "montaz" and ogladanie and gracz and gracz.akcja.has("dod"):
+		_zacznij_montaz_podglad(gracz.akcja["dod"], bool(gracz.akcja.get("zdejmij", false)))
+	elif nazwa == "" and not _mont.is_empty():
+		_konczy_montaz_podglad()
 	if nazwa != "" and nazwa != "schowaj" and nazwa != "montaz":
 		# osobna animacja dla każdej czynności (lek / magazynek), rekwizyty z modeli
 		if _anim_cz:
@@ -941,10 +1046,22 @@ func _process(delta: float) -> void:
 		poz += Vector3(0.06, -0.12, 0.05) * ez
 		if _lewa:
 			_lewa.position = _lewa.position.lerp(Vector3(-0.1, -0.3, 0.15), ez)
-	if _montaz > 0.0:
+	if _montaz > 0.0 and not ogladanie:
 		var rp := _animuj_montaz(rot, poz)
 		rot = rp[0]
 		poz = rp[1]
+	# podgląd broni: z boku przed sobą (prawą stroną do oka), obracany myszą
+	_ogl = move_toward(_ogl, 1.0 if ogladanie else 0.0, delta * 3.0)
+	if _ogl > 0.0 and przedmiot:
+		var eo := _ogl * _ogl * (3.0 - 2.0 * _ogl)
+		var srodek := -0.07 if jest_pistolet() else -0.2
+		var p_o := Vector3(srodek * -1.0 * 0.0, -0.02, -0.34 if jest_pistolet() else -0.58)
+		var r_o := Vector3(ogl_obrot.y + 0.12, -PI * 0.5 + ogl_obrot.x, 0.0)
+		var bo := Basis.from_euler(r_o)
+		p_o -= bo * Vector3(0, 0.0, srodek)
+		poz = poz.lerp(p_o, eo)
+		rot = rot.lerp(r_o, eo)
+		_animuj_montaz_podglad()
 	model.position = poz
 	model.rotation = rot
 	# przy lunecie patrzymy przez okular: model znika, HUD rysuje siatkę PSO
