@@ -482,6 +482,9 @@ func zamknij() -> void:
 	_otwieranie = ""
 	otwarte = []
 	_kieszenie.clear()
+	ekw.plecak_rozlozony = false
+	ekw.bezp_rozlozony = false
+	ekw.zakryte.clear()
 	if not _przekl.is_empty():
 		_przekl = {}
 		if _reka_p:
@@ -851,9 +854,9 @@ func _process(delta: float) -> void:
 			if _siatka_pojemnika(co) != null:
 				otwarte.append(co)
 				_swiezy = co
-				if _r3d and co in ["plecak", "bezpieczny"]:
-					# położony przed sobą, zapięty: kieszenie otwiera się każdą osobno
-					var idp := "kontener" if co == "bezpieczny" else (ekw.sloty["plecak"] as Przedmiot).id
+				if _r3d and co in ["plecak", "bezpieczny", "kamizelka"]:
+					# położony przed sobą, zapięty: kieszenie otwiera się każdą osobno (kamizelka: klapki ładownic)
+					var idp := "kontener" if co == "bezpieczny" else (ekw.sloty[co] as Przedmiot).id
 					var lst := []
 					for e in ModeleOporzadzenia.kieszenie_dla(idp, _siatka_pojemnika(co)):
 						lst.append({"r": e["r"], "nazwa": e["nazwa"], "otwarta": false, "w_toku": false})
@@ -888,6 +891,7 @@ func _process(delta: float) -> void:
 				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
 				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
 				c.position = cc - (c as Control).size * 0.5
+	_synchronizuj_dostep()
 	_przekl_krok()
 	_kolejka_krok(delta)
 	if _warstwa:
@@ -1072,6 +1076,26 @@ func _ekran_przedmiotu(p: Przedmiot, z: Dictionary) -> Vector2:
 			if is_instance_valid(sl) and sl.slot == z["slot"]:
 				return sl.get_global_rect().get_center()
 	return _root.get_global_mouse_position()
+
+
+## Co jest pod ręką dla automatów (przeładowanie, leki, napełnianie, podnoszenie): rozłożony plecak
+## i otwarte kieszenie.
+func _synchronizuj_dostep() -> void:
+	if tryb_bazy or gracz == null:
+		return
+	ekw.plecak_rozlozony = otwarty and "plecak" in otwarte and _r3d != null
+	ekw.bezp_rozlozony = otwarty and "bezpieczny" in otwarte and _r3d != null
+	ekw.zakryte.clear()
+	for co in _kieszenie:
+		var s := _siatka_pojemnika(co)
+		if s == null or co == "kamizelka":
+			continue   # ładownice na ciele: przeładowanie sięga do nich i tak
+		var zam := []
+		for e in _kieszenie[co]:
+			if not bool(e["otwarta"]):
+				zam.append(e["r"])
+		if not zam.is_empty():
+			ekw.zakryte[s] = zam
 
 
 ## Przełożenie ręką: animacja dłoni (sięgnięcie, chwyt, łuk, odłożenie), `wykonaj` na końcu.
@@ -1300,10 +1324,7 @@ func _upusc_drag(anuluj: bool) -> void:
 	# poza slotami i siatkami: wyrzucenie na ziemię
 	if not nad_celem(mysz):
 		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and _jest_prawa(d["z"]["siatka"])):
-			_usun_ze_zrodla(p, d["z"])
-			gracz.upusc(p)
-			Dzwiek.graj("odloz", -8.0)
-			_po_zmianie()
+			_wyrzuc_reka(p, d["z"])
 		else:
 			_odswiez()
 		return
@@ -1330,9 +1351,25 @@ func _upusc_drag(anuluj: bool) -> void:
 		var q := ui.siatka.przedmiot_w(pod.x, pod.y)
 		if q != null and ui.ukryty(q):
 			q = null
-		if q != null and q != p and _polacz(p, d["z"], q, ui):
-			_po_zmianie()
-			return
+		if q != null and q != p:
+			var akcja: bool = (p.typ() == "dodatek" and q.typ() == "bron") or (p.typ() == "amunicja" and q.typ() == "magazynek")
+			if akcja or not _w_swiecie():
+				if _polacz(p, d["z"], q, ui):
+					_po_zmianie()
+					return
+			elif _polacz_mozliwe(p, q, ui.siatka):
+				# dołożenie do stosu, magazynek do broni, do pojemnika – ręką
+				var zq: Dictionary = d["z"]
+				var sq: Siatka = ui.siatka
+				var cel_q := _ekran_przedmiotu(q, {"typ": "siatka", "siatka": sq})
+				_animuj(p, zq, cel_q, func():
+					if _w_zrodle(p, zq) and sq.zawiera(q):
+						var tmp := SiatkaUI.new()
+						tmp.siatka = sq
+						_polacz(p, zq, q, tmp)
+						tmp.free()
+					_po_zmianie())
+				return
 		var tl: Vector2 = mysz - d["off"] - ui.global_position
 		var kom := Vector2i(roundi(tl.x / SiatkaUI.KOM), roundi(tl.y / SiatkaUI.KOM))
 		if d["rot"] != p.obrot:
@@ -1432,6 +1469,16 @@ func _na_slot(p: Przedmiot, z: Dictionary, slot: String) -> void:
 
 
 ## Interakcje przedmiot-na-przedmiot: stos amunicji, amunicja do magazynka, magazynek do broni, przedmiot do pojemnika.
+func _polacz_mozliwe(p: Przedmiot, q: Przedmiot, s: Siatka) -> bool:
+	if p.id == q.id and p.stos_max() > 1 and q.ilosc < q.stos_max():
+		return s.ile_zmiesci(q, mini(p.ilosc, q.stos_max() - q.ilosc)) > 0
+	if p.typ() == "magazynek" and q.typ() == "bron":
+		return p.id in q.defn()["bron"].get("magazynki", []) and q.dane["mag"] == null
+	if q.typ() == "pojemnik" and p != q and p.typ() != "pojemnik":
+		return not (q.dane["siatka"] as Siatka).wolne_miejsce(p).is_empty()
+	return false
+
+
 func _polacz(p: Przedmiot, z: Dictionary, q: Przedmiot, ui: SiatkaUI) -> bool:
 	if p.id == q.id and p.stos_max() > 1 and q.ilosc < q.stos_max():
 		# stos rośnie (garść -> pudełko): dokładamy tyle, ile się zmieści
@@ -1577,6 +1624,18 @@ func _cel_kolejki(do_pojemnika: bool) -> Vector2:
 	return Vector2(200, 500)
 
 
+## Wyrzucenie: dłoń bierze przedmiot i upuszcza go przed sobą (spada z ręki na ziemię).
+func _wyrzuc_reka(p: Przedmiot, z: Dictionary) -> void:
+	if _zajete():
+		return
+	var cel := Vector2(_root.size.x * 0.62, _root.size.y * 0.92)
+	_animuj(p, z, cel, func():
+		if _w_zrodle(p, z):
+			_usun_ze_zrodla(p, z)
+			gracz.upusc(p)
+		_po_zmianie())
+
+
 ## Podział stosu na pół (Shift+klik): druga połowa w wolnym miejscu tej samej siatki.
 func _podziel(p: Przedmiot, s: Siatka) -> void:
 	var n := p.ilosc / 2
@@ -1595,44 +1654,8 @@ func _podziel(p: Przedmiot, s: Siatka) -> void:
 
 ## Do własnego ekwipunku, ale przy rozłożonym plecaku tylko do otwartych kieszeni (zapiętych nie widać).
 func _dodaj_do_otwartych(p: Przedmiot) -> bool:
-	if not _kieszenie.has("plecak") or ekw.siatka_plecaka() == null:
-		return ekw.dodaj(p)
-	var kz: Array = _kieszenie["plecak"]
-	var zakr := func(x: int, y: int, w: int, h: int) -> bool:
-		for e in kz:
-			if not bool(e["otwarta"]) and (e["r"] as Rect2i).intersects(Rect2i(x, y, w, h)):
-				return true
-		return false
-	var cele := [ekw.kieszenie, ekw.siatka_kamizelki()]
-	var pl: Siatka = ekw.siatka_plecaka()
-	# najpierw dołożenie do stosu w otwartej kieszeni plecaka
-	if p.stos_max() > 1:
-		for e2 in pl.items:
-			var q: Przedmiot = e2["p"]
-			if q.id == p.id and q.ilosc < q.stos_max() and not zakr.call(int(e2["x"]), int(e2["y"]), q.szer(), q.wys()):
-				var ile: int = mini(p.ilosc, q.stos_max() - q.ilosc)
-				q.ilosc += ile
-				p.ilosc -= ile
-				if p.ilosc <= 0:
-					pl.zmieniona.emit()
-					ekw.zmieniony.emit()
-					return true
-	for rot in [p.obrot, not p.obrot]:
-		var r := p.rozmiar()
-		var pw: int = r.y if rot else r.x
-		var ph: int = r.x if rot else r.y
-		for y in pl.h:
-			for x in pl.w:
-				if pl.moze(p, x, y, rot) and not zakr.call(x, y, pw, ph):
-					pl.poloz(p, x, y, rot)
-					ekw.zmieniony.emit()
-					return true
-	for s2 in cele:
-		if s2 != null and (s2 as Siatka).dodaj(p):
-			ekw.zmieniony.emit()
-			return true
-	return false
-
+	_synchronizuj_dostep()
+	return ekw.dodaj(p)
 
 func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 	var z_prawej: bool = z["typ"] == "siatka" and _jest_prawa(z["siatka"])
@@ -1643,7 +1666,7 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 		_usun_ze_zrodla(p, z)
 		if not _dodaj_do_otwartych(p):
 			(z["siatka"] as Siatka).dodaj(p)
-			_komunikat("Brak miejsca w ekwipunku")
+			_komunikat("Brak miejsca pod ręką – zdejmij plecak i otwórz kieszeń, żeby włożyć do środka" if ekw.ograniczony and not ekw.plecak_rozlozony and ekw.siatka_plecaka() != null else "Brak miejsca w ekwipunku")
 		else:
 			Dzwiek.graj("podnies", -8.0)
 	elif _prawa_siatka != null:
@@ -1765,8 +1788,8 @@ func _menu_akcja(id: int) -> void:
 			_szybkie_przeniesienie(p, z)
 			return
 		M_WYRZUC:
-			_usun_ze_zrodla(p, z)
-			gracz.upusc(p)
+			_wyrzuc_reka(p, z)
+			return
 	_po_zmianie()
 
 
@@ -1798,13 +1821,15 @@ func _napelnij(mag: Przedmiot, stos: Przedmiot, z_stosu: Dictionary) -> bool:
 				_usun_ze_zrodla(stos, z_stosu)
 			return w)
 		return true
-	# z ekwipunku / skrytki
-	var zrodla := ekw.siatki()
+	# z ekwipunku / skrytki (w rajdzie tylko spod ręki: kamizelka, kieszenie, otwarte kieszenie plecaka)
+	var zrodla := ekw.siatki_pod_reka()
 	if tryb_bazy:
 		zrodla.append(Gra.skrytka)
 	var typ: String = mag.dane["amunicja"] if mag.dane["naboje"] > 0 else ""
 	for s in zrodla:
 		for e in (s as Siatka).items:
+			if not ekw.odkryty(s, e):
+				continue
 			var a: Przedmiot = e["p"]
 			if a.typ() == "amunicja" and a.defn()["amunicja"]["kaliber"] == kal and (typ == "" or a.id == typ):
 				var ile2: int = mini(wolne, a.ilosc)
@@ -1846,11 +1871,13 @@ func _zaplanuj_ladowanie(mag: Przedmiot, amun: String, ile: int, zabierz: Callab
 
 func napelnij_wszystkie() -> void:
 	var mags := []
-	var zrodla := ekw.siatki()
+	var zrodla := ekw.siatki_pod_reka()
 	if tryb_bazy:
 		zrodla.append(Gra.skrytka)
 	for s in zrodla:
 		for e in (s as Siatka).items:
+			if not ekw.odkryty(s, e):
+				continue
 			var m: Przedmiot = e["p"]
 			if m.typ() == "magazynek" and m.dane["naboje"] < int(m.defn()["magazynek"]["pojemnosc"]):
 				mags.append(m)
@@ -1961,11 +1988,9 @@ func _wyrzuc(p: Przedmiot) -> void:
 			z = {"typ": "siatka", "siatka": s}
 	if z.is_empty():
 		return
-	_usun_ze_zrodla(p, z)
-	gracz.upusc(p)
 	_hover_p = null
 	_tooltip.visible = false
-	Dzwiek.graj("odloz", -8.0)
+	_wyrzuc_reka(p, z)
 	_po_zmianie()
 
 

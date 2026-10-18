@@ -106,6 +106,6 @@ func interakcja(g) -> void:
 			Dzwiek.graj("podnies", -6.0)
 			queue_free()
 		elif is_instance_valid(self):
-			g.komunikat.emit("Brak miejsca w ekwipunku")
+			g.komunikat.emit("Brak miejsca w kamizelce i kieszeniach – do plecaka trzeba go zdjąć" if g.ekw.siatka_plecaka() != null else "Brak miejsca w ekwipunku")
 		, "podnies")
 	get_tree().create_timer(czas + 0.5).timeout.connect(func(): _podnoszony = false)

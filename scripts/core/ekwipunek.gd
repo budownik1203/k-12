@@ -64,8 +64,10 @@ func util_aktywny(slot: String) -> bool:
 ## Czy przedmiot o danym id jest w aktywnym slocie wyposażenia (np. latarka gotowa do użycia).
 ## Czy przedmiot o danym id jest gdziekolwiek w ekwipunku (siatki i sloty).
 func ma_przedmiot(pid: String) -> bool:
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			if (e["p"] as Przedmiot).id == pid:
 				return true
 	for k in sloty:
@@ -130,6 +132,70 @@ func siatki(tylko_szybkie := false) -> Array:
 	return out
 
 
+## Rajd: plecak i kontener na plecach są niedostępne (przeładowanie, leki, podnoszenie, napełnianie
+## sięgają tylko do kamizelki i kieszeni); po zdjęciu i rozłożeniu – tylko otwarte kieszenie.
+var ograniczony := false
+var plecak_rozlozony := false
+var bezp_rozlozony := false
+var zakryte := {}            # Siatka -> [Rect2i] zapiętych kieszeni
+
+
+func siatki_pod_reka() -> Array:
+	if not ograniczony:
+		return siatki()
+	var out := siatki(true)
+	if plecak_rozlozony and siatka_plecaka() != null:
+		out.append(siatka_plecaka())
+	if bezp_rozlozony:
+		out.append(bezpieczny)
+	return out
+
+
+## Czy przedmiot leży w otwartej części siatki (nie w zapiętej kieszeni).
+func odkryty(s: Siatka, e: Dictionary) -> bool:
+	if not zakryte.has(s):
+		return true
+	var p: Przedmiot = e["p"]
+	var r := Rect2i(int(e["x"]), int(e["y"]), p.szer(), p.wys())
+	for z in zakryte[s]:
+		if (z as Rect2i).intersects(r):
+			return false
+	return true
+
+
+## Dodaje do siatki z pominięciem zapiętych kieszeni (stosy i wolne miejsce).
+func _dodaj_do(s: Siatka, p: Przedmiot) -> bool:
+	if not zakryte.has(s):
+		return s.dodaj(p)
+	if p.stos_max() > 1:
+		for e in s.items:
+			var q: Przedmiot = e["p"]
+			if q.id == p.id and q.ilosc < q.stos_max() and odkryty(s, e):
+				var ile: int = mini(p.ilosc, q.stos_max() - q.ilosc)
+				q.ilosc += ile
+				p.ilosc -= ile
+				if p.ilosc <= 0:
+					s.zmieniona.emit()
+					return true
+	for rot in [p.obrot, not p.obrot]:
+		var r := p.rozmiar()
+		var pw: int = r.y if rot else r.x
+		var ph: int = r.x if rot else r.y
+		for y in s.h:
+			for x in s.w:
+				if not s.moze(p, x, y, rot):
+					continue
+				var ok := true
+				for z in zakryte[s]:
+					if (z as Rect2i).intersects(Rect2i(x, y, pw, ph)):
+						ok = false
+						break
+				if ok:
+					s.poloz(p, x, y, rot)
+					return true
+	return false
+
+
 func czy_szybka(s: Siatka) -> bool:
 	return s == kieszenie or s == siatka_kamizelki()
 
@@ -152,12 +218,12 @@ func waga() -> float:
 func dodaj(p: Przedmiot) -> bool:
 	if p.typ() in UTILITY and wolny_util() != "":
 		return zaloz("util", p)
-	var kolejnosc := siatki()
+	var kolejnosc := siatki_pod_reka()
 	kolejnosc.erase(bezpieczny)
 	if p.typ() not in ["magazynek", "amunicja", "med"]:
-		kolejnosc = [siatka_plecaka(), kieszenie, siatka_kamizelki()].filter(func(s): return s != null)
+		kolejnosc = [siatka_plecaka(), kieszenie, siatka_kamizelki()].filter(func(s): return s != null and s in siatki_pod_reka())
 	for s in kolejnosc:
-		if (s as Siatka).dodaj(p):
+		if _dodaj_do(s as Siatka, p):
 			zmieniony.emit()
 			return true
 	zmieniony.emit()
@@ -167,8 +233,10 @@ func dodaj(p: Przedmiot) -> bool:
 ## Najlepszy magazynek do przeładowania: z nabojami, najpierw pod ręką.
 func znajdz_magazynek(mag_ids: Array) -> Dictionary:
 	var best := {}
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.id in mag_ids and p.dane["naboje"] > 0:
 				var szybki := czy_szybka(s)
@@ -180,8 +248,10 @@ func znajdz_magazynek(mag_ids: Array) -> Dictionary:
 
 func policz_amunicje(kaliber: String) -> int:
 	var n := 0
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.typ() == "amunicja" and p.defn()["amunicja"]["kaliber"] == kaliber:
 				n += p.ilosc
@@ -191,8 +261,10 @@ func policz_amunicje(kaliber: String) -> int:
 ## Zabiera do n naboi danego kalibru (preferując wskazany typ). Zwraca {"id": typ, "n": ile}.
 func zabierz_amunicje(kaliber: String, n: int, preferowany := "") -> Dictionary:
 	var kandydaci := []
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.typ() == "amunicja" and p.defn()["amunicja"]["kaliber"] == kaliber:
 				kandydaci.append([s, p])
@@ -206,7 +278,12 @@ func zabierz_amunicje(kaliber: String, n: int, preferowany := "") -> Dictionary:
 	for k in kandydaci:
 		if k[1].id != typ_id:
 			continue
-		wziete += (k[0] as Siatka).zabierz(typ_id, n - wziete)
+		var st: Przedmiot = k[1]
+		var ile: int = mini(st.ilosc, n - wziete)
+		st.ilosc -= ile
+		wziete += ile
+		if st.ilosc <= 0:
+			(k[0] as Siatka).usun(st)
 		if wziete >= n:
 			break
 	zmieniony.emit()
@@ -214,8 +291,10 @@ func zabierz_amunicje(kaliber: String, n: int, preferowany := "") -> Dictionary:
 
 
 func znajdz_med(efekty: Array) -> Dictionary:
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.typ() == "med" and p.defn()["med"]["efekt"] in efekty:
 				return {"p": p, "siatka": s, "szybki": czy_szybka(s)}
@@ -223,8 +302,10 @@ func znajdz_med(efekty: Array) -> Dictionary:
 
 
 func znajdz_id(id: String) -> Dictionary:
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.id == id:
 				return {"p": p, "siatka": s, "szybki": czy_szybka(s)}
@@ -255,8 +336,10 @@ func pasek() -> Array:
 
 
 func znajdz_klucz(otwiera: String) -> Dictionary:
-	for s in siatki():
+	for s in siatki_pod_reka():
 		for e in (s as Siatka).items:
+			if not odkryty(s, e):
+				continue
 			var p: Przedmiot = e["p"]
 			if p.typ() == "klucz" and p.defn()["klucz"]["otwiera"] == otwiera:
 				return {"p": p, "siatka": s}

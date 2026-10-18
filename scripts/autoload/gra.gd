@@ -138,7 +138,16 @@ func rozpocznij_rajd() -> void:
 
 ## wynik: {"przezyl": bool, "przyczyna": String, "czas": float, "zabici": Array, "wyjscie": String,
 ##         "wartosc_poczatkowa": int, "utracone": Array, "zdrowie": Dictionary, "zdarzenia": Array}
+func _odblokuj_ekw() -> void:
+	if ekw:
+		ekw.ograniczony = false
+		ekw.plecak_rozlozony = false
+		ekw.bezp_rozlozony = false
+		ekw.zakryte.clear()
+
+
 func koniec_rajdu(wynik: Dictionary) -> void:
+	_odblokuj_ekw()
 	rajd_w_toku = false
 	statystyki["zabici"] += wynik.get("zabici", []).size()
 	if wynik["przezyl"]:

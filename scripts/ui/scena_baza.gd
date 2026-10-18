@@ -19,6 +19,7 @@ const WYS := 3.0
 
 
 func _ready() -> void:
+	Gra._odblokuj_ekw()
 	add_to_group("ui_bazy")
 	add_to_group("hud")
 	widok = Widok3D.zbuduj(self, 0.06, 0.16)

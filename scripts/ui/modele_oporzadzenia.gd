@@ -41,7 +41,7 @@ static func _zawias(rodzic: Node3D, poz: Vector3) -> Node3D:
 static func zbuduj(id: String, w: float, d: float, kieszenie: Array = []) -> Dictionary:
 	match id:
 		"napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska":
-			return _kamizelka(id, w, d)
+			return _kamizelka(id, w, d, kieszenie)
 	if kieszenie.is_empty():
 		# bez podziału (np. model leżący na ziemi): jedna zamknięta komora
 		var typ := "wieko" if id in ["kontener", "bezpieczny"] else ("sciagacz" if id == "worek" else "klapa")
@@ -200,13 +200,35 @@ static func kieszenie_dla(id: String, s: Siatka) -> Array:
 		for e in d["kieszenie"]:
 			out.append({"r": Rect2i(int(e[0]), int(e[1]), int(e[2]), int(e[3])), "nazwa": String(e[4]), "typ": String(e[5])})
 		return out
+	if not s.maska.is_empty():
+		# ładownice / przegródki: spójne grupy pól układu
+		var odw := {}
+		for y in s.h:
+			for x in s.w:
+				if not s.dostepna(x, y) or odw.has(Vector2i(x, y)):
+					continue
+				var stos := [Vector2i(x, y)]
+				odw[Vector2i(x, y)] = true
+				var mn := Vector2i(x, y)
+				var mx := Vector2i(x, y)
+				while not stos.is_empty():
+					var c: Vector2i = stos.pop_back()
+					mn = Vector2i(mini(mn.x, c.x), mini(mn.y, c.y))
+					mx = Vector2i(maxi(mx.x, c.x), maxi(mx.y, c.y))
+					for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var nb: Vector2i = c + dv
+						if nb.x >= 0 and nb.y >= 0 and nb.x < s.w and nb.y < s.h and s.dostepna(nb.x, nb.y) and not odw.has(nb):
+							odw[nb] = true
+							stos.append(nb)
+				out.append({"r": Rect2i(mn, mx - mn + Vector2i.ONE), "nazwa": "Ładownica", "typ": "rzep"})
+		return out
 	var typ := "wieko" if id in ["kontener", "bezpieczny"] else "klapa"
 	out.append({"r": Rect2i(0, 0, s.w, s.h), "nazwa": "Kontener" if typ == "wieko" else "Komora", "typ": typ})
 	return out
 
 
 ## Kamizelki: płyta z ładownicami; klapki ładownic odchylane po kolei (rzepy / zatrzaski).
-static func _kamizelka(id: String, w: float, d: float) -> Dictionary:
+static func _kamizelka(id: String, w: float, d: float, kieszenie: Array = []) -> Dictionary:
 	var k: Color = KOLORY.get(id, Color(0.3, 0.32, 0.24))
 	var n := Node3D.new()
 	var cz := [_t(Vector3(0, 0, -0.012), Vector3(w + 0.04, d + 0.05, 0.03), k.darkened(0.15), 0.012)]
@@ -222,6 +244,20 @@ static func _kamizelka(id: String, w: float, d: float) -> Dictionary:
 		"kamizelka_mysliwska":
 			cz.append(_t(Vector3(0, d * 0.42, 0.004), Vector3(w + 0.04, 0.03, 0.008), Color(0.85, 0.42, 0.1), 0.004))  # pomarańczowy pas
 	_mi(n, cz)
+	if not kieszenie.is_empty():
+		# osobna klapka na rzep nad każdą ładownicą (r: x lewej krawędzi, y górnej, szer., wys.)
+		var kz := []
+		for e in kieszenie:
+			var r: Rect2 = e["r"]
+			var cx := r.position.x + r.size.x * 0.5
+			var kl := _zawias(n, Vector3(cx, r.position.y, 0.014))
+			var hgt := r.size.y
+			_mi(kl, [_t(Vector3(0, -hgt * 0.5, 0.007), Vector3(r.size.x * 0.96, hgt, 0.014), k.lightened(0.04), 0.005),
+				_t(Vector3(0, -hgt * 0.82, 0.015), Vector3(minf(0.03, r.size.x * 0.5), hgt * 0.12, 0.004), k.darkened(0.3), 0.0)])
+			# korpus ładownicy pod klapką
+			_mi(n, [_t(Vector3(cx, r.position.y - hgt * 0.5, 0.004), Vector3(r.size.x * 0.98, hgt, 0.01), k.darkened(0.1), 0.004)])
+			kz.append({"kroki": [[[kl, "rotation:x", -2.3, 0.14]]], "dzwieki": ["rzep"]})
+		return {"wezel": n, "gora": Vector3(0, 0, 0.01), "kroki": [], "kieszenie": kz}
 	# klapki: tyle co kolumn ładownic (pas u góry płyty)
 	var ile := 4 if id in ["napiersnik", "kamizelka_lbv"] else 3
 	var kroki := []

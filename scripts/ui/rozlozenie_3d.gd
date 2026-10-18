@@ -66,6 +66,12 @@ func _zbuduj(co: String, s: Siatka) -> Dictionary:
 	# osobny model dla każdego pojemnika; plecak i kontener – każda kieszeń ma własną klapę / zamek
 	var kz_m := []
 	var kz_def := []
+	if co == "kamizelka":
+		kz_def = ModeleOporzadzenia.kieszenie_dla(id, s)
+		var kv := SiatkaUI.KOM * (1.0 / 1050.0)
+		for e in kz_def:
+			var r: Rect2i = e["r"]
+			kz_m.append({"r": Rect2(Vector2(-s.w * kv * 0.5 + r.position.x * kv, s.h * kv * 0.5 - r.position.y * kv), Vector2(r.size.x * kv, r.size.y * kv)), "typ": "rzep"})
 	if co != "kamizelka":
 		kz_def = ModeleOporzadzenia.kieszenie_dla(id, s)
 		var kx := SiatkaUI.KOM * KOM_M
