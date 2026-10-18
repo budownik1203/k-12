@@ -454,7 +454,11 @@ func _przebuduj() -> void:
 		if siatka == null:
 			continue
 		var ramka := PanelContainer.new()
-		ramka.add_theme_stylebox_override("panel", RamkaStyl.new(false, 8.0))
+		if _warstwa:
+			# w świecie: same kafelki we wnętrzu pojemnika, nad nimi drobny napis – bez okna
+			ramka.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		else:
+			ramka.add_theme_stylebox_override("panel", RamkaStyl.new(false, 8.0))
 		ramka.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var wn := VBoxContainer.new()
 		wn.add_theme_constant_override("separation", 4)
@@ -463,7 +467,14 @@ func _przebuduj() -> void:
 		var tytul: String = NAZWY_POJ[co]
 		if co in ["kamizelka", "plecak"] and ekw.sloty[co] != null:
 			tytul = ekw.sloty[co].nazwa() + _opis_red(ekw.sloty[co])
-		nag.add_child(Motyw.naszywka(tytul))
+		if _warstwa:
+			var lt := Motyw.etykieta(tytul.to_upper(), 11, Color(0.86, 0.8, 0.62, 0.85), Motyw.mono_b())
+			lt.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+			lt.add_theme_constant_override("shadow_offset_x", 1)
+			lt.add_theme_constant_override("shadow_offset_y", 1)
+			nag.add_child(lt)
+		else:
+			nag.add_child(Motyw.naszywka(tytul))
 		var sp2 := Control.new()
 		sp2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sp2.custom_minimum_size = Vector2(8, 0)
@@ -471,14 +482,18 @@ func _przebuduj() -> void:
 		var x := Button.new()
 		x.text = "✕"
 		x.tooltip_text = "Zamknij"
-		x.custom_minimum_size = Vector2(26, 22)
+		x.custom_minimum_size = Vector2(26, 22) if not _warstwa else Vector2(20, 16)
+		if _warstwa:
+			x.add_theme_font_size_override("font_size", 10)
+			x.flat = true
 		var c2: String = co
 		x.pressed.connect(func(): przelacz_pojemnik(c2))
 		nag.add_child(x)
 		wn.add_child(nag)
-		if co == "plecak":
+		if co == "plecak" and not _warstwa:
 			wn.add_child(Zamek.new())
 		var gui := _siatka_ui(siatka, co)
+		ramka.set_meta("siatka_ui", gui)
 		gui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		wn.add_child(gui)
 		if _warstwa:
@@ -682,7 +697,12 @@ func _process(delta: float) -> void:
 			if pk == null:
 				r.visible = false
 				continue
-			var cel: Vector2 = (pk as Vector2) - r.size * 0.5 - Vector2(0, 12)
+			# środek kafelków (nie całej ramki z napisem) w środku wnętrza modelu
+			var g: Control = r.get_meta("siatka_ui", null)
+			var off := r.size * 0.5
+			if g and is_instance_valid(g):
+				off = g.global_position - r.global_position + g.size * 0.5
+			var cel: Vector2 = (pk as Vector2) - off
 			cel.x = clampf(cel.x, 4.0, _root.size.x - r.size.x - 4.0)
 			cel.y = clampf(cel.y, 4.0, _root.size.y - r.size.y - 30.0)
 			if not r.visible:
