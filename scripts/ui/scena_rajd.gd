@@ -770,6 +770,50 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--reka"):
+		# przekładanie ręką: z kieszeni do rozłożonego plecaka (przeciągnięcie), potem trafienie w trakcie
+		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")
+		Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("konserwa"))
+		print("dodano kompas: ", Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("kompas")))
+		ekran_ekw.otworz(null)
+		await _klatki(5)
+		ekran_ekw.przelacz_pojemnik("plecak")
+		await get_tree().create_timer(2.0).timeout
+		var gui: SiatkaUI = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
+		for i in (ekran_ekw._kieszenie["plecak"] as Array).size():
+			ekran_ekw._klik_kieszeni(gui, i, "plecak")
+			while ekran_ekw._zajete():
+				await get_tree().process_frame
+			await get_tree().create_timer(0.1).timeout
+		await get_tree().create_timer(0.5).timeout
+		gui = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
+		var kons: Przedmiot = null
+		for e in Gra.ekw.kieszenie.items:
+			if (e["p"] as Przedmiot).id == "konserwa":
+				kons = e["p"]
+		var cel := gui.global_position + Vector2(2.5, 2.5) * SiatkaUI.KOM
+		ekran_ekw._animuj(kons, {"typ": "siatka", "siatka": Gra.ekw.kieszenie}, cel, func():
+			Gra.ekw.kieszenie.usun(kons)
+			Gra.ekw.siatka_plecaka().poloz(kons, 2, 2, false))
+		for fr in [0.2, 0.45, 0.65, 0.88]:
+			while ekran_ekw._reka_p.aktywna and ekran_ekw._reka_p.postep() < fr:
+				await get_tree().process_frame
+			await _zapisz(katalog, "rk_%d" % int(fr * 100))
+		while not ekran_ekw._przekl.is_empty():
+			await get_tree().process_frame
+		print("konserwa w plecaku: ", Gra.ekw.siatka_plecaka().zawiera(kons))
+		# drugi: trafienie w trakcie
+		var radio: Przedmiot = null
+		for e in Gra.ekw.kieszenie.items:
+			if (e["p"] as Przedmiot).id == "kompas":
+				radio = e["p"]
+		ekran_ekw._animuj(radio, {"typ": "siatka", "siatka": Gra.ekw.kieszenie}, cel, func(): pass)
+		await get_tree().create_timer(0.7).timeout
+		gracz.trafiony(gracz.global_position + Vector3.UP * 0.3, 5.0, 0.0, null)
+		await get_tree().create_timer(1.2).timeout
+		var na_ziemi: Array = swiat.get_children().filter(func(x): return x is LupNaZiemi and x.przedmiot == radio)
+		print("radio w kieszeniach: ", Gra.ekw.kieszenie.zawiera(radio), " na ziemi: ", na_ziemi.size(), " ekran otwarty: ", ekran_ekw.otwarty, " plecak w slocie: ", Gra.ekw.sloty["plecak"] != null)
+		return
 	if OS.get_cmdline_user_args().has("--porzucenie"):
 		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_wojskowy")
 		Gra.ekw.siatka_plecaka().dodaj(Przedmiot.nowy("konserwa"))
@@ -842,7 +886,8 @@ func _zrzut_animacji(katalog: String) -> void:
 				print("w kolejce: ", ekran_ekw._kolejka.size())
 				await get_tree().create_timer(0.3).timeout
 				await _zapisz(katalog, "zw_2b_kolejka")
-				await get_tree().create_timer(2.0).timeout
+				while not ekran_ekw._kolejka.is_empty() or ekran_ekw._zajete():
+					await get_tree().process_frame
 				print("w ladownicach po kolejce: ", (c["siatka"] as Siatka).items.size(), " kolejka: ", ekran_ekw._kolejka.size())
 		var nc: Dictionary = pj2.lista_czesci()[pj2.lista_czesci().size() - 1]
 		print("czesci: ", pj2.lista_czesci().map(func(c): return "%s:%d/%d" % [c["nazwa"], c["odkryte"], (c["siatka"] as Siatka).items.size()]))

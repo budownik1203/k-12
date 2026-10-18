@@ -46,7 +46,7 @@ do wyjść w liście [O], kompas – pasek kierunków u góry ekranu. Amunicja l
 pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kieszenie).
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzie kolejka – dłoń przekłada po kolei),
-**Shift+LPM** dzieli stos na pół, **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).
+**Shift+LPM** dzieli stos na pół (w rajdzie każde przełożenie robi dłoń – trwa, a trafienie w trakcie wytrąca przedmiot), **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).
 Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem kliknięciem otwierasz konkretne kieszenie
 (zamek, klamry, rzep, ściągacz – każda z animacją); **Załóż** zapina je i zakłada plecak. Kontener bezpieczny tak samo
 (**Wyjmij kontener**, potem zatrzaski i wieko).

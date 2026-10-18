@@ -75,6 +75,9 @@ var _kolko_przel: KolkoPostepu
 var _ucieczka_t := 0.0
 ## Kieszenie zdjętego plecaka / wyjętego kontenera (rajd): co -> [{"r", "nazwa", "otwarta", "w_toku"}]
 var _kieszenie := {}
+## Przenoszenie ręką (rajd): dłoń bierze przedmiot i odkłada; dopóki nie skończy – czekasz.
+var _przekl := {}               # {"p", "z", "wykonaj": Callable, "dz": bool}
+var _reka_p: RekaPrzekladania
 var _podp_ucieczka: Label
 
 
@@ -479,6 +482,10 @@ func zamknij() -> void:
 	_otwieranie = ""
 	otwarte = []
 	_kieszenie.clear()
+	if not _przekl.is_empty():
+		_przekl = {}
+		if _reka_p:
+			_reka_p.przerwij()
 	_szybki = false
 	_ucieczka_t = 0.0
 	if gracz:
@@ -816,7 +823,9 @@ func _process(delta: float) -> void:
 	if _ogl_ui and _ogl_ui.otwarty:
 		return
 	if Input.is_action_just_pressed("ekwipunek") and not Sterowanie.blokada_menu() and Engine.get_process_frames() > Sterowanie.blokuj_tab_do:
-		if otwarty and not tryb_bazy and not _szybki and Time.get_ticks_msec() - _pokaz_ms < 320 and _pojemnik == null:
+		if otwarty and not _przekl.is_empty():
+			_komunikat("Najpierw odłóż: " + (_przekl["p"] as Przedmiot).nazwa())
+		elif otwarty and not tryb_bazy and not _szybki and Time.get_ticks_msec() - _pokaz_ms < 320 and _pojemnik == null:
 			szybka_kamizelka()
 		elif otwarty:
 			zamknij_animowany()
@@ -879,7 +888,12 @@ func _process(delta: float) -> void:
 				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
 				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
 				c.position = cc - (c as Control).size * 0.5
+	_przekl_krok()
 	_kolejka_krok(delta)
+	if _warstwa:
+		var cel_a := 0.55 if not _przekl.is_empty() else 1.0
+		_warstwa.modulate.a = move_toward(_warstwa.modulate.a, cel_a, delta * 3.0)
+		_lp.modulate.a = move_toward(_lp.modulate.a, cel_a, delta * 3.0)
 	# ucieczka od rozłożonego plecaka: przytrzymany ruch porzuca go na ziemi
 	var plecak_rozl := not tryb_bazy and gracz != null and ("plecak" in otwarte or _otwieranie == "plecak")
 	if _podp_ucieczka == null and not tryb_bazy:
@@ -1006,7 +1020,110 @@ func _rzut(p: Vector3) -> Variant:
 
 
 func przeciagany() -> Przedmiot:
+	if not _przekl.is_empty():
+		return _przekl["p"]
 	return _drag.get("p")
+
+
+func _w_swiecie() -> bool:
+	return not tryb_bazy and gracz != null and _warstwa != null
+
+
+func _skala_ekranu() -> Vector2:
+	var vp := gracz.kamera.get_viewport()
+	var skala := Vector2(Widok3D.POMNIEJSZENIE, Widok3D.POMNIEJSZENIE)
+	if vp is SubViewport:
+		var kont := vp.get_parent() as Control
+		if kont:
+			skala = kont.size / Vector2((vp as SubViewport).size)
+	return skala
+
+
+## Punkt ekranu -> punkt w układzie kamery, tam gdzie sięga dłoń: na rozłożonym sprzęcie / w meblu,
+## a panel operatora po lewej to własne ciało (kieszenie, pas) – blisko i nisko.
+func _ekran_na_kamere(scr: Vector2) -> Vector3:
+	var kam: Camera3D = gracz.kamera
+	var vp_pos := scr / _skala_ekranu()
+	var od := kam.project_ray_origin(vp_pos)
+	var kier := kam.project_ray_normal(vp_pos)
+	var dl := 0.62
+	if scr.x < 380.0:
+		# kieszenie, pas, sloty na ciele: dłoń schodzi poniżej kadru (do biodra / piersi)
+		var wys := clampf(scr.y / maxf(1.0, _root.size.y), 0.0, 1.0)
+		return Vector3(-0.16 + wys * 0.06, -0.3 - wys * 0.16, -0.3)
+	var q := PhysicsRayQueryParameters3D.create(od, od + kier * 1.6, Balistyka.WARSTWA_SWIAT)
+	q.exclude = [gracz.get_rid()]
+	var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	if not r.is_empty():
+		# zasięg ręki: dalej sięga się pochyleniem – dłoń zostaje na promieniu widzenia (trafia w kafelek)
+		dl = clampf(od.distance_to(r["position"]) - 0.12, 0.3, 0.68)
+	return kam.to_local(od + kier * dl)
+
+
+## Środek przedmiotu na ekranie (siatka albo slot).
+func _ekran_przedmiotu(p: Przedmiot, z: Dictionary) -> Vector2:
+	if z.get("typ") == "siatka":
+		for ui in _siatki:
+			if is_instance_valid(ui) and ui.siatka == z["siatka"] and ui.is_visible_in_tree():
+				var poz: Vector2i = ui.siatka.pozycja(p)
+				return ui.global_position + (Vector2(poz) + Vector2(p.szer(), p.wys()) * 0.5) * SiatkaUI.KOM
+	elif z.get("typ") == "slot":
+		for sl in _sloty:
+			if is_instance_valid(sl) and sl.slot == z["slot"]:
+				return sl.get_global_rect().get_center()
+	return _root.get_global_mouse_position()
+
+
+## Przełożenie ręką: animacja dłoni (sięgnięcie, chwyt, łuk, odłożenie), `wykonaj` na końcu.
+func _animuj(p: Przedmiot, z: Dictionary, cel_scr: Vector2, wykonaj: Callable) -> void:
+	if not _w_swiecie():
+		wykonaj.call()
+		return
+	if _reka_p == null or not is_instance_valid(_reka_p):
+		_reka_p = RekaPrzekladania.new()
+		_reka_p.gracz = gracz
+		gracz.kamera.add_child(_reka_p)
+	var od_scr := _ekran_przedmiotu(p, z)
+	var od := _ekran_na_kamere(od_scr)
+	var do_ := _ekran_na_kamere(cel_scr)
+	var czas := 0.8 + od_scr.distance_to(cel_scr) / 1100.0 + p.waga() * 0.06 + p.szer() * p.wys() * 0.03
+	czas = clampf(czas, 0.85, 2.4)
+	_przekl = {"p": p, "z": z, "wykonaj": wykonaj, "chwyt": false, "odl": false}
+	_reka_p.zacznij(p, od, do_, czas)
+	_odswiez()
+
+
+func _przekl_krok() -> void:
+	if _przekl.is_empty() or _reka_p == null:
+		return
+	var f := _reka_p.postep()
+	if f > 0.35 and not _przekl["chwyt"]:
+		_przekl["chwyt"] = true
+		Dzwiek.graj("podnies", -14.0, randf_range(1.1, 1.3))
+	if f > 0.9 and not _przekl["odl"]:
+		_przekl["odl"] = true
+		Dzwiek.graj("odloz", -11.0, clampf(1.3 - (_przekl["p"] as Przedmiot).waga() * 0.06, 0.7, 1.3))
+	if not _reka_p.aktywna:
+		var w: Callable = _przekl["wykonaj"]
+		_przekl = {}
+		if w.is_valid():
+			w.call()
+		_po_zmianie()
+
+
+## Trafienie / zerwanie w trakcie przekładania: przedmiot wypada z ręki na ziemię.
+func _upusc_z_reki() -> void:
+	if _przekl.is_empty():
+		return
+	var p: Przedmiot = _przekl["p"]
+	var z: Dictionary = _przekl["z"]
+	_przekl = {}
+	if _reka_p:
+		_reka_p.przerwij()
+	if _w_zrodle(p, z):
+		_usun_ze_zrodla(p, z)
+		gracz.upusc(p)
+		gracz.komunikat.emit("Wypada ci z ręki: " + p.nazwa())
 
 
 ## Czy siatka należy do przeszukiwanego pojemnika / skrytki (prawa strona).
@@ -1072,6 +1189,8 @@ func _napis_swiat(t: String, rozm: int, k: Color, gruby: bool) -> Label:
 func zerwij_sie(powod: String) -> void:
 	if not otwarty or tryb_bazy or gracz == null or _chowanie:
 		return
+	if powod == "trafienie":
+		_upusc_z_reki()
 	var plecak_otw := "plecak" in otwarte or _otwieranie == "plecak"
 	if not plecak_otw and _pojemnik == null and not ("bezpieczny" in otwarte):
 		if powod == "trafienie" and ("kamizelka" in otwarte or _otwieranie != ""):
@@ -1194,8 +1313,12 @@ func _upusc_drag(anuluj: bool) -> void:
 				_montuj(w, p, d["z"])
 				_odswiez()
 				return
-			_na_slot(p, d["z"], s.slot)
-			_po_zmianie()
+			var slot_n: String = s.slot
+			var zr: Dictionary = d["z"]
+			_animuj(p, zr, s.get_global_rect().get_center(), func():
+				if _w_zrodle(p, zr):
+					_na_slot(p, zr, slot_n)
+				_po_zmianie())
 			return
 	# cel: siatka
 	for ui in _siatki:
@@ -1225,13 +1348,17 @@ func _upusc_drag(anuluj: bool) -> void:
 			_odswiez()
 			return
 		if ui.siatka.moze(p, kom.x, kom.y, d["rot"], p):
-			var inna: bool = d["z"]["typ"] != "siatka" or d["z"]["siatka"] != ui.siatka
-			_usun_ze_zrodla(p, d["z"])
-			ui.siatka.poloz(p, kom.x, kom.y, d["rot"])
-			Dzwiek.graj("odloz", -10.0)
-			if inna:
-				_zajmij(_koszt_przelozenia(p, d["z"], ui.siatka))
-			_po_zmianie()
+			var sg: Siatka = ui.siatka
+			var zr2: Dictionary = d["z"]
+			var rot: bool = d["rot"]
+			var cel_scr := ui.global_position + (Vector2(kom) + Vector2(sw, sh) * 0.5) * SiatkaUI.KOM
+			_animuj(p, zr2, cel_scr, func():
+				if _w_zrodle(p, zr2) and sg.moze(p, kom.x, kom.y, rot, p):
+					_usun_ze_zrodla(p, zr2)
+					sg.poloz(p, kom.x, kom.y, rot)
+					if not _w_swiecie():
+						Dzwiek.graj("odloz", -10.0)
+				_po_zmianie())
 		return
 	_odswiez()
 
@@ -1391,7 +1518,7 @@ func w_kolejce(p: Przedmiot) -> bool:
 
 
 func _zajete() -> bool:
-	return _zajete_t > 0.0 and not tryb_bazy
+	return (_zajete_t > 0.0 or not _przekl.is_empty()) and not tryb_bazy
 
 
 func _zajmij(t: float) -> void:
@@ -1415,16 +1542,37 @@ func _koszt_przelozenia(p: Przedmiot, z: Dictionary, cel) -> float:
 func _kolejka_krok(delta: float) -> void:
 	if _zajete_t > 0.0:
 		_zajete_t -= delta
-	if _zajete_t > 0.0 or _kolejka.is_empty() or not _drag.is_empty():
+	if _zajete_t > 0.0 or _kolejka.is_empty() or not _drag.is_empty() or not _przekl.is_empty():
 		return
 	var e: Dictionary = _kolejka.pop_front()
 	var p: Przedmiot = e["p"]
 	if not _w_zrodle(p, e["z"]):
 		_odswiez()
 		return
-	var cel: Variant = ekw.siatka_plecaka() if _jest_prawa(e["z"].get("siatka")) else _prawa_siatka
-	_przenies_teraz(p, e["z"])
-	_zajmij(_koszt_przelozenia(p, e["z"], cel))
+	var z: Dictionary = e["z"]
+	var do_pojemnika := not _jest_prawa(z.get("siatka"))
+	var cel_scr := _cel_kolejki(do_pojemnika)
+	_animuj(p, z, cel_scr, func():
+		if _w_zrodle(p, z):
+			_przenies_teraz(p, z))
+	if not _w_swiecie():
+		_zajmij(_koszt_przelozenia(p, z, null))
+
+
+## Gdzie na ekranie odkłada dłoń przy Ctrl+klik: do mebla / zwłok albo do własnego sprzętu.
+func _cel_kolejki(do_pojemnika: bool) -> Vector2:
+	if do_pojemnika:
+		if _ramka_poj and is_instance_valid(_ramka_poj) and _ramka_poj.visible:
+			return _ramka_poj.get_global_rect().get_center()
+		return _pp.get_global_rect().get_center()
+	for co in ["plecak", "kamizelka"]:
+		var r: Control = _ramki.get(co)
+		if r and is_instance_valid(r) and r.visible:
+			return r.get_global_rect().get_center()
+	for ui in _siatki:
+		if is_instance_valid(ui) and ui.siatka == ekw.kieszenie:
+			return ui.get_global_rect().get_center()
+	return Vector2(200, 500)
 
 
 ## Podział stosu na pół (Shift+klik): druga połowa w wolnym miejscu tej samej siatki.
