@@ -523,9 +523,11 @@ func _animuj_przeladowanie(f: float) -> void:
 		mag = Vector3.ZERO
 		reka = chwyt.lerp(p_przod, e)
 		if _byl_pusty and not jest_pistolet():
-			# pusta komora: lewa dłoń sięga do rączki zamka po prawej stronie i przeciąga ją do tyłu
-			var raczka := Vector3(0.05, 0.075, -0.09) + (p_przod - Vector3(md.get("lozysko", p_przod)))
+			# pusta komora: lewa dłoń sięga do rączki zamka po prawej stronie i przeciąga ją do tyłu;
+			# dłoń obraca się wnętrzem do broni (chwyt rączki z boku, nie od spodu)
+			var raczka := Vector3(0.062, 0.018, -0.085) + (p_przod - Vector3(md.get("lozysko", p_przod)))
 			var t := (f - 0.78) / 0.22
+			_roll_l = 1.45 * smoothstep(0.05, 0.3, t) * (1.0 - smoothstep(0.62, 0.9, t))
 			if t < 0.35:
 				reka = chwyt.lerp(raczka, smoothstep(0.0, 0.35, t))
 			elif t < 0.6:
@@ -546,8 +548,17 @@ func _animuj_przeladowanie(f: float) -> void:
 		_raczka = 0.0
 	if mag_node:
 		mag_node.position = mag
+	if not (_byl_pusty and not jest_pistolet() and f >= 0.78):
+		_roll_l = move_toward(_roll_l, 0.0, 0.2)
 	if _lewa:
-		_lewa.position = reka - p_przod if not jest_pistolet() else (reka - p_przod) * 0.7
+		if jest_pistolet():
+			_lewa.position = (reka - p_przod) * 0.7
+		else:
+			# obrót dłoni wokół punktu chwytu (osi lufy)
+			var g: Vector3 = Vector3(md.get("lozysko", p_przod))
+			var rb := Basis(Vector3(0, 0, 1), _roll_l)
+			_lewa.basis = rb
+			_lewa.position = (reka - p_przod + g) - rb * g
 	# palce lewej dłoni: otwarta przy sięganiu, zaciśnięta na magazynku, chwyt rączki zamka, powrót na łoże
 	if _lewa and _reka_l and is_instance_valid(_reka_l):
 		var poza := "pistolet" if (jest_pistolet() or md.has("chwyt_pionowy")) else "lozysko"
@@ -563,6 +574,7 @@ func _animuj_przeladowanie(f: float) -> void:
 
 
 var _wcisniety := false
+var _roll_l := 0.0
 
 
 func _animuj_ladowanie_naboju(f: float) -> void:
