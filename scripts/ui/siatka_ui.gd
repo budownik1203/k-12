@@ -4,12 +4,16 @@ extends Control
 
 signal klik(ui: SiatkaUI, p: Przedmiot, przycisk: int, pozycja: Vector2)
 signal najechano(p: Przedmiot)
+signal kieszen(ui: SiatkaUI, indeks: int)
 
 const KOM := 34
 
 var siatka: Siatka
 var tytul := ""
 var widoczne := -1          # ile pierwszych przedmiotów widać (-1 = wszystkie) – przy przeszukiwaniu
+## Kieszenie rozłożonego plecaka / kontenera: zamknięte zakrywają swoje pola (trzeba je otworzyć).
+## [{"r": Rect2i, "nazwa": String, "otwarta": bool, "w_toku": bool}]
+var kieszenie: Array = []
 var ciemno := false         # przeszukiwanie po ciemku: przedmioty jako cienie (bez latarki)
 var kontroler: Node         # EkranEkwipunku
 var zrodlo := ""            # opis: "skrytka", "plecak", "pojemnik"...
@@ -33,7 +37,32 @@ func komorka_pod(pos_lokalna: Vector2) -> Vector2i:
 	return Vector2i(int(floor(pos_lokalna.x / KOM)), int(floor(pos_lokalna.y / KOM)))
 
 
+func kieszen_pod(k: Vector2i) -> int:
+	for i in kieszenie.size():
+		if (kieszenie[i]["r"] as Rect2i).has_point(k):
+			return i
+	return -1
+
+
+func zakryta(k: Vector2i) -> bool:
+	var i := kieszen_pod(k)
+	return i >= 0 and not bool(kieszenie[i]["otwarta"])
+
+
+## Czy obszar (np. pod upuszczany przedmiot) zahacza o zamkniętą kieszeń.
+func zakryty_obszar(x: int, y: int, w: int, h: int) -> bool:
+	for yy in range(y, y + h):
+		for xx in range(x, x + w):
+			if zakryta(Vector2i(xx, yy)):
+				return true
+	return false
+
+
 func ukryty(p: Przedmiot) -> bool:
+	if not kieszenie.is_empty() and siatka:
+		var poz := siatka.pozycja(p)
+		if zakryty_obszar(poz.x, poz.y, p.szer(), p.wys()):
+			return true
 	if widoczne < 0 or siatka == null:
 		return false
 	for i in siatka.items.size():
@@ -48,7 +77,7 @@ func _draw() -> void:
 		draw_string(Motyw.cond(), Vector2(6, 22), "—", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Motyw.TEKST_CIEMNY)
 		return
 	var kt := Motyw.tekstura("komorka")
-	if siatka.maska.is_empty():
+	if siatka.maska.is_empty() and kieszenie.is_empty():
 		if kt:
 			draw_texture_rect(kt, Rect2(Vector2.ZERO, Vector2(siatka.w, siatka.h) * KOM), true, Color(1, 1, 1, 0.82))
 		else:
@@ -61,7 +90,7 @@ func _draw() -> void:
 		# tylko pola ładownic; szwy między nimi przezroczyste
 		for y in siatka.h:
 			for x in siatka.w:
-				if not siatka.dostepna(x, y):
+				if not siatka.dostepna(x, y) or zakryta(Vector2i(x, y)):
 					continue
 				var rk := Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM))
 				if kt:
@@ -94,6 +123,8 @@ func _draw() -> void:
 		if p == przeciagany:
 			continue
 		var r := Rect2(Vector2(e["x"], e["y"]) * KOM, Vector2(p.szer(), p.wys()) * KOM)
+		if not kieszenie.is_empty() and zakryty_obszar(int(e["x"]), int(e["y"]), p.szer(), p.wys()):
+			continue
 		if widoczne >= 0 and i >= widoczne:
 			draw_rect(r.grow(-2), Color(0.09, 0.09, 0.08))
 			draw_string(Motyw.mono_b(), r.position + Vector2(r.size.x * 0.5 - 5, r.size.y * 0.5 + 6), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Motyw.TEKST_CIEMNY)
@@ -104,6 +135,8 @@ func _draw() -> void:
 		if kontroler and kontroler.has_method("w_kolejce") and kontroler.w_kolejce(p):
 			draw_rect(r.grow(-2), Color(0.86, 0.72, 0.36, 0.22))
 			draw_rect(r.grow(-2), Color(0.86, 0.72, 0.36, 0.8), false, 1.5)
+
+	_rysuj_kieszenie()
 
 
 static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl := false) -> void:
@@ -144,6 +177,27 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 		ci.draw_string(Motyw.cond(), r.position + Vector2(4, 12), p.nazwa().substr(0, int(r.size.x / 7)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.72, 0.62, 0.85))
 
 
+func _rysuj_kieszenie() -> void:
+	for kz in kieszenie:
+		if bool(kz["otwarta"]):
+			continue
+		var rr: Rect2i = kz["r"]
+		var r := Rect2(Vector2(rr.position) * KOM, Vector2(rr.size) * KOM).grow(-1)
+		draw_rect(r, Color(0.05, 0.05, 0.04, 0.18))
+		# przeszycie wzdłuż brzegu klapy
+		var w := r.grow(-4)
+		for i in range(0, int(w.size.x), 6):
+			draw_line(w.position + Vector2(i, 0), w.position + Vector2(i + 3, 0), Color(0.45, 0.42, 0.32, 0.8))
+			draw_line(Vector2(w.position.x + i, w.end.y), Vector2(w.position.x + i + 3, w.end.y), Color(0.45, 0.42, 0.32, 0.8))
+		draw_rect(r, Color(0.86, 0.8, 0.62, 0.45), false, 1.5)
+		var f := Motyw.cond()
+		var nz := String(kz["nazwa"])
+		var t2 := "otwieranie..." if bool(kz.get("w_toku", false)) else "kliknij – otwórz"
+		var sz := minf(12.0, r.size.x / maxf(1.0, nz.length()) * 1.7)
+		draw_string(f, Vector2(r.position.x + 4, r.get_center().y - 2), nz, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, int(maxf(8.0, sz)), Color(0.86, 0.8, 0.62, 0.9))
+		draw_string(f, Vector2(r.position.x + 4, r.get_center().y + 12), t2, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, 9, Color(0.7, 0.66, 0.52, 0.75))
+
+
 func _gui_input(event: InputEvent) -> void:
 	if siatka == null:
 		return
@@ -158,6 +212,11 @@ func _gui_input(event: InputEvent) -> void:
 			queue_redraw()
 	elif event is InputEventMouseButton and event.pressed:
 		var k := komorka_pod(event.position)
+		if zakryta(k):
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				kieszen.emit(self, kieszen_pod(k))
+			accept_event()
+			return
 		var p := siatka.przedmiot_w(k.x, k.y)
 		if p != null and ukryty(p):
 			return

@@ -752,8 +752,21 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.przelacz_pojemnik(slot)
 			await _klatki(25)
 			await _zapisz(katalog, "pl_%s_a" % pid)
-			await get_tree().create_timer(2.4).timeout
+			await get_tree().create_timer(2.0).timeout
 			await _zapisz(katalog, "pl_%s_b" % pid)
+			if slot == "plecak" and ekran_ekw._kieszenie.has("plecak"):
+				var gui: SiatkaUI = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
+				for i in (ekran_ekw._kieszenie["plecak"] as Array).size():
+					ekran_ekw._klik_kieszeni(gui, i, "plecak")
+					await get_tree().create_timer(0.3).timeout
+					if i == 0:
+						await _zapisz(katalog, "pl_%s_c" % pid)
+					while ekran_ekw._zajete():
+						await get_tree().process_frame
+					await get_tree().create_timer(0.1).timeout
+				await get_tree().create_timer(0.4).timeout
+				await _zapisz(katalog, "pl_%s_d" % pid)
+				print("%s kieszenie: %s" % [pid, (ekran_ekw._kieszenie["plecak"] as Array).map(func(e): return "%s=%s" % [e["nazwa"], e["otwarta"]])])
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return

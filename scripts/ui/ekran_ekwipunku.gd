@@ -73,6 +73,8 @@ var _zajete_t := 0.0
 var _zajete_calk := 0.0
 var _kolko_przel: KolkoPostepu
 var _ucieczka_t := 0.0
+## Kieszenie zdjętego plecaka / wyjętego kontenera (rajd): co -> [{"r", "nazwa", "otwarta", "w_toku"}]
+var _kieszenie := {}
 var _podp_ucieczka: Label
 
 
@@ -246,7 +248,7 @@ func _buduj() -> void:
 
 const NAZWY_POJ := {"kieszenie": "Kieszenie", "kamizelka": "Kamizelka", "plecak": "Plecak", "bezpieczny": "Kontener bezpieczny"}
 ## Czas otwarcia w rajdzie: sięgnięcie do kieszeni, spojrzenie w dół na ładownice, zdjęcie i rozpięcie plecaka.
-const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.4, "plecak": 1.9, "bezpieczny": 1.2}
+const CZAS_OTW := {"kieszenie": 0.25, "kamizelka": 0.4, "plecak": 1.4, "bezpieczny": 0.9}
 
 
 func _siatka_pojemnika(co: String) -> Siatka:
@@ -275,11 +277,15 @@ func przelacz_pojemnik(co: String) -> void:
 			return
 		_zamykany = co
 		if _r3d:
+			var otw: int = _r3d.ile_otwartych(co)
 			_r3d.zamknij(co, 0.5)
+			_kieszenie.erase(co)
 			var twr := r.create_tween()
 			twr.tween_property(r, "modulate:a", 0.0, 0.12)
-			twr.tween_interval(0.35)
+			twr.tween_interval(0.35 + otw * 0.3)
 			twr.tween_callback(dokoncz)
+			if co in ["plecak", "bezpieczny"]:
+				gracz.komunikat.emit("Zapinasz kieszenie i zakładasz plecak..." if co == "plecak" else "Zamykasz i chowasz kontener...")
 			return
 		r.pivot_offset = Vector2(r.size.x * 0.5, 0.0 if co == "plecak" else r.size.y)
 		var tw := r.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -398,9 +404,9 @@ func zamknij_animowany(po := Callable()) -> void:
 	var czas := 0.0
 	if gracz and not tryb_bazy:
 		if "plecak" in otwarte:
-			czas += 0.95
+			czas += 0.95 + (_r3d.ile_otwartych("plecak") * 0.3 if _r3d else 0.0)
 		if "bezpieczny" in otwarte:
-			czas += 0.55
+			czas += 0.55 + (_r3d.ile_otwartych("bezpieczny") * 0.25 if _r3d else 0.0)
 		if "kamizelka" in otwarte and czas == 0.0:
 			czas = 0.3
 		if _otwieranie != "":
@@ -472,6 +478,7 @@ func zamknij() -> void:
 			Dzwiek.graj("plecak", -8.0, 1.1)
 	_otwieranie = ""
 	otwarte = []
+	_kieszenie.clear()
 	_szybki = false
 	_ucieczka_t = 0.0
 	if gracz:
@@ -589,6 +596,9 @@ func _przebuduj() -> void:
 		if co == "plecak" and not _warstwa:
 			wn.add_child(Zamek.new())
 		var gui := _siatka_ui(siatka, co)
+		if _warstwa and _kieszenie.has(co):
+			gui.kieszenie = _kieszenie[co]
+			gui.kieszen.connect(_klik_kieszeni.bind(co))
 		ramka.set_meta("siatka_ui", gui)
 		gui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		wn.add_child(gui)
@@ -608,7 +618,7 @@ func _przebuduj() -> void:
 		var wo := VBoxContainer.new()
 		wo.alignment = BoxContainer.ALIGNMENT_CENTER
 		ramka_o.add_child(wo)
-		var l := Motyw.etykieta({"kieszenie": "Sięgasz do kieszeni...", "kamizelka": "Spoglądasz na ładownice...", "plecak": "Zdejmujesz i rozpinasz plecak...", "bezpieczny": "Otwierasz kontener..."}[_otwieranie], 14, Motyw.ZOLC, Motyw.cond())
+		var l := Motyw.etykieta({"kieszenie": "Sięgasz do kieszeni...", "kamizelka": "Spoglądasz na ładownice...", "plecak": "Zdejmujesz plecak i kładziesz przed sobą...", "bezpieczny": "Wyjmujesz kontener i stawiasz obok..."}[_otwieranie], 14, Motyw.ZOLC, Motyw.cond())
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		wo.add_child(l)
 		_kolko_otw = KolkoPostepu.new()
@@ -715,13 +725,24 @@ func _animuj_wejscie(r: Control, co: String) -> void:
 func _przycisk_otw(co: String) -> Button:
 	var b := Button.new()
 	var ma := _siatka_pojemnika(co) != null
+	var swiat := not tryb_bazy and gracz != null
 	if co == _otwieranie:
-		b.text = "otwieranie..."
+		b.text = {"plecak": "zdejmowanie...", "bezpieczny": "wyjmowanie..."}.get(co, "otwieranie...") if swiat else "otwieranie..."
 		b.disabled = true
 	elif co in otwarte:
-		b.text = "◂ Zamknij" if co in ["kamizelka", "plecak"] else "◂ " + NAZWY_POJ[co]
+		if swiat and co == "plecak":
+			b.text = "◂ Załóż"
+		elif swiat and co == "bezpieczny":
+			b.text = "◂ Schowaj kontener"
+		else:
+			b.text = "◂ Zamknij" if co in ["kamizelka", "plecak"] else "◂ " + NAZWY_POJ[co]
 	else:
-		b.text = "Otwórz ▸" if co in ["kamizelka", "plecak"] else NAZWY_POJ[co] + " ▸"
+		if swiat and co == "plecak":
+			b.text = "Zdejmij ▸"
+		elif swiat and co == "bezpieczny":
+			b.text = "Wyjmij kontener ▸"
+		else:
+			b.text = "Otwórz ▸" if co in ["kamizelka", "plecak"] else NAZWY_POJ[co] + " ▸"
 		b.disabled = not ma
 	b.add_theme_font_size_override("font_size", 12)
 	b.custom_minimum_size = Vector2(76 if co in ["kamizelka", "plecak"] else 150, 24)
@@ -821,6 +842,13 @@ func _process(delta: float) -> void:
 			if _siatka_pojemnika(co) != null:
 				otwarte.append(co)
 				_swiezy = co
+				if _r3d and co in ["plecak", "bezpieczny"]:
+					# położony przed sobą, zapięty: kieszenie otwiera się każdą osobno
+					var idp := "kontener" if co == "bezpieczny" else (ekw.sloty["plecak"] as Przedmiot).id
+					var lst := []
+					for e in ModeleOporzadzenia.kieszenie_dla(idp, _siatka_pojemnika(co)):
+						lst.append({"r": e["r"], "nazwa": e["nazwa"], "otwarta": false, "w_toku": false})
+					_kieszenie[co] = lst
 				if co == "plecak":
 					Dzwiek.graj("plecak", -9.0, 1.3)
 			_przebuduj()
@@ -1175,6 +1203,8 @@ func _upusc_drag(anuluj: bool) -> void:
 			continue
 		var pod := ui.komorka_pod(mysz - ui.global_position)
 		var q := ui.siatka.przedmiot_w(pod.x, pod.y)
+		if q != null and ui.ukryty(q):
+			q = null
 		if q != null and q != p and _polacz(p, d["z"], q, ui):
 			_po_zmianie()
 			return
@@ -1183,6 +1213,16 @@ func _upusc_drag(anuluj: bool) -> void:
 		if d["rot"] != p.obrot:
 			kom = pod
 		if p.typ() == "pojemnik" and p.dane["siatka"] == ui.siatka:
+			return
+		var sw := p.szer()
+		var sh := p.wys()
+		if d["rot"] != p.obrot:
+			var tmp := sw
+			sw = sh
+			sh = tmp
+		if ui.zakryty_obszar(kom.x, kom.y, sw, sh):
+			_komunikat("Ta kieszeń jest zapięta – kliknij ją, żeby otworzyć")
+			_odswiez()
 			return
 		if ui.siatka.moze(p, kom.x, kom.y, d["rot"], p):
 			var inna: bool = d["z"]["typ"] != "siatka" or d["z"]["siatka"] != ui.siatka
@@ -1318,6 +1358,31 @@ func _szybkie_przeniesienie(p: Przedmiot, z: Dictionary) -> void:
 	_przenies_teraz(p, z)
 
 
+## Otwarcie kieszeni rozłożonego plecaka / kontenera: animacja na modelu, chwila czasu, szelest.
+func _klik_kieszeni(ui: SiatkaUI, i: int, co: String) -> void:
+	if not _kieszenie.has(co) or i < 0 or i >= (_kieszenie[co] as Array).size():
+		return
+	var e: Dictionary = _kieszenie[co][i]
+	if bool(e["otwarta"]) or bool(e["w_toku"]):
+		return
+	for x in _kieszenie[co]:
+		if bool(x["w_toku"]):
+			return     # jedna kieszeń naraz – obie ręce przy zamku
+	if gracz and not gracz.akcja.is_empty():
+		return
+	var czas: float = _r3d.otworz_kieszen(co, i) if _r3d else 0.3
+	e["w_toku"] = true
+	ui.queue_redraw()
+	_zajmij(czas)
+	if gracz:
+		Gra.emituj_halas(gracz.global_position, 3.0, gracz)
+	get_tree().create_timer(maxf(0.1, czas)).timeout.connect(func():
+		e["w_toku"] = false
+		e["otwarta"] = true
+		if is_instance_valid(ui):
+			ui.queue_redraw())
+
+
 func w_kolejce(p: Przedmiot) -> bool:
 	for e in _kolejka:
 		if e["p"] == p:
@@ -1378,6 +1443,47 @@ func _podziel(p: Przedmiot, s: Siatka) -> void:
 	_po_zmianie()
 
 
+## Do własnego ekwipunku, ale przy rozłożonym plecaku tylko do otwartych kieszeni (zapiętych nie widać).
+func _dodaj_do_otwartych(p: Przedmiot) -> bool:
+	if not _kieszenie.has("plecak") or ekw.siatka_plecaka() == null:
+		return ekw.dodaj(p)
+	var kz: Array = _kieszenie["plecak"]
+	var zakr := func(x: int, y: int, w: int, h: int) -> bool:
+		for e in kz:
+			if not bool(e["otwarta"]) and (e["r"] as Rect2i).intersects(Rect2i(x, y, w, h)):
+				return true
+		return false
+	var cele := [ekw.kieszenie, ekw.siatka_kamizelki()]
+	var pl: Siatka = ekw.siatka_plecaka()
+	# najpierw dołożenie do stosu w otwartej kieszeni plecaka
+	if p.stos_max() > 1:
+		for e2 in pl.items:
+			var q: Przedmiot = e2["p"]
+			if q.id == p.id and q.ilosc < q.stos_max() and not zakr.call(int(e2["x"]), int(e2["y"]), q.szer(), q.wys()):
+				var ile: int = mini(p.ilosc, q.stos_max() - q.ilosc)
+				q.ilosc += ile
+				p.ilosc -= ile
+				if p.ilosc <= 0:
+					pl.zmieniona.emit()
+					ekw.zmieniony.emit()
+					return true
+	for rot in [p.obrot, not p.obrot]:
+		var r := p.rozmiar()
+		var pw: int = r.y if rot else r.x
+		var ph: int = r.x if rot else r.y
+		for y in pl.h:
+			for x in pl.w:
+				if pl.moze(p, x, y, rot) and not zakr.call(x, y, pw, ph):
+					pl.poloz(p, x, y, rot)
+					ekw.zmieniony.emit()
+					return true
+	for s2 in cele:
+		if s2 != null and (s2 as Siatka).dodaj(p):
+			ekw.zmieniony.emit()
+			return true
+	return false
+
+
 func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 	var z_prawej: bool = z["typ"] == "siatka" and _jest_prawa(z["siatka"])
 	if z_prawej and _czesc_zdejmowana(z["siatka"]):
@@ -1385,7 +1491,7 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 		return
 	if z_prawej:
 		_usun_ze_zrodla(p, z)
-		if not ekw.dodaj(p):
+		if not _dodaj_do_otwartych(p):
 			(z["siatka"] as Siatka).dodaj(p)
 			_komunikat("Brak miejsca w ekwipunku")
 		else:

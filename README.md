@@ -47,6 +47,9 @@ pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kie
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzie kolejka – dłoń przekłada po kolei),
 **Shift+LPM** dzieli stos na pół, **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).
+Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem kliknięciem otwierasz konkretne kieszenie
+(zamek, klamry, rzep, ściągacz – każda z animacją); **Załóż** zapina je i zakłada plecak. Kontener bezpieczny tak samo
+(**Wyjmij kontener**, potem zatrzaski i wieko).
 Szafki, szuflady i skrzynie otwiera się w świecie (**F**), zawartość odkrywa się stopniowo – po ciemku wolniej.
 Ciała przeszukuje się po kieszeniach; pancerz i hełm z ciała zdejmuje się kliknięciem (trwa). Zamknięte na kłódkę
 skrzynie i szafki wyłamuje się (z kombinerkami lub kluczem nastawnym szybciej). Przytrzymany ruch przy rozłożonym

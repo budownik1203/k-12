@@ -63,8 +63,19 @@ func _zbuduj(co: String, s: Siatka) -> Dictionary:
 	if co == "kamizelka":
 		w = s.w * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
 		d = s.h * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
-	# osobny model dla każdego pojemnika z własną sekwencją otwierania
-	var m := ModeleOporzadzenia.zbuduj(id, w, d)
+	# osobny model dla każdego pojemnika; plecak i kontener – każda kieszeń ma własną klapę / zamek
+	var kz_m := []
+	var kz_def := []
+	if co != "kamizelka":
+		kz_def = ModeleOporzadzenia.kieszenie_dla(id, s)
+		var kx := SiatkaUI.KOM * KOM_M
+		var kzz := kx / 0.82
+		var o := Vector2(-s.w * kx * 0.5, -s.h * kzz * 0.5)
+		for e in kz_def:
+			var r: Rect2i = e["r"]
+			var rr := Rect2(o + Vector2(r.position.x * kx, r.position.y * kzz), Vector2(r.size.x * kx, r.size.y * kzz)).grow(-0.004)
+			kz_m.append({"r": rr, "typ": e["typ"]})
+	var m := ModeleOporzadzenia.zbuduj(id, w, d, kz_m)
 	var wezel: Node3D = m["wezel"]
 	add_child(wezel)
 	for mi in wezel.find_children("*", "MeshInstance3D", true, false):
@@ -83,7 +94,82 @@ func _zbuduj(co: String, s: Siatka) -> Dictionary:
 		sw.omni_range = 0.9
 		sw.position = Vector3(0, 0.12, 0.3)
 		wezel.add_child(sw)
-	return {"wezel": wezel, "wieko": null, "gora": m["gora"], "w": w, "d": d, "tw": null, "kroki": m["kroki"], "start": start, "id": id}
+	var kieszenie := []
+	for kz in m.get("kieszenie", []):
+		var st2 := []
+		for krok in kz["kroki"]:
+			var a := []
+			for zm in krok:
+				a.append((zm[0] as Node3D).get_indexed(NodePath(String(zm[1]))))
+			st2.append(a)
+		kieszenie.append({"kroki": kz["kroki"], "dzwieki": kz["dzwieki"], "start": st2, "otwarta": false, "tw": null})
+	return {"wezel": wezel, "wieko": null, "gora": m["gora"], "w": w, "d": d, "tw": null, "kroki": m["kroki"], "start": start, "id": id, "kieszenie": kieszenie}
+
+
+## Otwarcie jednej kieszeni (rozpięcie zamka, odpięcie klamer, rzep, ściągacz); zwraca czas.
+func otworz_kieszen(co: String, i: int) -> float:
+	if not _modele.has(co):
+		return 0.0
+	var kz: Array = _modele[co].get("kieszenie", [])
+	if i < 0 or i >= kz.size() or bool(kz[i]["otwarta"]):
+		return 0.0
+	var e: Dictionary = kz[i]
+	e["otwarta"] = true
+	var tw := create_tween()
+	e["tw"] = tw
+	var czas := 0.0
+	for j in (e["kroki"] as Array).size():
+		var krok: Array = e["kroki"][j]
+		var dz: String = e["dzwieki"][j] if j < (e["dzwieki"] as Array).size() else "plecak"
+		var dl := 0.0
+		for zm in krok:
+			dl = maxf(dl, float(zm[3]))
+		czas += dl + 0.03
+		tw.tween_callback(func(): _dzwiek(dz))
+		for zm in krok:
+			tw.parallel().tween_property(zm[0], NodePath(String(zm[1])), zm[2], float(zm[3])).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(0.03)
+	return czas
+
+
+func ile_otwartych(co: String) -> int:
+	var n := 0
+	if _modele.has(co):
+		for e in _modele[co].get("kieszenie", []):
+			if bool(e["otwarta"]):
+				n += 1
+	return n
+
+
+func _dzwiek(dz: String) -> void:
+	match dz:
+		"zamek":
+			Dzwiek.graj("zamek", -9.0, randf_range(0.95, 1.1))
+		"rzep":
+			Dzwiek.graj("rzep", -9.0, randf_range(0.9, 1.1))
+		"klik":
+			Dzwiek.graj("klik", -10.0, randf_range(0.7, 0.85))
+		_:
+			Dzwiek.graj("plecak", -13.0, randf_range(1.1, 1.4))
+
+
+## Zamyka wszystkie otwarte kieszenie (odwrotnie) w podanym tweenie.
+func _zamknij_kieszenie(tw: Tween, m: Dictionary, skala: float) -> void:
+	for e in m.get("kieszenie", []):
+		if not bool(e["otwarta"]):
+			continue
+		e["otwarta"] = false
+		if e["tw"] and (e["tw"] as Tween).is_valid():
+			(e["tw"] as Tween).kill()
+		var kroki: Array = e["kroki"]
+		for j in range(kroki.size() - 1, -1, -1):
+			var krok: Array = kroki[j]
+			for q in krok.size():
+				var zm: Array = krok[q]
+				var tg := tw.parallel() if q > 0 else tw
+				tg.tween_property(zm[0], NodePath(String(zm[1])), e["start"][j][q], float(zm[3]) * skala).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		var dz: String = e["dzwieki"][0] if not (e["dzwieki"] as Array).is_empty() else "plecak"
+		tw.tween_callback(func(): _dzwiek(dz))
 
 
 ## Sekwencja otwierania (po kolei kroki, w kroku równolegle), dźwięki rzepów / zamka / klamer.
@@ -154,6 +240,7 @@ func zamknij(co: String, czas: float) -> void:
 	var wieko: Node3D = m["wieko"]
 	var tw := create_tween()
 	m["tw"] = tw
+	_zamknij_kieszenie(tw, m, 0.55)
 	_zamknij_kroki(tw, m, 0.6)
 	if co == "kamizelka":
 		tw.tween_property(wezel, "position", Vector3(0.0, -0.45, -0.3), czas * 0.5)
