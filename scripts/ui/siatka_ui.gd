@@ -10,6 +10,7 @@ const KOM := 34
 var siatka: Siatka
 var tytul := ""
 var widoczne := -1          # ile pierwszych przedmiotów widać (-1 = wszystkie) – przy przeszukiwaniu
+var ciemno := false         # przeszukiwanie po ciemku: przedmioty jako cienie (bez latarki)
 var kontroler: Node         # EkranEkwipunku
 var zrodlo := ""            # opis: "skrytka", "plecak", "pojemnik"...
 var _hover: Przedmiot = null
@@ -98,6 +99,11 @@ func _draw() -> void:
 			draw_string(Motyw.mono_b(), r.position + Vector2(r.size.x * 0.5 - 5, r.size.y * 0.5 + 6), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Motyw.TEKST_CIEMNY)
 			continue
 		rysuj_przedmiot(self, p, r, p == _hover)
+		if ciemno:
+			draw_rect(r.grow(-1), Color(0, 0, 0, 0.5))
+		if kontroler and kontroler.has_method("w_kolejce") and kontroler.w_kolejce(p):
+			draw_rect(r.grow(-2), Color(0.86, 0.72, 0.36, 0.22))
+			draw_rect(r.grow(-2), Color(0.86, 0.72, 0.36, 0.8), false, 1.5)
 
 
 static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl := false) -> void:

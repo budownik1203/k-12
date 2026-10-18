@@ -288,6 +288,23 @@ func opusc_rajd() -> void:
 
 
 ## Otwiera ekran ekwipunku z przeszukiwanym pojemnikiem (wołane przez Pojemnik).
+## Oświetlenie punktu 0..1 (lampy w pobliżu, latarka gracza skierowana w tę stronę).
+func oswietlenie(punkt: Vector3) -> float:
+	var best := 0.12
+	if gracz and gracz.latarka and gracz.latarka.visible:
+		var d := punkt - gracz.latarka.global_position
+		if d.length() < 6.0 and (-gracz.latarka.global_basis.z).dot(d.normalized()) > 0.7:
+			return 1.0
+	for l in info.get("lampy", []):
+		if not is_instance_valid(l) or (l as Light3D).light_energy < 0.3:
+			continue
+		var r: float = (l as OmniLight3D).omni_range if l is OmniLight3D else 6.0
+		var dd: float = (l as Node3D).global_position.distance_to(punkt)
+		if dd < r * 0.8:
+			best = maxf(best, 1.0 - dd / (r * 0.8) * 0.65)
+	return best
+
+
 func otworz_pojemnik(p: Node) -> void:
 	if ekran_ekw:
 		ekran_ekw.otworz(p)
@@ -553,9 +570,16 @@ func _zrzut_posterunku(katalog: String) -> void:
 
 
 ## Zrzuty broni w rękach: fazy przeładowania i bieg.
+var _wrog_testowy = null
+
+
 func _zrzut_vm(katalog: String) -> void:
 	DirAccess.make_dir_recursive_absolute(katalog)
 	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--zwloki"):
+			_wrog_testowy = w
+			w.set_physics_process(false)
+			continue
 		w.queue_free()
 	gracz.sterowanie = false
 	if OS.get_cmdline_user_args().has("--animacje"):
@@ -732,6 +756,56 @@ func _zrzut_animacji(katalog: String) -> void:
 			await _zapisz(katalog, "pl_%s_b" % pid)
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
+		return
+	if OS.get_cmdline_user_args().has("--zwloki"):
+		# wróg pada przed graczem, gracz przeszukuje ciało po częściach i zdejmuje pancerz
+		gracz.sterowanie = false
+		var przod3 := -gracz.global_basis.z
+		przod3.y = 0
+		przod3 = przod3.normalized()
+		var w0 = _wrog_testowy
+
+		if w0 == null:
+			print("brak wroga")
+			return
+		w0.global_position = gracz.global_position + przod3 * 1.3
+		w0.pancerz = Przedmiot.nowy("kamizelka_kl2")
+		w0.helm = Przedmiot.nowy("helm_wz67")
+		await _klatki(3)
+		w0.cialo.martwy = true
+		w0._smierc("test")
+		await get_tree().create_timer(1.2).timeout
+		await _zapisz(katalog, "zw_0_cialo")
+		var pj2: Pojemnik = null
+		for c in w0.get_children():
+			if c is Pojemnik:
+				pj2 = c
+		pj2.interakcja(gracz)
+		while not gracz.akcja.is_empty():
+			await get_tree().process_frame
+		await get_tree().create_timer(1.5).timeout
+		await _zapisz(katalog, "zw_1_kieszenie")
+		await get_tree().create_timer(4.0).timeout
+		await _zapisz(katalog, "zw_2_calosc")
+		# kolejka przekładania: wszystkie magazynki z ładownic Ctrl+klikiem
+		for c in pj2.lista_czesci():
+			if c["nazwa"] == "Ładownice":
+				for e in (c["siatka"] as Siatka).items.duplicate():
+					ekran_ekw._szybkie_przeniesienie(e["p"], {"typ": "siatka", "siatka": c["siatka"]})
+				print("w kolejce: ", ekran_ekw._kolejka.size())
+				await get_tree().create_timer(0.3).timeout
+				await _zapisz(katalog, "zw_2b_kolejka")
+				await get_tree().create_timer(2.0).timeout
+				print("w ladownicach po kolejce: ", (c["siatka"] as Siatka).items.size(), " kolejka: ", ekran_ekw._kolejka.size())
+		var nc: Dictionary = pj2.lista_czesci()[pj2.lista_czesci().size() - 1]
+		print("czesci: ", pj2.lista_czesci().map(func(c): return "%s:%d/%d" % [c["nazwa"], c["odkryte"], (c["siatka"] as Siatka).items.size()]))
+		if nc["zdejmowane"] and not (nc["siatka"] as Siatka).items.is_empty():
+			ekran_ekw._zdejmij_z_ciala((nc["siatka"] as Siatka).items[0]["p"], nc["siatka"])
+			await get_tree().create_timer(1.0).timeout
+			await _zapisz(katalog, "zw_3_zdejmowanie")
+			while not gracz.akcja.is_empty():
+				await get_tree().process_frame
+			print("po zdjeciu na ciele: ", (nc["siatka"] as Siatka).items.size(), " pancerz w ekw: ", Gra.ekw.siatki().any(func(s): return (s as Siatka).items.any(func(e): return (e["p"] as Przedmiot).typ() == "pancerz")))
 		return
 	if OS.get_cmdline_user_args().has("--meble"):
 		gracz.sterowanie = false

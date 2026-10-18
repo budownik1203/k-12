@@ -65,6 +65,13 @@ var _prawa_siatka: Siatka = null
 var _prawa_ui: SiatkaUI = null
 var _ramka_poj: PanelContainer = null   # rajd: siatka przeszukiwanego pojemnika nad jego wnętrzem w świecie
 var _etyk_szuk: Label = null
+var _prawe_ui: Array = []      # [SiatkaUI, indeks części pojemnika]
+var _swiatlo_szuk := -1.0
+## Przekładanie trwa (rajd): ręka przenosi przedmiot – czas wg rozmiaru i wagi; Ctrl+klik ustawia kolejkę.
+var _kolejka: Array = []       # [{"p", "z"}]
+var _zajete_t := 0.0
+var _zajete_calk := 0.0
+var _kolko_przel: KolkoPostepu
 
 
 func _ready() -> void:
@@ -192,7 +199,7 @@ func _buduj() -> void:
 	kol.add_child(_odstep_d)
 	var dol := HBoxContainer.new()
 	_dol = dol
-	var podp := Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz, dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
+	var podp := Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz, dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś (kolejka)  [Shift+LPM] podziel stos  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
 	podp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	podp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	podp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -447,6 +454,10 @@ func zamknij() -> void:
 			gracz.widok_ekwipunku("")
 	_pojemnik = null
 	_ramka_poj = null
+	_prawe_ui.clear()
+	_swiatlo_szuk = -1.0
+	_kolejka.clear()
+	_zajete_t = 0.0
 	_warsztat = false
 	if gracz and not tryb_bazy and ("kamizelka" in otwarte or "plecak" in otwarte or "bezpieczny" in otwarte or _otwieranie != ""):
 		gracz.widok_ekwipunku("")
@@ -614,25 +625,34 @@ func _przebuduj() -> void:
 		if _pojemnik != null:
 			_prawa_ui.widoczne = _pojemnik.odkryte
 		if _warstwa and _pojemnik != null:
-			# rajd: kafelki we wnętrzu otwartego mebla / przy zwłokach, bez okna
+			# rajd: kafelki we wnętrzu otwartego mebla / przy zwłokach, bez okna; zwłoki – części po kolei
 			_ramka_poj = PanelContainer.new()
 			_ramka_poj.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 			var wn := VBoxContainer.new()
 			wn.add_theme_constant_override("separation", 3)
 			_ramka_poj.add_child(wn)
-			var lt := Motyw.etykieta(naz.to_upper(), 11, Color(0.86, 0.8, 0.62, 0.85), Motyw.mono_b())
-			lt.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-			lt.add_theme_constant_override("shadow_offset_x", 1)
-			lt.add_theme_constant_override("shadow_offset_y", 1)
-			wn.add_child(lt)
-			_etyk_szuk = Motyw.etykieta("", 11, Color(0.75, 0.72, 0.6, 0.8), Motyw.cond())
-			_etyk_szuk.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-			_etyk_szuk.add_theme_constant_override("shadow_offset_x", 1)
-			_etyk_szuk.add_theme_constant_override("shadow_offset_y", 1)
+			wn.add_child(_napis_swiat(naz.to_upper(), 11, Color(0.86, 0.8, 0.62, 0.85), true))
+			_etyk_szuk = _napis_swiat("", 11, Color(0.75, 0.72, 0.6, 0.8), false)
 			wn.add_child(_etyk_szuk)
+			_prawe_ui.clear()
+			var cz_l: Array = _pojemnik.lista_czesci()
+			var kol := HBoxContainer.new()
+			kol.add_theme_constant_override("separation", 26)
+			wn.add_child(kol)
+			for i in cz_l.size():
+				var c: Dictionary = cz_l[i]
+				var gui: SiatkaUI = _prawa_ui if i == 0 and c["siatka"] == _prawa_siatka else _siatka_ui(c["siatka"], "prawy")
+				gui.widoczne = int(c["odkryte"])
+				var bl := VBoxContainer.new()
+				bl.add_theme_constant_override("separation", 2)
+				if String(c["nazwa"]) != "":
+					bl.add_child(_napis_swiat(String(c["nazwa"]) + ("  · kliknij, by zdjąć" if c.get("zdejmowane", false) else ""), 10, Color(0.8, 0.76, 0.62, 0.8), false))
+				gui.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+				bl.add_child(gui)
+				kol.add_child(bl)
+				_prawe_ui.append([gui, i])
 			_prawa_ui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			wn.add_child(_prawa_ui)
-			_ramka_poj.set_meta("siatka_ui", _prawa_ui)
+			_ramka_poj.set_meta("siatka_ui", kol)
 			_ramka_poj.visible = false
 			_warstwa.add_child(_ramka_poj)
 			_pp.visible = false
@@ -821,6 +841,21 @@ func _process(delta: float) -> void:
 				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
 				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
 				c.position = cc - (c as Control).size * 0.5
+	_kolejka_krok(delta)
+	if _kolko_przel == null:
+		_kolko_przel = KolkoPostepu.new()
+		_kolko_przel.promien = 9.0
+		_kolko_przel.podpowiedz = false
+		_root.add_child(_kolko_przel)
+	_kolko_przel.visible = (_zajete_t > 0.0 or not _kolejka.is_empty()) and not tryb_bazy
+	if _kolko_przel.visible:
+		_kolko_przel.calosc = 1.0 - clampf(_zajete_t / maxf(0.01, _zajete_calk), 0.0, 1.0)
+		_kolko_przel.tekst = ("w kolejce: %d" % _kolejka.size()) if not _kolejka.is_empty() else ""
+		_kolko_przel.position = _root.get_local_mouse_position() + Vector2(20, -18)
+		_kolko_przel.queue_redraw()
+	# przy przeszukiwaniu broń stale opuszczona (obie ręce zajęte)
+	if _pojemnik != null and gracz and not tryb_bazy and gracz.akcja.is_empty() and gracz.bron._anim_akcji != "schowaj":
+		gracz.bron.animacja_akcji("schowaj")
 	# rajd: siatka przeszukiwanego pojemnika nad jego wnętrzem w świecie
 	if _ramka_poj and is_instance_valid(_ramka_poj) and _pojemnik != null and is_instance_valid(_pojemnik):
 		var pk3: Variant = _rzut(_pojemnik.punkt_wnetrza())
@@ -839,21 +874,34 @@ func _process(delta: float) -> void:
 				_ramka_poj.position = cel3
 			_ramka_poj.position = _ramka_poj.position.lerp(cel3, 0.5)
 		if _etyk_szuk and is_instance_valid(_etyk_szuk):
-			_etyk_szuk.text = "przeszukujesz..." if not _pojemnik.przeszukany() else ("pusto" if _pojemnik.siatka.items.is_empty() else "")
-	# przeszukiwanie: stopniowe odkrywanie zawartości
+			var ic: int = _pojemnik.czesc_szukana()
+			var ciem := _swiatlo_szuk >= 0.0 and _swiatlo_szuk < 0.35
+			if ic >= 0:
+				var nz := String(_pojemnik.lista_czesci()[ic]["nazwa"]).to_lower()
+				_etyk_szuk.text = ("przeszukujesz po omacku" if ciem else "przeszukujesz") + (": " + nz if nz != "" else "") + "..."
+			else:
+				_etyk_szuk.text = "pusto" if _pojemnik.pusty() else ""
+	# przeszukiwanie: stopniowe odkrywanie zawartości (czas wg rozmiaru przedmiotu i światła), szelest słychać
 	if _pojemnik != null and _prawa_ui != null and not _pojemnik.przeszukany():
-		_szukanie_t += delta
-		if _szukanie_t >= _pojemnik.czas_na_przedmiot:
-			_szukanie_t = 0.0
-			_pojemnik.odkryte += 1
-			_prawa_ui.widoczne = _pojemnik.odkryte
-			_prawa_ui.queue_redraw()
-			Dzwiek.graj("szukanie", -12.0)
+		var swiatlo := _szuk_swiatlo() if not tryb_bazy else 1.0
+		var i_cz: int = _pojemnik.szukaj(delta, swiatlo)
+		if i_cz >= 0:
+			for el in _prawe_ui:
+				if int(el[1]) == i_cz and is_instance_valid(el[0]):
+					(el[0] as SiatkaUI).widoczne = int(_pojemnik.lista_czesci()[i_cz]["odkryte"])
+					(el[0] as SiatkaUI).ciemno = swiatlo < 0.35
+					(el[0] as SiatkaUI).queue_redraw()
+			if _prawe_ui.is_empty():
+				_prawa_ui.widoczne = _pojemnik.odkryte
+				_prawa_ui.queue_redraw()
+			Dzwiek.graj("szukanie", -12.0, randf_range(0.9, 1.15))
+			if gracz:
+				Gra.emituj_halas(_pojemnik.global_position, 3.5, gracz)
 		if gracz and gracz.global_position.distance_to(_pojemnik.global_position) > 3.0:
 			zamknij()
 			return
-	elif _pojemnik != null and _prawa_ui:
-		_pojemnik.odkryte = _pojemnik.siatka.items.size()
+	elif _pojemnik != null and _prawa_ui and tryb_bazy:
+		_pojemnik.odkryj_wszystko()
 		_prawa_ui.widoczne = -1
 	# postęp akcji gracza: kółko przy kursorze
 	_kolko.ustaw_z_gracza(gracz)
@@ -904,15 +952,91 @@ func przeciagany() -> Przedmiot:
 	return _drag.get("p")
 
 
+## Czy siatka należy do przeszukiwanego pojemnika / skrytki (prawa strona).
+func _jest_prawa(s) -> bool:
+	if s == null:
+		return false
+	if s == _prawa_siatka:
+		return true
+	if _pojemnik != null and is_instance_valid(_pojemnik):
+		for c in _pojemnik.lista_czesci():
+			if c["siatka"] == s:
+				return true
+	return false
+
+
+func _czesc_zdejmowana(s) -> bool:
+	if _pojemnik == null or not is_instance_valid(_pojemnik):
+		return false
+	for c in _pojemnik.lista_czesci():
+		if c["siatka"] == s:
+			return bool(c.get("zdejmowane", false))
+	return false
+
+
+## Zdjęcie przedmiotu z ciała (pancerz, hełm, kamizelka z zawartością, plecak): odpinanie trwa.
+func _zdejmij_z_ciala(p: Przedmiot, s: Siatka) -> void:
+	if gracz == null or tryb_bazy:
+		return
+	if not gracz.akcja.is_empty():
+		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]))
+		return
+	var czas: float = {"pancerz": 4.0, "pojemnik": 3.2}.get(p.typ(), 2.0)
+	if p.typ() == "pancerz" and p.defn()["pancerz"]["slot"] == "helm":
+		czas = 1.6
+	czas += p.waga() * 0.15
+	var poj := _pojemnik
+	var koniec := func():
+		if not s.zawiera(p):
+			return
+		s.usun(p)
+		if not ekw.dodaj(p):
+			# brak miejsca: kładzie obok zwłok
+			var l := LupNaZiemi.new()
+			l.przedmiot = p
+			poj.get_parent().add_child(l)
+			l.global_position = poj.global_position + Vector3(randf_range(-0.5, 0.5), 0.3, randf_range(-0.5, 0.5))
+			gracz.komunikat.emit("Brak miejsca – położono obok: " + p.nazwa())
+		Dzwiek.graj("rzep", -8.0, 0.9)
+		_przebuduj()
+	Dzwiek.graj("rzep", -10.0)
+	gracz.zacznij_akcje("Zdejmowanie: " + p.nazwa(), czas, koniec, "zdejmowanie")
+
+
+func _napis_swiat(t: String, rozm: int, k: Color, gruby: bool) -> Label:
+	var l := Motyw.etykieta(t, rozm, k, Motyw.mono_b() if gruby else Motyw.cond())
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 1)
+	return l
+
+
+func _szuk_swiatlo() -> float:
+	if _pojemnik == null or not is_instance_valid(_pojemnik):
+		return 1.0
+	if Engine.get_process_frames() % 20 == 0 or _swiatlo_szuk < 0.0:
+		var sc = get_tree().get_first_node_in_group("ui_rajdu")
+		_swiatlo_szuk = sc.oswietlenie(_pojemnik.punkt_wnetrza()) if sc and sc.has_method("oswietlenie") else 1.0
+	return _swiatlo_szuk
+
+
 # ------------------------------------------------------------------ kliknięcia
 
 func _klik_siatka(ui: SiatkaUI, p: Przedmiot, przycisk: int, pos: Vector2) -> void:
 	if p == null:
 		return
 	var z := {"typ": "siatka", "ui": ui, "siatka": ui.siatka}
+	if przycisk == MOUSE_BUTTON_LEFT and _czesc_zdejmowana(ui.siatka):
+		_zdejmij_z_ciala(p, ui.siatka)
+		return
 	if przycisk == MOUSE_BUTTON_LEFT:
 		if Input.is_key_pressed(KEY_CTRL):
 			_szybkie_przeniesienie(p, z)
+			return
+		if Input.is_key_pressed(KEY_SHIFT) and p.stos_max() > 1 and p.ilosc > 1:
+			_podziel(p, ui.siatka)
+			return
+		if _zajete():
 			return
 		var poz := ui.siatka.pozycja(p)
 		_drag = {"p": p, "z": z, "off": pos - (ui.global_position + Vector2(poz) * SiatkaUI.KOM), "rot": p.obrot}
@@ -928,6 +1052,8 @@ func _klik_slot(ui: SlotUI, p: Przedmiot, przycisk: int, pos: Vector2) -> void:
 	if przycisk == MOUSE_BUTTON_LEFT:
 		if Input.is_key_pressed(KEY_CTRL):
 			_szybkie_przeniesienie(p, z)
+			return
+		if _zajete():
 			return
 		_drag = {"p": p, "z": z, "off": Vector2(16, 16), "rot": p.obrot}
 	elif przycisk == MOUSE_BUTTON_RIGHT:
@@ -967,7 +1093,7 @@ func _upusc_drag(anuluj: bool) -> void:
 			return
 	# poza slotami i siatkami: wyrzucenie na ziemię
 	if not nad_celem(mysz):
-		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and d["z"]["siatka"] == _prawa_siatka):
+		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and _jest_prawa(d["z"]["siatka"])):
 			_usun_ze_zrodla(p, d["z"])
 			gracz.upusc(p)
 			Dzwiek.graj("odloz", -8.0)
@@ -1002,9 +1128,12 @@ func _upusc_drag(anuluj: bool) -> void:
 		if p.typ() == "pojemnik" and p.dane["siatka"] == ui.siatka:
 			return
 		if ui.siatka.moze(p, kom.x, kom.y, d["rot"], p):
+			var inna: bool = d["z"]["typ"] != "siatka" or d["z"]["siatka"] != ui.siatka
 			_usun_ze_zrodla(p, d["z"])
 			ui.siatka.poloz(p, kom.x, kom.y, d["rot"])
 			Dzwiek.graj("odloz", -10.0)
+			if inna:
+				_zajmij(_koszt_przelozenia(p, d["z"], ui.siatka))
 			_po_zmianie()
 		return
 	_odswiez()
@@ -1116,11 +1245,91 @@ func _polacz(p: Przedmiot, z: Dictionary, q: Przedmiot, ui: SiatkaUI) -> bool:
 
 
 func _szybkie_przeniesienie(p: Przedmiot, z: Dictionary) -> void:
-	var z_prawej: bool = z["typ"] == "siatka" and z["siatka"] == _prawa_siatka
+	if not tryb_bazy and gracz:
+		# w rajdzie: do kolejki – dłoń przenosi po kolei
+		for e in _kolejka:
+			if e["p"] == p:
+				return
+		if z["typ"] == "siatka" and _czesc_zdejmowana(z["siatka"]):
+			_zdejmij_z_ciala(p, z["siatka"])
+			return
+		if _prawa_siatka == null and not (z["typ"] == "siatka" and _jest_prawa(z["siatka"])):
+			return
+		_kolejka.append({"p": p, "z": z})
+		_odswiez()
+		return
+	_przenies_teraz(p, z)
+
+
+func w_kolejce(p: Przedmiot) -> bool:
+	for e in _kolejka:
+		if e["p"] == p:
+			return true
+	return false
+
+
+func _zajete() -> bool:
+	return _zajete_t > 0.0 and not tryb_bazy
+
+
+func _zajmij(t: float) -> void:
+	if tryb_bazy or gracz == null:
+		return
+	_zajete_t = t
+	_zajete_calk = t
+
+
+## Czas przełożenia: drobiazg ułamek sekundy, karabin czy pancerz dłużej; zapinane ładownice wolniej.
+func _koszt_przelozenia(p: Przedmiot, z: Dictionary, cel) -> float:
+	var t := 0.14 + 0.045 * p.szer() * p.wys() + p.waga() * 0.025
+	var kam := ekw.siatka_kamizelki()
+	if kam != null and (cel == kam or (z.get("siatka") == kam)):
+		t += 0.12
+	if _jest_prawa(z.get("siatka")) and _pojemnik != null and String(_pojemnik.nazwa).begins_with("Zwłoki"):
+		t += 0.1
+	return clampf(t, 0.15, 1.1)
+
+
+func _kolejka_krok(delta: float) -> void:
+	if _zajete_t > 0.0:
+		_zajete_t -= delta
+	if _zajete_t > 0.0 or _kolejka.is_empty() or not _drag.is_empty():
+		return
+	var e: Dictionary = _kolejka.pop_front()
+	var p: Przedmiot = e["p"]
+	if not _w_zrodle(p, e["z"]):
+		_odswiez()
+		return
+	var cel: Variant = ekw.siatka_plecaka() if _jest_prawa(e["z"].get("siatka")) else _prawa_siatka
+	_przenies_teraz(p, e["z"])
+	_zajmij(_koszt_przelozenia(p, e["z"], cel))
+
+
+## Podział stosu na pół (Shift+klik): druga połowa w wolnym miejscu tej samej siatki.
+func _podziel(p: Przedmiot, s: Siatka) -> void:
+	var n := p.ilosc / 2
+	if n <= 0:
+		return
+	var q := Przedmiot.nowy(p.id, n)
+	var m := s.wolne_miejsce(q)
+	if m.is_empty():
+		_komunikat("Brak miejsca na podział stosu")
+		return
+	p.ilosc -= n
+	s.poloz(q, m["x"], m["y"], m["rot"])
+	Dzwiek.graj("klik", -12.0, 1.2)
+	_po_zmianie()
+
+
+func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
+	var z_prawej: bool = z["typ"] == "siatka" and _jest_prawa(z["siatka"])
+	if z_prawej and _czesc_zdejmowana(z["siatka"]):
+		_zdejmij_z_ciala(p, z["siatka"])
+		return
 	if z_prawej:
 		_usun_ze_zrodla(p, z)
 		if not ekw.dodaj(p):
-			_prawa_siatka.dodaj(p)
+			(z["siatka"] as Siatka).dodaj(p)
 			_komunikat("Brak miejsca w ekwipunku")
 		else:
 			Dzwiek.graj("podnies", -8.0)
@@ -1137,7 +1346,7 @@ func _szybkie_przeniesienie(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL }
 const M_DOD := 100
 
 
@@ -1154,6 +1363,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 		_menu.add_item("Napełnij", M_NAPELNIJ)
 		if p.dane["naboje"] > 0:
 			_menu.add_item("Rozładuj", M_ROZLADUJ)
+	if p.stos_max() > 1 and p.ilosc > 1 and z["typ"] == "siatka":
+		_menu.add_item("Podziel stos [Shift]", M_PODZIEL)
 	if t == "bron" and gracz:
 		_menu.add_item("Oglądaj / dodatki", M_OGLADAJ)
 	if t == "bron":
@@ -1170,9 +1381,9 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 		_menu.add_item("Zdejmij", M_ZDEJMIJ)
 	elif Ekwipunek.slot_dla(p) != "":
 		_menu.add_item("Załóż", M_ZALOZ)
-	if z["typ"] == "siatka" and z["siatka"] == _prawa_siatka and _prawa_siatka != null:
-		_menu.add_item("Weź", M_WEZ)
-	if not tryb_bazy and gracz and not (z["typ"] == "siatka" and z["siatka"] == _prawa_siatka):
+	if z["typ"] == "siatka" and _jest_prawa(z["siatka"]):
+		_menu.add_item("Zdejmij z ciała" if _czesc_zdejmowana(z["siatka"]) else "Weź", M_WEZ)
+	if not tryb_bazy and gracz and not (z["typ"] == "siatka" and _jest_prawa(z["siatka"])):
 		_menu.add_item("Wyrzuć", M_WYRZUC)
 	if _menu.item_count == 0:
 		return
@@ -1231,7 +1442,13 @@ func _menu_akcja(id: int) -> void:
 			if not ekw.dodaj(p) and not (_prawa_siatka and _prawa_siatka.dodaj(p)):
 				ekw.zaloz(sl, p)
 				_komunikat("Brak miejsca")
+		M_PODZIEL:
+			_podziel(p, z["siatka"])
+			return
 		M_WEZ:
+			if z["typ"] == "siatka" and _czesc_zdejmowana(z["siatka"]):
+				_zdejmij_z_ciala(p, z["siatka"])
+				return
 			_szybkie_przeniesienie(p, z)
 			return
 		M_WYRZUC:

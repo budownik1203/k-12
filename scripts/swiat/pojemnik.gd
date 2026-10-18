@@ -44,14 +44,83 @@ func wypelnij(tabela: String, losowan: int, rng: RandomNumberGenerator) -> void:
 		siatka.dodaj(p)
 
 
+## Części pojemnika przeszukiwane po kolei (zwłoki: kieszenie kurtki, spodni, ładownice, plecak;
+## mebel: jedna). {"nazwa", "siatka", "odkryte", "zdejmowane": przedmioty na ciele – zdjęcie trwa}
+var czesci: Array = []
+var _szuk_t := 0.0
+
+
+func lista_czesci() -> Array:
+	if czesci.is_empty() and siatka:
+		czesci = [{"nazwa": "", "siatka": siatka, "odkryte": odkryte, "zdejmowane": false}]
+	return czesci
+
+
 func przeszukany() -> bool:
-	return odkryte >= siatka.items.size()
+	for c in lista_czesci():
+		if int(c["odkryte"]) < (c["siatka"] as Siatka).items.size():
+			return false
+	return true
+
+
+func pusty() -> bool:
+	for c in lista_czesci():
+		if not (c["siatka"] as Siatka).items.is_empty():
+			return false
+	return true
+
+
+func zaczety() -> bool:
+	for c in lista_czesci():
+		if int(c["odkryte"]) > 0:
+			return true
+	return odkryte > 0
+
+
+## Bieżąca przeszukiwana część (indeks) albo -1.
+func czesc_szukana() -> int:
+	var cz := lista_czesci()
+	for i in cz.size():
+		if int(cz[i]["odkryte"]) < (cz[i]["siatka"] as Siatka).items.size():
+			return i
+	return -1
+
+
+## Czas wyszukania przedmiotu: drobiazg szybko, karabin dłużej; po ciemku dwa razy wolniej.
+func czas_szukania(p: Przedmiot, swiatlo: float) -> float:
+	var komorki := p.szer() * p.wys()
+	var t := czas_na_przedmiot * (0.55 + 0.11 * komorki)
+	return t * lerpf(2.1, 1.0, clampf(swiatlo, 0.0, 1.0))
+
+
+## Krok przeszukiwania; zwraca indeks części, w której coś odkryto, albo -1.
+func szukaj(delta: float, swiatlo: float) -> int:
+	var i := czesc_szukana()
+	if i < 0:
+		return -1
+	var c: Dictionary = lista_czesci()[i]
+	var s: Siatka = c["siatka"]
+	var p: Przedmiot = s.items[int(c["odkryte"])]["p"]
+	_szuk_t += delta
+	if _szuk_t >= czas_szukania(p, swiatlo):
+		_szuk_t = 0.0
+		c["odkryte"] = int(c["odkryte"]) + 1
+		odkryte += 1
+		return i
+	return -1
+
+
+func odkryj_wszystko() -> void:
+	for c in lista_czesci():
+		c["odkryte"] = (c["siatka"] as Siatka).items.size()
 
 
 func tekst_interakcji(_g) -> String:
-	var stan := "" if odkryte == 0 else (" (przeszukane)" if przeszukany() else " (częściowo)")
-	if siatka.items.is_empty() and odkryte > 0:
+	var stan := "" if not zaczety() else (" (przeszukane)" if przeszukany() else " (częściowo)")
+	if pusty() and zaczety():
 		stan = " (puste)"
+	if zamkniety_kluczem != "" and not otwarty_mebel:
+		stan += " – zamknięte"
 	return "Przeszukaj: " + nazwa + stan
 
 

@@ -1226,9 +1226,18 @@ func _zwloki() -> void:
 	var pj := Pojemnik.new()
 	pj.nazwa = "Zwłoki: " + nazwa_jednostki
 	pj.collision_layer = Balistyka.WARSTWA_INTERAKCJE
-	pj.czas_na_przedmiot = 0.45
-	pj.siatka = Siatka.new(6, 5)
-	# broń z resztą amunicji w magazynku
+	pj.czas_na_przedmiot = 0.5
+	pj.niski = true
+	pj.wys_wnetrza = 0.25
+	# przeszukiwanie ciała po kolei: kieszenie kurtki, spodni, ładownice, worek/plecak; pancerz i hełm
+	# trzeba odpiąć i zdjąć (trwa)
+	var kurtka := Siatka.new(2, 2)
+	var spodnie := Siatka.new(2, 2)
+	var ladownice := Siatka.new(4, 2)
+	var plecak := Siatka.new(5, 4)
+	var na_ciele := Siatka.new(5, 3)
+	pj.siatka = kurtka
+	# broń z resztą amunicji w magazynku – wypada z rąk i leży obok
 	var bd: Dictionary = bron.defn()["bron"]
 	if bd.has("wewnetrzny"):
 		bron.dane["wewn"] = clampi(_w_magazynku, 0, int(bd["wewnetrzny"]))
@@ -1236,19 +1245,39 @@ func _zwloki() -> void:
 	elif bron.dane["mag"] != null:
 		bron.dane["mag"].dane["naboje"] = maxi(0, _w_magazynku - 1)
 		bron.dane["komora"] = amunicja_id if _w_magazynku > 0 else ""
-	pj.siatka.dodaj(bron)
+	var l := LupNaZiemi.new()
+	l.przedmiot = bron
+	var bw: Node3D = _czesci.get("bron")
+	if bw and is_instance_valid(bw):
+		l.rzut_z = bw.global_position
+		bw.visible = false
+	get_parent().add_child(l)
+	l.global_position = global_position + global_basis.x * 0.6 + global_basis.z * 0.2 + Vector3.UP * 0.4
 	if not bd.has("wewnetrzny"):
 		for i in zapas_mag:
 			var m := Gra.magazynek(bd["magazynki"][0], amunicja_id, randi_range(5, _pojemnosc()))
-			pj.siatka.dodaj(m)
+			if not ladownice.dodaj(m):
+				plecak.dodaj(m)
 	else:
-		pj.siatka.dodaj(Przedmiot.nowy(amunicja_id, randi_range(3, 10)))
+		spodnie.dodaj(Przedmiot.nowy(amunicja_id, randi_range(3, 10)))
 	if pancerz:
-		pj.siatka.dodaj(pancerz)
+		na_ciele.dodaj(pancerz)
 	if helm:
-		pj.siatka.dodaj(helm)
+		na_ciele.dodaj(helm)
 	for p in lup:
-		pj.siatka.dodaj(p)
+		if not (kurtka.dodaj(p) or spodnie.dodaj(p) or plecak.dodaj(p)):
+			var lp := LupNaZiemi.new()
+			lp.przedmiot = p
+			get_parent().add_child(lp)
+			lp.global_position = global_position + Vector3(randf_range(-0.5, 0.5), 0.3, randf_range(-0.5, 0.5))
+	pj.czesci = [{"nazwa": "Kieszenie kurtki", "siatka": kurtka, "odkryte": 0, "zdejmowane": false},
+		{"nazwa": "Kieszenie spodni", "siatka": spodnie, "odkryte": 0, "zdejmowane": false}]
+	if not ladownice.items.is_empty():
+		pj.czesci.append({"nazwa": "Ładownice", "siatka": ladownice, "odkryte": 0, "zdejmowane": false})
+	if not plecak.items.is_empty():
+		pj.czesci.append({"nazwa": "Chlebak", "siatka": plecak, "odkryte": 0, "zdejmowane": false})
+	if not na_ciele.items.is_empty():
+		pj.czesci.append({"nazwa": "Na ciele", "siatka": na_ciele, "odkryte": 0, "zdejmowane": true})
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
 	bs.size = Vector3(1.2, 0.5, 2.2)

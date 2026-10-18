@@ -457,6 +457,8 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
+	if nazwa in ["zdejmowanie"]:
+		nazwa = "schowaj"   # ręce przy zwłokach, poza kadrem (ekran przeszukiwania otwarty)
 	if nazwa == "montaz" and ogladanie and gracz and gracz.akcja.has("dod"):
 		_zacznij_montaz_podglad(gracz.akcja["dod"], bool(gracz.akcja.get("zdejmij", false)))
 	elif nazwa == "" and not _mont.is_empty():
