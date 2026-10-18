@@ -1,35 +1,40 @@
 class_name ModeleIB
 extends RefCounted
-## Modele broni w stylu Iron Blight: dużo fazowanych części i walców, zaokrąglenia z segmentów,
-## detale (nacięcia zamka, okno wyrzutnika, kabłąk z łuku, zawleczki, nity) i tekstury w niskiej
-## rozdzielczości: wytarta oksydowana stal, rudy orzech ze słojami, bakelit w kratkę.
-## Punkty (lufa, celownik, przód, chwyt, łoże) zgodne z animacjami i dodatkami.
+## Modele broni w stylu Iron Blight, budowane z prawdziwych sylwetek: każdy element (zamek, chwyt, kolba,
+## łoże, magazynek, kabłąk) to profil boczny wyciągnięty na szerokość z fazą, a lufy i rury to walce.
+## Tekstury: wytarta oksydowana stal, rudy orzech ze słojami, bakelit w kratkę. Punkty (lufa, celownik,
+## chwyt, łoże) zgodne z animacjami i dodatkami.
 
 const B := preload("res://scripts/core/bryly.gd")
 
 
-## Łuk z odcinków w płaszczyźnie YZ (kabłąk spustu, zaokrąglenia).
-static func _luk(srodek: Vector3, r: float, od: float, do_: float, n: int, gr: Vector2, m := "metal") -> Array:
-	var out := []
-	for i in n:
-		var a0 := deg_to_rad(lerpf(od, do_, float(i) / n))
-		var a1 := deg_to_rad(lerpf(od, do_, float(i + 1) / n))
-		var p0 := srodek + Vector3(0, sin(a0), cos(a0)) * r
-		var p1 := srodek + Vector3(0, sin(a1), cos(a1)) * r
-		var sr := (p0 + p1) * 0.5
-		var dl := p0.distance_to(p1) + 0.001
-		var kat := rad_to_deg(atan2(-(p1 - p0).y, -(p1 - p0).z))
-		out.append(B.box(sr, Vector3(gr.x, gr.y, dl), m, 0.0, Vector3(kat, 0, 0)))
-	return out
+static func V(z: float, y: float) -> Vector2:
+	return Vector2(z, y)
 
 
-## Nacięcia (radełkowanie zamka) po obu stronach: n pionowych rowków.
+## Kabłąk spustu: pasek w kształcie litery U (profil bez otworów: zewnętrzny łuk + wewnętrzny z powrotem).
+static func _kablak(z_przod: float, z_tyl: float, y_gora: float, gl: float, gr := 0.004, w := 0.008, m := "metal") -> Dictionary:
+	var zew := []
+	var wew := []
+	var n := 8
+	var cz := (z_przod + z_tyl) * 0.5
+	var rz := (z_tyl - z_przod) * 0.5
+	for i in n + 1:
+		var a := PI * float(i) / n
+		zew.append(V(cz - cos(a) * rz, y_gora - sin(a) * gl))
+	for i in range(n, -1, -1):
+		var a := PI * float(i) / n
+		wew.append(V(cz - cos(a) * (rz - gr), y_gora - sin(a) * (gl - gr)))
+	return B.profil(zew + wew, w, m, 0.0)
+
+
+## Nacięcia zamka po obu stronach.
 static func _naciecia(x: float, y: float, z0: float, z1: float, n: int, wys: float) -> Array:
 	var out := []
 	for i in n:
 		var z := lerpf(z0, z1, float(i) / maxf(1.0, n - 1))
 		for sx in [-1.0, 1.0]:
-			out.append(B.box(Vector3(sx * x, y, z), Vector3(0.002, wys, 0.0022), "czern", 0.0))
+			out.append(B.box(Vector3(sx * x, y, z), Vector3(0.0018, wys, 0.0018), "czern", 0.0))
 	return out
 
 
@@ -37,7 +42,7 @@ static func _nity(punkty: Array, x: float) -> Array:
 	var out := []
 	for p in punkty:
 		for sx in [-1.0, 1.0]:
-			out.append(B.walec(Vector3(sx * x, p.y, p.z), Vector3(sx * (x + 0.0015), p.y, p.z), 0.0028, 0.0024, "metal_jasny", 6))
+			out.append(B.walec(Vector3(sx * x, p.y, p.x), Vector3(sx * (x + 0.0014), p.y, p.x), 0.0026, 0.0022, "metal_jasny", 6))
 	return out
 
 
@@ -54,152 +59,141 @@ static func bron(id: String) -> Dictionary:
 	return {}
 
 
-## PW-9 „Kruk” (typ Makarowa): zaokrąglony zamek z nacięciami, kurek, okładziny w kratkę.
+## PW-9 „Kruk” (typ Makarowa).
 static func _pw9() -> Dictionary:
 	var c := [
-		# zamek: korpus + zaokrąglona góra + przód
-		B.box(Vector3(0, 0.034, -0.07), Vector3(0.027, 0.028, 0.168), "metal", 0.006),
-		B.box(Vector3(0, 0.048, -0.072), Vector3(0.021, 0.008, 0.16), "metal", 0.004),
-		B.walec(Vector3(0, 0.036, -0.154), Vector3(0, 0.036, -0.158), 0.0065, 0.0065, "czern", 8),
-		B.box(Vector3(0.0137, 0.04, -0.045), Vector3(0.002, 0.012, 0.03), "czern", 0.0),        # okno wyrzutnika
-		B.box(Vector3(-0.0137, 0.036, -0.005), Vector3(0.004, 0.006, 0.014), "metal_jasny", 0.002),  # bezpiecznik
-		# szkielet, kabłąk, spust
-		B.box(Vector3(0, 0.013, -0.075), Vector3(0.025, 0.016, 0.13), "metal", 0.004),
-		B.box(Vector3(0, -0.002, -0.062), Vector3(0.006, 0.02, 0.008), "metal_jasny", 0.002, Vector3(-18, 0, 0)),
-		# chwyt: szkielet + okładziny w kratkę po bokach + stopka
-		B.box(Vector3(0, -0.035, 0.008), Vector3(0.024, 0.086, 0.04), "metal", 0.006, Vector3(12, 0, 0)),
-		B.box(Vector3(0.0128, -0.036, 0.008), Vector3(0.003, 0.074, 0.036), "okladzina", 0.002, Vector3(12, 0, 0)),
-		B.box(Vector3(-0.0128, -0.036, 0.008), Vector3(0.003, 0.074, 0.036), "okladzina", 0.002, Vector3(12, 0, 0)),
-		B.walec(Vector3(0, -0.08, 0.024), Vector3(0, -0.084, 0.03), 0.004, 0.004, "metal_jasny", 6),
-		# kurek i przyrządy
-		B.box(Vector3(0, 0.032, 0.02), Vector3(0.01, 0.016, 0.012), "metal", 0.003, Vector3(30, 0, 0)),
-		B.box(Vector3(0, 0.057, -0.146), Vector3(0.0045, 0.01, 0.008), "metal", 0.0),
-		B.box(Vector3(-0.007, 0.057, 0.006), Vector3(0.006, 0.01, 0.008), "metal", 0.0),
-		B.box(Vector3(0.007, 0.057, 0.006), Vector3(0.006, 0.01, 0.008), "metal", 0.0),
+		# zamek: zaokrąglony przód, skos z tyłu, wypukła góra
+		B.profil([V(0.022, 0.021), V(0.023, 0.044), V(0.017, 0.05), V(-0.148, 0.05), V(-0.156, 0.046), V(-0.159, 0.032), V(-0.156, 0.021)], 0.026, "metal", 0.004),
+		B.profil([V(0.016, 0.046), V(0.012, 0.0535), V(-0.144, 0.0535), V(-0.148, 0.046)], 0.019, "metal", 0.005),
+		B.walec(Vector3(0, 0.034, -0.157), Vector3(0, 0.034, -0.1595), 0.0058, 0.0058, "czern", 8),
+		B.box(Vector3(0.0132, 0.041, -0.05), Vector3(0.002, 0.013, 0.03), "czern", 0.0),
+		# szkielet z chwytem (jeden profil), okładzina w kratkę na wierzchu
+		B.profil([V(-0.15, 0.021), V(-0.15, 0.011), V(-0.11, 0.009), V(-0.04, 0.008), V(-0.014, 0.004), V(-0.009, -0.03),
+			V(-0.004, -0.07), V(0.0, -0.081), V(0.034, -0.081), V(0.037, -0.062), V(0.031, -0.02), V(0.029, 0.0),
+			V(0.034, 0.013), V(0.03, 0.021)], 0.024, "metal", 0.004),
+		B.profil([V(-0.007, -0.004), V(-0.003, -0.07), V(0.031, -0.07), V(0.027, -0.004)], 0.0275, "okladzina", 0.003),
+		B.walec(Vector3(0, -0.081, 0.026), Vector3(0, -0.086, 0.03), 0.0038, 0.0038, "metal_jasny", 6),
+		# kabłąk i spust
+		_kablak(-0.046, -0.008, 0.008, 0.026),
+		B.profil([V(-0.027, 0.007), V(-0.023, -0.003), V(-0.025, -0.012), V(-0.02, -0.013), V(-0.017, -0.002), V(-0.02, 0.007)], 0.006, "metal_jasny", 0.001),
+		# kurek, bezpiecznik, przyrządy
+		B.profil([V(0.024, 0.026), V(0.036, 0.034), V(0.04, 0.046), V(0.033, 0.048), V(0.025, 0.04)], 0.009, "metal", 0.002),
+		B.box(Vector3(-0.0138, 0.036, 0.006), Vector3(0.004, 0.006, 0.016), "metal_jasny", 0.002),
+		B.box(Vector3(0, 0.057, -0.142), Vector3(0.004, 0.009, 0.007), "metal", 0.0),
+		B.box(Vector3(-0.0065, 0.057, 0.008), Vector3(0.005, 0.009, 0.008), "metal", 0.0),
+		B.box(Vector3(0.0065, 0.057, 0.008), Vector3(0.005, 0.009, 0.008), "metal", 0.0),
 	]
-	c.append_array(_naciecia(0.0137, 0.037, -0.01, 0.012, 7, 0.02))
-	c.append_array(_luk(Vector3(0, 0.0, -0.058), 0.021, 180, 345, 6, Vector2(0.006, 0.004)))
-	var m := [
-		B.box(Vector3(0, -0.084, 0.014), Vector3(0.021, 0.008, 0.032), "metal", 0.003, Vector3(12, 0, 0)),
-		B.box(Vector3(0, -0.04, 0.009), Vector3(0.018, 0.08, 0.03), "metal", 0.003, Vector3(12, 0, 0)),
-	]
-	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.042, 0.014), "kat_chwytu": 12.0, "lozysko": Vector3(0, -0.04, 0.014)}
+	c.append_array(_naciecia(0.0132, 0.036, -0.004, 0.016, 8, 0.02))
+	var m := [B.profil([V(-0.002, -0.081), V(0.0, -0.088), V(0.036, -0.088), V(0.035, -0.081)], 0.022, "metal", 0.002)]
+	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.04, 0.014), "kat_chwytu": 10.0, "lozysko": Vector3(0, -0.04, 0.014)}
 
 
-## PM-63 „Rak”: płaska komora z ruchomym zamkiem, przedni chwyt, wysuwana kolba z blachy.
+## PM-63 „Rak”: płaska komora ze skośnym przodem, zamek z „łopatką”, chwyt przedni, kolba z blachy.
 static func _pm63() -> Dictionary:
 	var c := [
-		B.box(Vector3(0, 0.04, -0.1), Vector3(0.042, 0.052, 0.27), "metal", 0.008),
-		B.box(Vector3(0, 0.07, -0.09), Vector3(0.034, 0.012, 0.24), "metal", 0.005),
-		B.box(Vector3(0.0215, 0.048, -0.13), Vector3(0.002, 0.014, 0.05), "czern", 0.0),
-		B.walec(Vector3(0, 0.044, -0.235), Vector3(0, 0.044, -0.33), 0.0095, 0.009, "metal", 8),
-		B.box(Vector3(0, 0.042, -0.29), Vector3(0.026, 0.024, 0.07), "metal", 0.006),      # kompensator „łopatka”
-		B.walec(Vector3(0, 0.044, -0.33), Vector3(0, 0.044, -0.336), 0.006, 0.006, "czern", 8),
-		# chwyt i przedni chwyt
-		B.box(Vector3(0, -0.035, 0.0), Vector3(0.032, 0.105, 0.044), "okladzina", 0.012, Vector3(10, 0, 0)),
-		B.box(Vector3(0, -0.032, -0.17), Vector3(0.028, 0.07, 0.03), "bakelit", 0.01, Vector3(-5, 0, 0)),
-		# kolba składana z blachy
-		B.box(Vector3(0.014, 0.02, 0.12), Vector3(0.004, 0.01, 0.2), "metal", 0.002),
-		B.box(Vector3(-0.014, 0.02, 0.12), Vector3(0.004, 0.01, 0.2), "metal", 0.002),
-		B.box(Vector3(0, 0.0, 0.22), Vector3(0.036, 0.05, 0.006), "metal", 0.003),
-		# przyrządy, spust
-		B.box(Vector3(0, 0.08, -0.205), Vector3(0.005, 0.026, 0.008), "metal", 0.0),
-		B.box(Vector3(-0.01, 0.082, 0.0), Vector3(0.005, 0.02, 0.016), "metal", 0.0),
-		B.box(Vector3(0.01, 0.082, 0.0), Vector3(0.005, 0.02, 0.016), "metal", 0.0),
-		B.box(Vector3(0, -0.002, -0.055), Vector3(0.007, 0.022, 0.009), "metal_jasny", 0.002, Vector3(-15, 0, 0)),
+		B.profil([V(0.04, 0.016), V(0.04, 0.06), V(-0.2, 0.06), V(-0.235, 0.05), V(-0.24, 0.022), V(-0.2, 0.016)], 0.04, "metal", 0.006),
+		B.profil([V(0.036, 0.058), V(0.03, 0.072), V(-0.22, 0.072), V(-0.232, 0.06)], 0.034, "metal", 0.008),
+		B.profil([V(-0.232, 0.03), V(-0.232, 0.066), V(-0.3, 0.06), V(-0.305, 0.03)], 0.026, "metal", 0.006),
+		B.walec(Vector3(0, 0.044, -0.3), Vector3(0, 0.044, -0.334), 0.0085, 0.0085, "metal", 8),
+		B.walec(Vector3(0, 0.044, -0.334), Vector3(0, 0.044, -0.336), 0.005, 0.005, "czern", 8),
+		B.box(Vector3(0.0205, 0.048, -0.12), Vector3(0.002, 0.014, 0.05), "czern", 0.0),
+		# chwyt z magazynkiem w środku i chwyt przedni
+		B.profil([V(-0.024, 0.016), V(-0.016, -0.03), V(-0.012, -0.085), V(0.024, -0.085), V(0.026, -0.03), V(0.024, 0.016)], 0.032, "okladzina", 0.01),
+		B.profil([V(-0.19, 0.016), V(-0.188, -0.05), V(-0.178, -0.064), V(-0.155, -0.062), V(-0.152, 0.016)], 0.028, "bakelit", 0.009),
+		_kablak(-0.08, -0.024, 0.016, 0.028, 0.004, 0.008),
+		B.profil([V(-0.058, 0.014), V(-0.054, 0.002), V(-0.056, -0.008), V(-0.05, -0.009), V(-0.048, 0.003), V(-0.051, 0.014)], 0.006, "metal_jasny", 0.001),
+		# kolba z dwóch prętów i stopki
+		B.box(Vector3(0.014, 0.024, 0.13), Vector3(0.004, 0.009, 0.2), "metal", 0.002),
+		B.box(Vector3(-0.014, 0.024, 0.13), Vector3(0.004, 0.009, 0.2), "metal", 0.002),
+		B.profil([V(0.228, 0.03), V(0.234, 0.03), V(0.236, -0.03), V(0.226, -0.03)], 0.036, "metal", 0.003),
+		# przyrządy
+		B.box(Vector3(0, 0.08, -0.205), Vector3(0.005, 0.024, 0.008), "metal", 0.0),
+		B.box(Vector3(-0.01, 0.082, 0.02), Vector3(0.005, 0.02, 0.016), "metal", 0.0),
+		B.box(Vector3(0.01, 0.082, 0.02), Vector3(0.005, 0.02, 0.016), "metal", 0.0),
 	]
-	c.append_array(_naciecia(0.0215, 0.06, -0.02, 0.02, 6, 0.012))
-	c.append_array(_luk(Vector3(0, 0.002, -0.052), 0.022, 180, 345, 6, Vector2(0.006, 0.004)))
-	c.append_array(_nity([Vector3(0, 0.03, -0.18), Vector3(0, 0.03, -0.03)], 0.021))
-	var m := [
-		B.box(Vector3(0, -0.12, 0.004), Vector3(0.024, 0.16, 0.032), "metal", 0.005, Vector3(10, 0, 0)),
-		B.box(Vector3(0, -0.198, 0.018), Vector3(0.027, 0.01, 0.036), "metal", 0.003, Vector3(10, 0, 0)),
-	]
-	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.046, 0.008), "kat_chwytu": 10.0, "lozysko": Vector3(0, -0.034, -0.17)}
+	c.append_array(_naciecia(0.0172, 0.065, 0.0, 0.03, 6, 0.01))
+	c.append_array(_nity([V(-0.17, 0.03), V(-0.04, 0.03)], 0.0202))
+	var m := [B.profil([V(-0.014, -0.085), V(-0.012, -0.2), V(0.022, -0.2), V(0.022, -0.085)], 0.024, "metal", 0.004),
+		B.profil([V(-0.016, -0.2), V(-0.016, -0.208), V(0.025, -0.208), V(0.025, -0.2)], 0.027, "metal", 0.002)]
+	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.045, 0.006), "kat_chwytu": 6.0, "lozysko": Vector3(0, -0.03, -0.17)}
 
 
-## KB-47 „Kałach”: tłoczona komora z nitami, rude łoże i kolba, zakrzywiony magazynek z segmentów.
+## KB-47 „Kałach”: tłoczona komora z nitami, zaokrąglona pokrywa, rude łoże z wyprofilowaniem,
+## kolba z grzbietem i stopką, bananowy magazynek.
 static func _kb47() -> Dictionary:
 	var c := [
-		# komora i pokrywa (zaokrąglona), nity, okno, rączka zamka, przełącznik
-		B.box(Vector3(0, 0.05, -0.12), Vector3(0.046, 0.06, 0.36), "metal", 0.006),
-		B.box(Vector3(0, 0.086, -0.115), Vector3(0.04, 0.014, 0.33), "metal", 0.008),
-		B.box(Vector3(0, 0.094, -0.115), Vector3(0.028, 0.006, 0.3), "metal", 0.003),
-		B.box(Vector3(0.0235, 0.068, -0.15), Vector3(0.002, 0.012, 0.08), "czern", 0.0),
-		B.box(Vector3(0.03, 0.07, -0.08), Vector3(0.014, 0.01, 0.024), "metal_jasny", 0.004),
-		B.box(Vector3(0.0245, 0.06, -0.03), Vector3(0.003, 0.03, 0.09), "metal", 0.001, Vector3(-6, 0, 0)),
-		B.box(Vector3(0, 0.022, -0.12), Vector3(0.04, 0.012, 0.3), "metal", 0.004),
-		# łoże dolne (zwężające się, z wcięciem), nakładka rury gazowej, okucia
-		B.box(Vector3(0, 0.046, -0.385), Vector3(0.056, 0.05, 0.2), "drewno", 0.016),
-		B.box(Vector3(0, 0.024, -0.385), Vector3(0.044, 0.016, 0.18), "drewno", 0.007),
-		B.box(Vector3(0, 0.096, -0.405), Vector3(0.034, 0.024, 0.19), "drewno", 0.011),
-		B.box(Vector3(0, 0.058, -0.29), Vector3(0.05, 0.05, 0.012), "metal", 0.004),
-		B.box(Vector3(0, 0.058, -0.488), Vector3(0.05, 0.05, 0.012), "metal", 0.004),
-		# lufa, rura gazowa, blok gazowy, blok muszki z osłoną, hamulec
-		B.walec(Vector3(0, 0.058, -0.49), Vector3(0, 0.058, -0.77), 0.0105, 0.0095, "metal", 8),
-		B.walec(Vector3(0, 0.094, -0.5), Vector3(0, 0.094, -0.6), 0.0085, 0.0085, "metal", 8),
-		B.box(Vector3(0, 0.078, -0.6), Vector3(0.024, 0.05, 0.03), "metal", 0.005),
-		B.box(Vector3(0, 0.072, -0.69), Vector3(0.022, 0.034, 0.024), "metal", 0.005),
-		B.box(Vector3(-0.009, 0.098, -0.69), Vector3(0.003, 0.02, 0.02), "metal", 0.0),
-		B.box(Vector3(0.009, 0.098, -0.69), Vector3(0.003, 0.02, 0.02), "metal", 0.0),
-		B.box(Vector3(0, 0.095, -0.69), Vector3(0.0045, 0.05, 0.006), "metal", 0.0),
-		B.walec(Vector3(0, 0.058, -0.77), Vector3(0, 0.058, -0.805), 0.0135, 0.0125, "metal", 8),
-		B.walec(Vector3(0, 0.058, -0.805), Vector3(0, 0.058, -0.808), 0.007, 0.007, "czern", 8),
-		# szczerbinka
-		B.box(Vector3(0, 0.092, -0.22), Vector3(0.032, 0.01, 0.05), "metal", 0.003),
+		# komora i pokrywa
+		B.profil([V(0.06, 0.028), V(0.06, 0.08), V(-0.3, 0.08), V(-0.3, 0.026), V(-0.21, 0.02), V(-0.12, 0.02), V(-0.02, 0.02), V(0.03, 0.022)], 0.046, "metal", 0.005),
+		B.profil([V(0.068, 0.076), V(0.058, 0.094), V(-0.225, 0.094), V(-0.245, 0.08)], 0.042, "metal", 0.011),
+		B.box(Vector3(0.0235, 0.066, -0.15), Vector3(0.002, 0.014, 0.085), "czern", 0.0),
+		B.profil([V(-0.072, 0.064), V(-0.078, 0.072), V(-0.098, 0.072), V(-0.1, 0.064)], 0.03, "metal_jasny", 0.003, 0.025),
+		B.profil([V(0.0, 0.05), V(0.002, 0.066), V(-0.09, 0.064), V(-0.09, 0.058)], 0.003, "metal", 0.0, 0.0245),     # przełącznik
+		# szczerbinka na klinie
+		B.profil([V(-0.2, 0.08), V(-0.2, 0.098), V(-0.262, 0.098), V(-0.28, 0.082)], 0.03, "metal", 0.004),
 		B.box(Vector3(-0.011, 0.105, -0.22), Vector3(0.007, 0.03, 0.04), "metal", 0.002),
 		B.box(Vector3(0.011, 0.105, -0.22), Vector3(0.007, 0.03, 0.04), "metal", 0.002),
-		# kolba: szyjka i trzon, stopka z blachy
-		B.box(Vector3(0, 0.038, 0.11), Vector3(0.036, 0.05, 0.1), "drewno", 0.012, Vector3(-8, 0, 0)),
-		B.box(Vector3(0, 0.022, 0.26), Vector3(0.042, 0.098, 0.22), "drewno", 0.016, Vector3(-6, 0, 0)),
-		B.box(Vector3(0, 0.01, 0.374), Vector3(0.046, 0.11, 0.01), "metal", 0.004, Vector3(-6, 0, 0)),
-		# chwyt pistoletowy (bakelit), kabłąk, spust
-		B.box(Vector3(0, -0.036, 0.0), Vector3(0.03, 0.1, 0.042), "okladzina", 0.012, Vector3(18, 0, 0)),
-		B.box(Vector3(0, -0.004, -0.06), Vector3(0.007, 0.024, 0.009), "metal_jasny", 0.002, Vector3(-15, 0, 0)),
+		# łoże dolne z wyprofilowaniem pod palce i nakładka na rurę gazową
+		B.profil([V(-0.29, 0.074), V(-0.29, 0.026), V(-0.305, 0.016), V(-0.37, 0.02), V(-0.4, 0.014), V(-0.47, 0.018), V(-0.485, 0.032), V(-0.485, 0.074)], 0.056, "drewno", 0.014),
+		B.profil([V(-0.305, 0.084), V(-0.298, 0.104), V(-0.495, 0.104), V(-0.505, 0.086)], 0.032, "drewno", 0.011),
+		B.profil([V(-0.29, 0.024), V(-0.29, 0.084), V(-0.296, 0.084), V(-0.296, 0.024)], 0.05, "metal", 0.003),
+		B.profil([V(-0.485, 0.03), V(-0.485, 0.084), V(-0.492, 0.084), V(-0.492, 0.03)], 0.05, "metal", 0.003),
+		# lufa, rura gazowa, blok gazowy, wycior, blok muszki z osłoną, hamulec
+		B.walec(Vector3(0, 0.058, -0.49), Vector3(0, 0.058, -0.77), 0.0105, 0.0095, "metal", 10),
+		B.walec(Vector3(0, 0.094, -0.5), Vector3(0, 0.094, -0.59), 0.0085, 0.0085, "metal", 8),
+		B.profil([V(-0.58, 0.042), V(-0.58, 0.104), V(-0.61, 0.104), V(-0.62, 0.05)], 0.024, "metal", 0.004),
+		B.walec(Vector3(0, 0.038, -0.49), Vector3(0, 0.038, -0.74), 0.003, 0.003, "metal_jasny", 6),
+		B.profil([V(-0.675, 0.044), V(-0.675, 0.088), V(-0.705, 0.088), V(-0.71, 0.046)], 0.022, "metal", 0.004),
+		B.box(Vector3(-0.009, 0.098, -0.69), Vector3(0.003, 0.022, 0.022), "metal", 0.0),
+		B.box(Vector3(0.009, 0.098, -0.69), Vector3(0.003, 0.022, 0.022), "metal", 0.0),
+		B.box(Vector3(0, 0.095, -0.69), Vector3(0.0045, 0.05, 0.006), "metal", 0.0),
+		B.walec(Vector3(0, 0.058, -0.77), Vector3(0, 0.058, -0.806), 0.0135, 0.0125, "metal", 10),
+		B.walec(Vector3(0, 0.058, -0.806), Vector3(0, 0.058, -0.808), 0.007, 0.007, "czern", 8),
+		# kolba: grzbiet opadający do stopki, szyjka u dołu
+		B.profil([V(0.055, 0.078), V(0.372, 0.062), V(0.375, -0.046), V(0.33, -0.05), V(0.17, -0.01), V(0.1, 0.01), V(0.055, 0.028)], 0.042, "drewno", 0.014),
+		B.profil([V(0.37, 0.064), V(0.384, 0.064), V(0.386, -0.05), V(0.372, -0.05)], 0.046, "metal", 0.004),
+		# chwyt pistoletowy (skośny), kabłąk, spust
+		B.profil([V(-0.018, 0.021), V(-0.012, -0.03), V(0.004, -0.084), V(0.034, -0.08), V(0.03, -0.04), V(0.018, 0.021)], 0.031, "okladzina", 0.01),
+		_kablak(-0.105, -0.022, 0.02, 0.032, 0.004, 0.009),
+		B.profil([V(-0.072, 0.018), V(-0.068, 0.004), V(-0.07, -0.008), V(-0.063, -0.009), V(-0.06, 0.004), V(-0.064, 0.018)], 0.007, "metal_jasny", 0.001),
 	]
-	c.append_array(_luk(Vector3(0, 0.012, -0.06), 0.022, 180, 350, 6, Vector2(0.008, 0.004)))
-	c.append_array(_nity([Vector3(0, 0.032, -0.25), Vector3(0, 0.032, -0.07), Vector3(0, 0.04, 0.02)], 0.0232))
-	# magazynek: łuk z czterech segmentów z żebrami
-	var m := []
-	var kat := -10.0
-	var p := Vector3(0, -0.02, -0.165)
-	for i in 4:
-		var dl := 0.05
-		var r := Basis.from_euler(Vector3(deg_to_rad(kat), 0, 0))
-		var sr := p + r * Vector3(0, -dl * 0.5, 0)
-		m.append(B.box(sr, Vector3(0.03, dl + 0.004, 0.064 - i * 0.003), "metal", 0.005, Vector3(kat, 0, 0)))
-		m.append(B.box(sr + Vector3(0.0155, 0, 0), Vector3(0.002, dl * 0.7, 0.04), "metal_jasny", 0.0, Vector3(kat, 0, 0)))
-		m.append(B.box(sr - Vector3(0.0155, 0, 0), Vector3(0.002, dl * 0.7, 0.04), "metal_jasny", 0.0, Vector3(kat, 0, 0)))
-		p = p + r * Vector3(0, -dl, 0)
-		kat -= 7.0
-	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.042, 0.012), "kat_chwytu": 18.0, "lozysko": Vector3(0, 0.046, -0.385)}
+	c.append_array(_nity([V(-0.25, 0.03), V(-0.07, 0.03), V(0.025, 0.04)], 0.0232))
+	var m := [
+		B.profil([V(-0.205, 0.022), V(-0.208, -0.04), V(-0.222, -0.1), V(-0.25, -0.16), V(-0.268, -0.188), V(-0.205, -0.212),
+			V(-0.19, -0.18), V(-0.168, -0.12), V(-0.152, -0.06), V(-0.142, 0.022)], 0.03, "metal", 0.006),
+		B.profil([V(-0.27, -0.186), V(-0.274, -0.196), V(-0.204, -0.222), V(-0.2, -0.212)], 0.033, "metal", 0.003),
+	]
+	for i in 3:
+		var t := 0.25 + i * 0.22
+		var zz := lerpf(-0.175, -0.225, t)
+		var yy := lerpf(0.0, -0.17, t)
+		m.append(B.box(Vector3(0.0156, yy, zz), Vector3(0.002, 0.028, 0.034), "metal", 0.0, Vector3(-20 - i * 8, 0, 0)))
+		m.append(B.box(Vector3(-0.0156, yy, zz), Vector3(0.002, 0.028, 0.034), "metal", 0.0, Vector3(-20 - i * 8, 0, 0)))
+	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.04, 0.01), "kat_chwytu": 16.0, "lozysko": Vector3(0, 0.046, -0.385)}
 
 
-## Obrzyn: dwie lufy z wąską szyną, baskila z dźwignią otwierania, kurki, chwyt z drewna.
+## Obrzyn: dwie lufy z szyną, baskila, kurki, ucięta kolba w kształcie chwytu.
 static func _obrzyn() -> Dictionary:
 	var c := [
-		B.walec(Vector3(-0.0118, 0.045, -0.07), Vector3(-0.0118, 0.045, -0.44), 0.0118, 0.0112, "metal", 10),
-		B.walec(Vector3(0.0118, 0.045, -0.07), Vector3(0.0118, 0.045, -0.44), 0.0118, 0.0112, "metal", 10),
+		B.walec(Vector3(-0.0118, 0.045, -0.07), Vector3(-0.0118, 0.045, -0.44), 0.0118, 0.0112, "metal", 12),
+		B.walec(Vector3(0.0118, 0.045, -0.07), Vector3(0.0118, 0.045, -0.44), 0.0118, 0.0112, "metal", 12),
 		B.walec(Vector3(-0.0118, 0.045, -0.44), Vector3(-0.0118, 0.045, -0.442), 0.0085, 0.0085, "czern", 10),
 		B.walec(Vector3(0.0118, 0.045, -0.44), Vector3(0.0118, 0.045, -0.442), 0.0085, 0.0085, "czern", 10),
-		B.box(Vector3(0, 0.059, -0.25), Vector3(0.008, 0.006, 0.37), "metal", 0.002),
-		B.box(Vector3(0, 0.03, -0.25), Vector3(0.012, 0.012, 0.37), "metal", 0.002),
-		B.box(Vector3(0, 0.064, -0.43), Vector3(0.005, 0.006, 0.006), "metal_jasny", 0.0),
-		# czółenko (drewno) pod lufami
-		B.box(Vector3(0, 0.022, -0.17), Vector3(0.05, 0.03, 0.15), "drewno", 0.012),
+		B.box(Vector3(0, 0.0585, -0.25), Vector3(0.008, 0.005, 0.37), "metal", 0.002),
+		B.box(Vector3(0, 0.031, -0.25), Vector3(0.012, 0.01, 0.37), "metal", 0.002),
+		B.box(Vector3(0, 0.063, -0.43), Vector3(0.004, 0.005, 0.005), "metal_jasny", 0.0),
+		# czółenko
+		B.profil([V(-0.1, 0.034), V(-0.1, 0.012), V(-0.12, 0.004), V(-0.24, 0.008), V(-0.255, 0.034)], 0.05, "drewno", 0.013),
 		# baskila
-		B.box(Vector3(0, 0.032, -0.03), Vector3(0.05, 0.05, 0.08), "metal", 0.01),
-		B.box(Vector3(0, 0.058, 0.0), Vector3(0.012, 0.014, 0.03), "metal_jasny", 0.004),
+		B.profil([V(0.005, 0.0), V(0.005, 0.05), V(-0.012, 0.058), V(-0.07, 0.058), V(-0.07, 0.02), V(-0.04, 0.0)], 0.05, "metal", 0.008),
+		B.box(Vector3(0, 0.062, 0.0), Vector3(0.012, 0.012, 0.03), "metal_jasny", 0.004),
 		# kurki
-		B.box(Vector3(-0.01, 0.06, 0.018), Vector3(0.006, 0.02, 0.01), "metal", 0.002, Vector3(40, 0, 0)),
-		B.box(Vector3(0.01, 0.06, 0.018), Vector3(0.006, 0.02, 0.01), "metal", 0.002, Vector3(40, 0, 0)),
-		# chwyt (resztka kolby) z drewna, nasadka
-		B.box(Vector3(0, -0.01, 0.045), Vector3(0.04, 0.07, 0.06), "drewno", 0.014, Vector3(28, 0, 0)),
-		B.box(Vector3(0, -0.055, 0.075), Vector3(0.038, 0.06, 0.05), "drewno", 0.014, Vector3(28, 0, 0)),
-		B.box(Vector3(0, -0.084, 0.092), Vector3(0.04, 0.008, 0.05), "metal", 0.003, Vector3(28, 0, 0)),
-		# spusty
-		B.box(Vector3(0, 0.0, -0.02), Vector3(0.006, 0.022, 0.008), "metal_jasny", 0.002, Vector3(-15, 0, 0)),
-		B.box(Vector3(0, 0.0, -0.005), Vector3(0.006, 0.02, 0.008), "metal_jasny", 0.002, Vector3(-10, 0, 0)),
+		B.profil([V(0.004, 0.04), V(0.01, 0.06), V(0.02, 0.068), V(0.024, 0.062), V(0.014, 0.04)], 0.006, "metal", 0.0015, -0.011),
+		B.profil([V(0.004, 0.04), V(0.01, 0.06), V(0.02, 0.068), V(0.024, 0.062), V(0.014, 0.04)], 0.006, "metal", 0.0015, 0.011),
+		# chwyt z uciętej kolby
+		B.profil([V(0.004, 0.05), V(0.04, 0.04), V(0.07, 0.0), V(0.11, -0.07), V(0.112, -0.09), V(0.07, -0.092), V(0.05, -0.05), V(0.03, -0.018), V(0.005, 0.0)], 0.042, "drewno", 0.014),
+		B.profil([V(0.072, -0.092), V(0.114, -0.09), V(0.115, -0.098), V(0.07, -0.1)], 0.044, "metal", 0.003),
+		_kablak(-0.038, 0.012, 0.0, 0.026, 0.004, 0.009),
+		B.profil([V(-0.024, 0.0), V(-0.02, -0.01), V(-0.022, -0.018), V(-0.016, -0.019), V(-0.014, -0.008), V(-0.017, 0.0)], 0.006, "metal_jasny", 0.001),
+		B.profil([V(-0.008, 0.0), V(-0.004, -0.01), V(-0.006, -0.017), V(0.0, -0.018), V(0.002, -0.008), V(-0.001, 0.0)], 0.006, "metal_jasny", 0.001),
 	]
-	c.append_array(_luk(Vector3(0, 0.012, -0.012), 0.024, 180, 350, 6, Vector2(0.007, 0.004)))
-	return {"cialo3": c, "mag3": [], "chwyt": Vector3(0, -0.036, 0.055), "kat_chwytu": 28.0, "lozysko": Vector3(0, 0.025, -0.17)}
+	return {"cialo3": c, "mag3": [], "chwyt": Vector3(0, -0.036, 0.055), "kat_chwytu": 34.0, "lozysko": Vector3(0, 0.025, -0.17)}

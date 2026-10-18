@@ -411,11 +411,11 @@ def metal_bron():
     img = col((50, 52, 58))[None, None] * (0.8 + 0.3 * fbm(h, w, 4, 4, 321)[..., None])
     img += (fbm(h, w, 32, 32, 323, 2)[..., None] - 0.5) * 18
     wyt = fbm(h, w, 6, 6, 324)
-    img[wyt > 0.66] = img[wyt > 0.66] * 0.5 + col((128, 130, 134)) * 0.5
-    for _ in range(40):
+    img[wyt > 0.74] = img[wyt > 0.74] * 0.65 + col((112, 114, 118)) * 0.35
+    for _ in range(22):
         y, x = r.integers(0, h), r.integers(0, w)
-        for i in range(r.integers(2, 9)):
-            img[(y + i // 3) % h, (x + i) % w] = col((150, 152, 156)) * r.uniform(0.75, 1.0)
+        for i in range(r.integers(2, 6)):
+            img[(y + i // 3) % h, (x + i) % w] = col((132, 134, 138)) * r.uniform(0.75, 1.0)
     img += ziarno(h, w, 322, 10)[..., None]
     zapisz(img, "metal_bron.png", 40)
 
@@ -442,10 +442,10 @@ def drewno_bron():
     w, h = 32, 64
     yy, xx = np.mgrid[0:h, 0:w].astype(float)
     n = fbm(h, w, 2, 2, 340)
-    sl = np.sin(xx * 1.1 + n * 7.0 + yy * 0.04)
-    ciemne = (sl > 0.72).astype(float)
-    img = col((150, 72, 38)) * (0.86 + 0.14 * fbm(h, w, 6, 3, 341)[..., None])
-    img = img * (1 - 0.45 * ciemne[..., None])
+    sl = np.sin(xx * 1.9 + n * 9.0 + yy * 0.03)
+    ciemne = (sl > 0.86).astype(float)
+    img = col((128, 58, 32)) * (0.86 + 0.14 * fbm(h, w, 6, 3, 341)[..., None])
+    img = img * (1 - 0.32 * ciemne[..., None])
     img += (fbm(h, w, 16, 8, 343, 2)[..., None] - 0.5) * 20
     jasne = fbm(h, w, 4, 3, 344) > 0.7
     img[jasne] = img[jasne] * 0.75 + col((196, 120, 70)) * 0.25

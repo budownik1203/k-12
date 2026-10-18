@@ -41,6 +41,29 @@ func _ready() -> void:
 					get_viewport().get_texture().get_image().save_png(kat.path_join("reka_%d_%d.png" % [i, kk]))
 			get_tree().quit()
 			return
+		"bronie":
+			var lista := ["pw9", "pm63", "kb47", "obrzyn"]
+			for i in lista.size():
+				var md := Modele.bron(lista[i])
+				var n := Node3D.new()
+				n.position = Vector3(i * 6.0, 0, 0)
+				add_child(n)
+				n.add_child(Bryly.instancja(md["cialo3"]))
+				if not (md["mag3"] as Array).is_empty():
+					n.add_child(Bryly.instancja(md["mag3"]))
+			kam.fov = 30
+			for i in lista.size():
+				var dl := 0.55 if lista[i] == "pw9" else (1.0 if lista[i] == "pm63" else (2.2 if lista[i] == "kb47" else 1.2))
+				var sr := Vector3(i * 6.0, 0.0, -0.18 if lista[i] == "kb47" else -0.08)
+				for kk in 2:
+					kam.position = sr + (Vector3(dl, 0.02, 0.0) if kk == 0 else Vector3(-dl * 0.55, dl * 0.35, dl * 0.6))
+					kam.look_at(sr)
+					for f in 4:
+						await get_tree().process_frame
+					await RenderingServer.frame_post_draw
+					get_viewport().get_texture().get_image().save_png(kat.path_join("bron_%s_%d.png" % [lista[i], kk]))
+			get_tree().quit()
+			return
 	for f in 8:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw

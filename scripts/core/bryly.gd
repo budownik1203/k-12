@@ -81,6 +81,8 @@ static func siatka(czesci: Array, vm := true) -> ArrayMesh:
 				_walec(grupy[klucz], c, skala_uv(m))
 			"quad":
 				_quad_uv(grupy[klucz], c)
+			"profil":
+				_profil(grupy[klucz], c, skala_uv(m))
 	var mesh := ArrayMesh.new()
 	for klucz in grupy:
 		var st: SurfaceTool = grupy[klucz]
@@ -293,3 +295,95 @@ static func _walec(st: SurfaceTool, c: Dictionary, sk: float) -> void:
 			_tri(st, [a, p00, p01], [Vector2(0.5, 0.5), Vector2(0.5, 0.5) + Vector2(cos(t0), sin(t0)) * r0 * sk, Vector2(0.5, 0.5) + Vector2(cos(t1), sin(t1)) * r0 * sk], -w)
 		if r1 > 0.0005:
 			_tri(st, [b, p11, p10], [Vector2(0.5, 0.5), Vector2(0.5, 0.5) + Vector2(cos(t1), sin(t1)) * r1 * sk, Vector2(0.5, 0.5) + Vector2(cos(t0), sin(t0)) * r1 * sk], w)
+
+
+
+## Profil: wielokąt sylwetki z boku (punkty (z, y), w metrach) wyciągnięty na szerokość w wzdłuż osi X,
+## z fazą f na krawędziach. Pozwala robić prawdziwe kształty broni: zamek, chwyt, kolbę, łoże, magazynek.
+## Opcje: "x" środek w osi X, "o" przesunięcie, "r" obrót w stopniach.
+static func profil(punkty: Array, w: float, m: String, faza := 0.0, x := 0.0, o := Vector3.ZERO, rot := Vector3.ZERO, k := Color.WHITE) -> Dictionary:
+	return {"t": "profil", "p": punkty, "w": w, "m": m, "f": faza, "x": x, "o": o, "r": rot, "k": k}
+
+
+static func _wsuniety(pts: PackedVector2Array, d: float) -> PackedVector2Array:
+	# odsunięcie wierzchołków do środka o d (miter), z ograniczeniem przy ostrych kątach
+	var n := pts.size()
+	var out := PackedVector2Array()
+	out.resize(n)
+	for i in n:
+		var a := pts[(i - 1 + n) % n]
+		var b := pts[i]
+		var c := pts[(i + 1) % n]
+		var e1 := (b - a).normalized()
+		var e2 := (c - b).normalized()
+		var n1 := Vector2(-e1.y, e1.x)
+		var n2 := Vector2(-e2.y, e2.x)
+		var bis := (n1 + n2)
+		if bis.length() < 0.001:
+			bis = n1
+		bis = bis.normalized()
+		var cosk := maxf(0.35, bis.dot(n1))
+		out[i] = b + bis * (d / cosk)
+	return out
+
+
+static func _profil(st: SurfaceTool, c: Dictionary, sk: float) -> void:
+	var pts := PackedVector2Array()
+	for p in c["p"]:
+		pts.append(p)
+	if pts.size() < 3:
+		return
+	# wnętrze po lewej stronie krawędzi = wielokąt przeciwnie do wskazówek zegara
+	if Geometry2D.is_polygon_clockwise(pts):
+		pts.reverse()
+	var w: float = c["w"]
+	var f: float = minf(float(c.get("f", 0.0)), w * 0.45)
+	var x0: float = c.get("x", 0.0)
+	var b := Basis.from_euler(Vector3(c.get("r", Vector3.ZERO)) * PI / 180.0)
+	var o: Vector3 = c.get("o", Vector3.ZERO)
+	var P := func(p2: Vector2, x: float) -> Vector3: return o + b * Vector3(x0 + x, p2.y, p2.x)
+	var N := func(v: Vector3) -> Vector3: return (b * v).normalized()
+	var wew := _wsuniety(pts, f) if f > 0.0001 else pts
+	var h := w * 0.5
+	var hs := h - f
+	# denka (boki broni) z wsuniętego wielokąta
+	var tr := Geometry2D.triangulate_polygon(wew)
+	for sx in [-1.0, 1.0]:
+		var n3: Vector3 = N.call(Vector3(sx, 0, 0))
+		for i in range(0, tr.size(), 3):
+			var q := [wew[tr[i]], wew[tr[i + 1]], wew[tr[i + 2]]]
+			var p3 := [P.call(q[0], sx * h), P.call(q[1], sx * h), P.call(q[2], sx * h)]
+			var uv := [Vector2(q[0].x, -q[0].y) * sk, Vector2(q[1].x, -q[1].y) * sk, Vector2(q[2].x, -q[2].y) * sk]
+			_tri(st, p3, uv, n3)
+	# ściana boczna (obwód) i pasy fazy
+	var n := pts.size()
+	var obw := 0.0
+	for i in n:
+		var a := pts[i]
+		var bb := pts[(i + 1) % n]
+		var e := bb - a
+		var dl := e.length()
+		if dl < 0.00001:
+			continue
+		var nn := Vector2(e.y, -e.x).normalized()   # na zewnątrz (CCW)
+		var n3: Vector3 = N.call(Vector3(0, nn.y, nn.x))
+		var u0 := obw * sk
+		var u1 := (obw + dl) * sk
+		obw += dl
+		var A0: Vector3 = P.call(a, -hs)
+		var A1: Vector3 = P.call(a, hs)
+		var B0: Vector3 = P.call(bb, -hs)
+		var B1: Vector3 = P.call(bb, hs)
+		_tri(st, [A0, B0, B1], [Vector2(u0, 0), Vector2(u1, 0), Vector2(u1, w * sk)], n3)
+		_tri(st, [A0, B1, A1], [Vector2(u0, 0), Vector2(u1, w * sk), Vector2(u0, w * sk)], n3)
+		if f > 0.0001:
+			var wa := wew[i]
+			var wb := wew[(i + 1) % n]
+			for sx in [-1.0, 1.0]:
+				var nf: Vector3 = N.call(Vector3(sx * 0.7, nn.y * 0.7, nn.x * 0.7))
+				var C0: Vector3 = P.call(a, sx * hs)
+				var C1: Vector3 = P.call(bb, sx * hs)
+				var D0: Vector3 = P.call(wa, sx * h)
+				var D1: Vector3 = P.call(wb, sx * h)
+				_tri(st, [C0, C1, D1], [Vector2(u0, 0), Vector2(u1, 0), Vector2(u1, f * sk)], nf)
+				_tri(st, [C0, D1, D0], [Vector2(u0, 0), Vector2(u1, f * sk), Vector2(u0, f * sk)], nf)
