@@ -697,6 +697,8 @@ func _szukaj_lupu() -> Node3D:
 			continue
 		if w is Pojemnik and ((w as Pojemnik).pusty() or not String((w as Pojemnik).nazwa).begins_with("Zwłoki")):
 			continue
+		if w is LupNaZiemi and (w as LupNaZiemi)._podnoszony:
+			continue
 		var d := global_position.distance_to(w.global_position)
 		if d < bd and absf(w.global_position.y - global_position.y) < 1.5:
 			bd = d

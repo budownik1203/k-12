@@ -171,7 +171,10 @@ func _dodaj_do(s: Siatka, p: Przedmiot) -> bool:
 		for e in s.items:
 			var q: Przedmiot = e["p"]
 			if q.id == p.id and q.ilosc < q.stos_max() and odkryty(s, e):
-				var ile: int = mini(p.ilosc, q.stos_max() - q.ilosc)
+				# stos rośnie z ilością (garść -> pudełko): tylko tyle, ile się zmieści na miejscu
+				var ile: int = s.ile_zmiesci(q, mini(p.ilosc, q.stos_max() - q.ilosc))
+				if ile <= 0:
+					continue
 				q.ilosc += ile
 				p.ilosc -= ile
 				if p.ilosc <= 0:

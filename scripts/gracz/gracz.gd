@@ -683,6 +683,13 @@ func upusc(p: Przedmiot) -> LupNaZiemi:
 	przod = przod.normalized() if przod.length() > 0.01 else -global_basis.z
 	var bok := przod.cross(Vector3.UP)
 	var cel := global_position + przod * randf_range(0.45, 0.75) + bok * randf_range(-0.25, 0.25) + Vector3.UP * 0.3
+	# nie za ścianę ani w mebel: jeśli coś stoi po drodze, przedmiot ląduje przed przeszkodą
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.3, cel, Balistyka.WARSTWA_SWIAT)
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		var hp: Vector3 = hit["position"]
+		cel = global_position + Vector3.UP * 0.3 + (hp - (global_position + Vector3.UP * 0.3)) * 0.6
 	lup.rzut_z = kamera.global_position + przod * 0.3 + Vector3.DOWN * 0.25
 	swiat.add_child(lup)
 	lup.global_position = cel

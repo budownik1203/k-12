@@ -11,6 +11,7 @@ const KOM := 34
 var siatka: Siatka
 var tytul := ""
 var widoczne := -1          # ile pierwszych przedmiotów widać (-1 = wszystkie) – przy przeszukiwaniu
+var znane = null            # Dictionary przedmiotów już znalezionych (przeszukiwanie); null = wszystko widać
 ## Kieszenie rozłożonego plecaka / kontenera: zamknięte zakrywają swoje pola (trzeba je otworzyć).
 ## [{"r": Rect2i, "nazwa": String, "otwarta": bool, "w_toku": bool}]
 var kieszenie: Array = []
@@ -63,6 +64,8 @@ func ukryty(p: Przedmiot) -> bool:
 		var poz := siatka.pozycja(p)
 		if zakryty_obszar(poz.x, poz.y, p.szer(), p.wys()):
 			return true
+	if znane != null:
+		return not (znane as Dictionary).has(p)
 	if widoczne < 0 or siatka == null:
 		return false
 	for i in siatka.items.size():
@@ -125,7 +128,7 @@ func _draw() -> void:
 		var r := Rect2(Vector2(e["x"], e["y"]) * KOM, Vector2(p.szer(), p.wys()) * KOM)
 		if not kieszenie.is_empty() and zakryty_obszar(int(e["x"]), int(e["y"]), p.szer(), p.wys()):
 			continue
-		if widoczne >= 0 and i >= widoczne:
+		if (znane != null and not (znane as Dictionary).has(p)) or (znane == null and widoczne >= 0 and i >= widoczne):
 			draw_rect(r.grow(-2), Color(0.09, 0.09, 0.08))
 			draw_string(Motyw.mono_b(), r.position + Vector2(r.size.x * 0.5 - 5, r.size.y * 0.5 + 6), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Motyw.TEKST_CIEMNY)
 			continue

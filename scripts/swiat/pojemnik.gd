@@ -63,12 +63,28 @@ var _szuk_t := 0.0
 func lista_czesci() -> Array:
 	if czesci.is_empty() and siatka:
 		czesci = [{"nazwa": "", "siatka": siatka, "odkryte": odkryte, "zdejmowane": false}]
+	for c in czesci:
+		if not c.has("znane"):
+			# znane przedmioty (zbiór): wyjęcie jednego nie odsłania następnego bez szukania
+			var zn := {}
+			var items: Array = (c["siatka"] as Siatka).items
+			for i in mini(int(c.get("odkryte", 0)), items.size()):
+				zn[items[i]["p"]] = true
+			c["znane"] = zn
 	return czesci
+
+
+func _nieznany(c: Dictionary) -> Przedmiot:
+	var zn: Dictionary = c["znane"]
+	for e in (c["siatka"] as Siatka).items:
+		if not zn.has(e["p"]):
+			return e["p"]
+	return null
 
 
 func przeszukany() -> bool:
 	for c in lista_czesci():
-		if int(c["odkryte"]) < (c["siatka"] as Siatka).items.size():
+		if _nieznany(c) != null:
 			return false
 	return true
 
@@ -82,7 +98,7 @@ func pusty() -> bool:
 
 func zaczety() -> bool:
 	for c in lista_czesci():
-		if int(c["odkryte"]) > 0:
+		if not (c["znane"] as Dictionary).is_empty():
 			return true
 	return odkryte > 0
 
@@ -91,7 +107,7 @@ func zaczety() -> bool:
 func czesc_szukana() -> int:
 	var cz := lista_czesci()
 	for i in cz.size():
-		if int(cz[i]["odkryte"]) < (cz[i]["siatka"] as Siatka).items.size():
+		if _nieznany(cz[i]) != null:
 			return i
 	return -1
 
@@ -109,20 +125,28 @@ func szukaj(delta: float, swiatlo: float) -> int:
 	if i < 0:
 		return -1
 	var c: Dictionary = lista_czesci()[i]
-	var s: Siatka = c["siatka"]
-	var p: Przedmiot = s.items[int(c["odkryte"])]["p"]
+	var p := _nieznany(c)
 	_szuk_t += delta
 	if _szuk_t >= czas_szukania(p, swiatlo):
 		_szuk_t = 0.0
-		c["odkryte"] = int(c["odkryte"]) + 1
+		(c["znane"] as Dictionary)[p] = true
+		c["odkryte"] = (c["znane"] as Dictionary).size()
 		odkryte += 1
 		return i
 	return -1
 
 
+## Przedmiot włożony przez gracza – wiadomo, co to.
+func poznaj(p: Przedmiot) -> void:
+	for c in lista_czesci():
+		if (c["siatka"] as Siatka).zawiera(p):
+			(c["znane"] as Dictionary)[p] = true
+
+
 func odkryj_wszystko() -> void:
 	for c in lista_czesci():
-		c["odkryte"] = (c["siatka"] as Siatka).items.size()
+		for e in (c["siatka"] as Siatka).items:
+			(c["znane"] as Dictionary)[e["p"]] = true
 
 
 ## Zamknięta na kłódkę skrzynia / szafka: klucz otwiera od razu, narzędziem (kombinerki, klucz nastawny)

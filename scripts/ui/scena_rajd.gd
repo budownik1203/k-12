@@ -574,6 +574,148 @@ func _zrzut_posterunku(katalog: String) -> void:
 var _wrog_testowy = null
 
 
+## Spójność siatki: przedmioty bez nakładania i w dostępnych polach.
+func _siatka_ok(sg: Siatka) -> bool:
+	var zajete := {}
+	for e in sg.items:
+		var p: Przedmiot = e["p"]
+		for y in p.wys():
+			for x in p.szer():
+				var k := Vector2i(int(e["x"]) + x, int(e["y"]) + y)
+				if zajete.has(k) or not sg.dostepna(k.x, k.y):
+					return false
+				zajete[k] = true
+	return true
+
+
+func _wszystkie_przedmioty(pj: Pojemnik) -> Array:
+	var out: Array = Gra.ekw.wszystkie()
+	if pj:
+		for c in pj.lista_czesci():
+			out.append_array((c["siatka"] as Siatka).items.map(func(e): return e["p"]))
+	for n in swiat.get_children():
+		if n is LupNaZiemi and not n.is_queued_for_deletion():
+			out.append(n.przedmiot)
+	return out
+
+
+func _test_mechanik() -> void:
+	var bledy := 0
+	var ek := Gra.ekw
+	gracz.sterowanie = false
+	# A: kolejka przenoszenia przerwana zamknięciem – nic nie znika ani się nie dubluje
+	var pj := Pojemnik.new()
+	pj.nazwa = "Szafa testowa"
+	pj.siatka = Siatka.new(5, 4)
+	for pid in ["konserwa", "zegarek", "bandaz", "kompas"]:
+		pj.siatka.dodaj(Przedmiot.nowy(pid))
+	swiat.add_child(pj)
+	pj.global_position = gracz.global_position - gracz.global_basis.z * 1.0
+	ek.sloty["plecak"] = null
+	var przed := _wszystkie_przedmioty(pj).size()
+	ekran_ekw.otworz(pj)
+	await _klatki(3)
+	pj.odkryj_wszystko()
+	for e in pj.siatka.items.duplicate():
+		ekran_ekw._szybkie_przeniesienie(e["p"], {"typ": "siatka", "siatka": pj.siatka})
+	await get_tree().create_timer(1.6).timeout
+	ekran_ekw.zamknij()
+	await _klatki(5)
+	var po := _wszystkie_przedmioty(pj)
+	var unik := {}
+	for x in po:
+		unik[x] = true
+	var ok := po.size() == przed and unik.size() == po.size()
+	print("A kolejka przerwana: przed %d po %d unikalne %d %s" % [przed, po.size(), unik.size(), "OK" if ok else "BLAD"])
+	bledy += 0 if ok else 1
+	# B: trafienie w trakcie przekładania – przedmiot na ziemi
+	ekran_ekw.otworz(pj)
+	await _klatki(3)
+	var zost: Array = pj.siatka.items.map(func(e): return e["p"])
+	if not zost.is_empty():
+		var p0: Przedmiot = zost[0]
+		ekran_ekw._szybkie_przeniesienie(p0, {"typ": "siatka", "siatka": pj.siatka})
+		await get_tree().create_timer(0.6).timeout
+		gracz.trafiony(gracz.global_position + Vector3.UP * 0.3, 1.0, 0.0, null)
+		await _klatki(5)
+		var na_ziemi := swiat.get_children().any(func(n): return n is LupNaZiemi and n.przedmiot == p0)
+		ok = na_ziemi and not pj.siatka.zawiera(p0) and not ekran_ekw.otwarty
+		print("B trafienie w trakcie: na ziemi %s %s" % [na_ziemi, "OK" if ok else "BLAD"])
+		bledy += 0 if ok else 1
+	# C: rosnący stos nie nachodzi na sąsiada
+	ek.ograniczony = true
+	var kk := ek.kieszenie
+	for e in kk.items.duplicate():
+		kk.usun(e["p"])
+	var g9 := Przedmiot.nowy("a_762", 9)
+	kk.poloz(g9, 0, 0, false)
+	kk.poloz(Przedmiot.nowy("kompas"), 0, 1, false)
+	ek.dodaj(Przedmiot.nowy("a_762", 5))
+	ok = _siatka_ok(kk)
+	print("C stos w kieszeni: %s" % ("OK" if ok else "BLAD (nakładanie)"))
+	bledy += 0 if ok else 1
+	for sg in ek.siatki():
+		if not _siatka_ok(sg):
+			print("C siatka nieprawidłowa: ", sg)
+			bledy += 1
+	# D: wyrzucenie przy ścianie – nie za ścianę
+	var space := gracz.get_world_3d().direct_space_state
+	var przod := -gracz.global_basis.z
+	var hh := {}
+	for obr in 8:
+		gracz.rotation.y += PI / 4.0
+		await _klatki(1)
+		przod = -gracz.global_basis.z
+		var qq := PhysicsRayQueryParameters3D.create(gracz.global_position + Vector3.UP * 0.3, gracz.global_position + Vector3.UP * 0.3 + przod * 6.0, Balistyka.WARSTWA_SWIAT)
+		qq.exclude = [gracz.get_rid()]
+		hh = space.intersect_ray(qq)
+		if not hh.is_empty():
+			break
+	if not hh.is_empty():
+		var sciana: Vector3 = hh["position"]
+		gracz.global_position = sciana - przod * 0.35 - Vector3.UP * 0.3
+		await _klatki(3)
+		var q2 := PhysicsRayQueryParameters3D.create(gracz.global_position + Vector3.UP * 0.3, gracz.global_position + Vector3.UP * 0.3 + przod * 6.0, Balistyka.WARSTWA_SWIAT)
+		q2.exclude = [gracz.get_rid()]
+		var h2 := space.intersect_ray(q2)
+		var d_sc: float = (h2["position"] - (gracz.global_position + Vector3.UP * 0.3)).length() if not h2.is_empty() else 9.0
+		var l := gracz.upusc(Przedmiot.nowy("konserwa"))
+		await get_tree().create_timer(1.0).timeout
+		var d_l := Vector2(l.global_position.x - gracz.global_position.x, l.global_position.z - gracz.global_position.z).dot(Vector2(przod.x, przod.z))
+		ok = d_l < d_sc
+		print("D wyrzucenie przy ścianie: %.2f m przed graczem (ściana %.2f) %s" % [d_l, d_sc, "OK" if ok else "BLAD"])
+		bledy += 0 if ok else 1
+	# E: kłódka – wyłamanie
+	var pk := Pojemnik.new()
+	pk.nazwa = "Skrzynia"
+	pk.siatka = Siatka.new(3, 2)
+	pk.zamkniety_kluczem = "klodka"
+	swiat.add_child(pk)
+	pk.global_position = gracz.global_position
+	pk.interakcja(gracz)
+	while not gracz.akcja.is_empty():
+		await get_tree().process_frame
+	ok = pk.zamkniety_kluczem == ""
+	print("E kłódka wyłamana: %s" % ("OK" if ok else "BLAD"))
+	bledy += 0 if ok else 1
+	# F: wyjęcie znalezionego przedmiotu nie odsłania kolejnego
+	var pf := Pojemnik.new()
+	pf.nazwa = "Szuflada"
+	pf.siatka = Siatka.new(4, 2)
+	for pid in ["zegarek", "kompas", "bandaz"]:
+		pf.siatka.dodaj(Przedmiot.nowy(pid))
+	swiat.add_child(pf)
+	pf.szukaj(10.0, 1.0)
+	var pierwszy: Przedmiot = pf.siatka.items[0]["p"]
+	var znany: bool = pf.lista_czesci()[0]["znane"].has(pierwszy)
+	pf.siatka.usun(pierwszy)
+	var drugi: Przedmiot = pf.siatka.items[0]["p"]
+	ok = znany and not pf.lista_czesci()[0]["znane"].has(drugi) and not pf.przeszukany()
+	print("F szukanie po wyjęciu: %s" % ("OK" if ok else "BLAD"))
+	bledy += 0 if ok else 1
+	print("TEST MECHANIK: błędów %d" % bledy)
+
+
 func _zrzut_vm(katalog: String) -> void:
 	DirAccess.make_dir_recursive_absolute(katalog)
 	for w in get_tree().get_nodes_in_group("wrogowie"):
@@ -773,6 +915,9 @@ func _zrzut_animacji(katalog: String) -> void:
 				print("%s kieszenie: %s" % [pid, (ekran_ekw._kieszenie[slot] as Array).map(func(e): return "%s=%s" % [e["nazwa"], e["otwarta"]])])
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
+		return
+	if OS.get_cmdline_user_args().has("--mechaniki"):
+		await _test_mechanik()
 		return
 	if OS.get_cmdline_user_args().has("--szaber"):
 		var w0 = _wrog_testowy

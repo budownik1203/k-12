@@ -674,7 +674,7 @@ func _przebuduj() -> void:
 				_odswiez())
 			_sortuj_btn(bs)
 		if _pojemnik != null:
-			_prawa_ui.widoczne = _pojemnik.odkryte
+			_prawa_ui.znane = _pojemnik.lista_czesci()[0]["znane"]
 		if _warstwa and _pojemnik != null:
 			# rajd: kafelki we wnętrzu otwartego mebla / przy zwłokach, bez okna; zwłoki – części po kolei
 			_ramka_poj = PanelContainer.new()
@@ -693,7 +693,7 @@ func _przebuduj() -> void:
 			for i in cz_l.size():
 				var c: Dictionary = cz_l[i]
 				var gui: SiatkaUI = _prawa_ui if i == 0 and c["siatka"] == _prawa_siatka else _siatka_ui(c["siatka"], "prawy")
-				gui.widoczne = int(c["odkryte"])
+				gui.znane = c["znane"]
 				var bl := VBoxContainer.new()
 				bl.add_theme_constant_override("separation", 2)
 				if String(c["nazwa"]) != "":
@@ -984,11 +984,9 @@ func _process(delta: float) -> void:
 		if i_cz >= 0:
 			for el in _prawe_ui:
 				if int(el[1]) == i_cz and is_instance_valid(el[0]):
-					(el[0] as SiatkaUI).widoczne = int(_pojemnik.lista_czesci()[i_cz]["odkryte"])
 					(el[0] as SiatkaUI).ciemno = swiatlo < 0.35
 					(el[0] as SiatkaUI).queue_redraw()
 			if _prawe_ui.is_empty():
-				_prawa_ui.widoczne = _pojemnik.odkryte
 				_prawa_ui.queue_redraw()
 			Dzwiek.graj("szukanie", -12.0, randf_range(0.9, 1.15))
 			if gracz:
@@ -998,7 +996,7 @@ func _process(delta: float) -> void:
 			return
 	elif _pojemnik != null and _prawa_ui and tryb_bazy:
 		_pojemnik.odkryj_wszystko()
-		_prawa_ui.widoczne = -1
+		_prawa_ui.queue_redraw()
 	# postęp akcji gracza: kółko przy kursorze
 	_kolko.ustaw_z_gracza(gracz)
 	_kolko.position = _root.get_local_mouse_position() + Vector2(-34, -34)
@@ -1427,6 +1425,8 @@ func _upusc_drag(anuluj: bool) -> void:
 				if _w_zrodle(p, zr2) and sg.moze(p, kom.x, kom.y, rot, p):
 					_usun_ze_zrodla(p, zr2)
 					sg.poloz(p, kom.x, kom.y, rot)
+					if _pojemnik and is_instance_valid(_pojemnik):
+						_pojemnik.poznaj(p)
 					if not _w_swiecie():
 						Dzwiek.graj("odloz", -10.0)
 				_po_zmianie())
@@ -1766,13 +1766,24 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 		else:
 			Dzwiek.graj("podnies", -8.0)
 	elif _prawa_siatka != null:
-		var m := _prawa_siatka.wolne_miejsce(p)
-		if m.is_empty():
-			_komunikat("Brak miejsca: " + _prawy_tytul.text.to_lower())
+		# do mebla / zwłok: pierwsza część z miejscem (kieszenie kurtki, spodni, chlebak – nie „na ciele”)
+		var cele := [_prawa_siatka]
+		if _pojemnik != null and is_instance_valid(_pojemnik):
+			cele = _pojemnik.lista_czesci().filter(func(c): return not c.get("zdejmowane", false)).map(func(c): return c["siatka"])
+		for sg in cele:
+			var m := (sg as Siatka).wolne_miejsce(p)
+			if m.is_empty():
+				continue
+			_usun_ze_zrodla(p, z)
+			(sg as Siatka).poloz(p, m["x"], m["y"], m["rot"])
+			if _pojemnik and is_instance_valid(_pojemnik):
+				_pojemnik.poznaj(p)
+			if not _w_swiecie():
+				Dzwiek.graj("odloz", -8.0)
+			_po_zmianie()
 			return
-		_usun_ze_zrodla(p, z)
-		_prawa_siatka.poloz(p, m["x"], m["y"], m["rot"])
-		Dzwiek.graj("odloz", -8.0)
+		_komunikat("Brak miejsca: " + (_pojemnik.nazwa if _pojemnik else _prawy_tytul.text).to_lower())
+		return
 	_po_zmianie()
 
 
