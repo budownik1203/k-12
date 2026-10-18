@@ -26,6 +26,12 @@ func _ready() -> void:
 	gen = GeneratorBiomu.new()
 	info = gen.generuj(Gra.ziarno_rajdu, swiat)
 	await _nawigacja_ze_sprawdzeniem()
+	# duża mapa: geometria dalej niż ~45 m nie jest rysowana (i tak ginie w mgle)
+	for mi in swiat.find_children("*", "GeometryInstance3D", true, false):
+		var gi := mi as GeometryInstance3D
+		if gi.get_aabb().size.length() < 40.0:
+			gi.visibility_range_end = 46.0
+			gi.visibility_range_end_margin = 4.0
 	gracz = Gracz.new()
 	swiat.add_child(gracz)
 	gracz.global_position = info["start"]
@@ -118,10 +124,24 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 		region.queue_free()
 
 
+var _cull_t := 0.0
+var _start_ms := 0
+
+
 func _process(delta: float) -> void:
 	if koniec or gracz == null:
 		return
+	if _start_ms == 0:
+		_start_ms = Time.get_ticks_msec()
 	czas += delta
+	# duża mapa: lampy daleko od gracza gasną w renderze (oszczędność), zostają dla logiki AI
+	_cull_t -= delta
+	if _cull_t <= 0.0:
+		_cull_t = 0.3
+		var gp := gracz.global_position
+		for l in info["lampy"]:
+			if is_instance_valid(l):
+				(l as Light3D).visible = (l as Node3D).global_position.distance_squared_to(gp) < 34.0 * 34.0
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).rajd_czas = czas
 	if _tryb_testu == "test" and czas > 1.0 and czas - delta <= 1.0:
@@ -212,7 +232,7 @@ func _process(delta: float) -> void:
 				stany[klucz] = stany.get(klucz, 0) + 1
 			print("SLUCH: ", stany)
 	if _tryb_testu == "test" and czas > 8.0:
-		print("TEST RAJDU OK: czas %.1f s, pomieszczeń %d, wrogów %d" % [czas, info["komorki"].size(), get_tree().get_nodes_in_group("wrogowie").size()])
+		print("TEST RAJDU OK: czas %.1f s, pomieszczeń %d, wrogów %d, fps %d, start %d ms" % [czas, info["komorki"].size(), get_tree().get_nodes_in_group("wrogowie").size(), Engine.get_frames_per_second(), _start_ms])
 		get_tree().quit()
 
 

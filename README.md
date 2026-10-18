@@ -29,7 +29,8 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
-| Tab | panel operatora; „Otwórz” przy kamizelce, plecaku, kieszeniach i kontenerze wyświetla pojemnik na środku (kilka naraz); w sklepie Tab zamyka |
+| Tab | panel operatora; „Otwórz” przy plecaku/kontenerze: postać zdejmuje go i rozkłada przed sobą (sloty we wnętrzu); w sklepie Tab zamyka |
+| Tab, Tab | szybkie zerknięcie na kamizelkę (ładownice pod ręką) |
 | G | napełnij magazynki z amunicji luzem |
 | L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz; z latarką taktyczną na broni włącza ją |
 | O | lista wyjść z kierunkiem i odległością |
@@ -54,7 +55,7 @@ Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w
 1. **Baza** (schron, chodzony w pierwszej osobie): Zbrojmistrz, Medyk i Pośrednik, skrytka w szafkach,
    leczenie, ubezpieczenie, darmowy zestaw startowy, gdy nie masz broni.
 2. **Rajd**: losowa sieć szerokich korytarzy z pomieszczeniami bloku oddzielonymi grubym murem (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
-   szabrownicy i najemnicy z taktycznym AI, zdziczałe psy, łup w szafkach i na zwłokach.
+   szabrownicy i najemnicy z taktycznym AI, pełzacze (mutanty chodzące po ścianach), łup w szafkach i na zwłokach.
 3. **Wyjścia**: brama (zawsze), piwnica nr 7 (na klucz z rajdu), okno na rusztowanie (tylko w oknie czasowym).
 4. **Raport urzędowy**: przeżycie albo zgon, z komunikatem zależnym od przyczyny i dopiskami z przebiegu rajdu.
 

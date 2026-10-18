@@ -13,8 +13,8 @@ const DRZWI_W := 1.2
 const DRZWI_H := 2.1
 const KW := 3.2          # szerokość korytarza
 const MARGINES := 0.35   # minimalny odstęp pomieszczenia od granicy komórki
-const GW := 6
-const GH := 5
+const GW := 11   # ok. 100 x 72 m: rajd na 25–40 minut zwiadu (skala jak mapa w Tarkovie, ale jedno piętro)
+const GH := 8
 
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const ROT := {Vector2i(0, -1): 0.0, Vector2i(0, 1): PI, Vector2i(-1, 0): PI / 2.0, Vector2i(1, 0): -PI / 2.0}
@@ -141,7 +141,7 @@ func _uklad() -> void:
 	var sy := rng.randi_range(1, GH - 2)
 	var start := Vector2i(0, sy)
 	_nowa(start, "klatka")
-	var lacznie := rng.randi_range(17, 22)
+	var lacznie := rng.randi_range(52, 64)
 	var udzial := rng.randf_range(0.3, 0.5)
 	var cel_kor := int(round(lacznie * udzial))
 	var k0 := Vector2i(1, sy)
@@ -176,7 +176,7 @@ func _uklad() -> void:
 		kor.append(n)
 		ostatni = n
 		kier = d
-	var cel_pok := maxi(9, lacznie - kor.size())
+	var cel_pok := maxi(26, lacznie - kor.size())
 	var pokoje: Array = []
 	var kand: Array = []
 	for c in kor:
@@ -1049,7 +1049,7 @@ func _zaplanuj_posterunki() -> void:
 		z_wyjsciem[p[0]] = true
 	var kand := komorki.keys().filter(func(k): return komorki[k]["typ"] in ["magazyn", "administracja", "warsztat", "piwnica", "pokoj"] and komorki[k]["glebokosc"] >= 2 and not z_wyjsciem.has(k) and minf((komorki[k]["rect"] as Rect2).size.x, (komorki[k]["rect"] as Rect2).size.y) >= 6.6)
 	_tasuj(kand)
-	var ile := rng.randi_range(1, 2)
+	var ile := rng.randi_range(2, 4)
 	for k in kand.slice(0, ile):
 		_plan_posterunkow[k] = true
 
@@ -1399,8 +1399,8 @@ func _wyjscia() -> void:
 		ew.nazwa = "Okno na rusztowanie"
 		ew.typ = "czasowe"
 		ew.czas_odliczania = 6.0
-		ew.okno_od = rng.randf_range(240.0, 540.0)
-		ew.okno_do = ew.okno_od + 150.0
+		ew.okno_od = rng.randf_range(600.0, 1500.0)
+		ew.okno_do = ew.okno_od + 300.0
 		var d: Vector2i = o[1]
 		_strefa(ew, (o[2] as Vector3) - Vector3(d.x, 0, d.y) * 0.9, Vector3(2.2, 2.0, 2.2))
 		wyjscia.append(ew)

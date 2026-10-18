@@ -73,16 +73,19 @@ func rozstaw(r: Node) -> void:
 		po_komorce[k].append(s)
 	var komorki := po_komorce.keys()
 	komorki.shuffle()
-	var liczba := clampi(int(r.info["komorki"].size() / 7.0), 2, 3)
+	var liczba := clampi(int(r.info["komorki"].size() / 9.0), 3, 7)
 	# wojskowi na posterunkach z worków: siedzą w gnieździe i trzymają wejście
 	for i in r.info.get("posterunki", []).size():
 		_posterunek(r.info["posterunki"][i], i)
 	var najemnicy := rng.randf() < 0.55
 	komorki.sort_custom(func(a, b): return po_komorce[a][0]["glebokosc"] > po_komorce[b][0]["glebokosc"])
 	var i := 0
+	var start_pos: Vector3 = r.info.get("start", Vector3.ZERO)
 	for k in komorki:
 		if i >= liczba:
 			break
+		if (po_komorce[k][0]["pos"] as Vector3).distance_to(start_pos) < 25.0:
+			continue
 		var frak := "najemnik" if (najemnicy and i == 0) else "szabrownik"
 		var ile := rng.randi_range(2, 3) if frak == "szabrownik" else 2
 		_oddzial(frak, po_komorce[k], ile, i)
@@ -90,7 +93,7 @@ func rozstaw(r: Node) -> void:
 	# fauna: watahy psów w piwnicach i magazynach
 	var stada := 0
 	for k in komorki:
-		if stada >= 2:
+		if stada >= 3:
 			break
 		if r.info["komorki"][k]["typ"] in ["piwnica", "magazyn"] and rng.randf() < 0.7:
 			_stado(po_komorce[k][0]["pos"], rng.randi_range(1, 2))
@@ -198,7 +201,7 @@ func _stado(pos: Vector3, ile: int) -> void:
 ## Nowa grupa (szabrownicy albo fauna) z dala od gracza.
 func _fala() -> void:
 	var g: Node3D = rajd.gracz
-	var kandydaci: Array = rajd.info["spawny"].filter(func(s): return s["pos"].distance_to(g.global_position) > 18.0)
+	var kandydaci: Array = rajd.info["spawny"].filter(func(s): return s["pos"].distance_to(g.global_position) > 35.0)
 	if kandydaci.is_empty():
 		return
 	var s: Dictionary = kandydaci[rng.randi() % kandydaci.size()]
