@@ -241,9 +241,27 @@ func patrz_na(punkt: Vector3, czas: float, przysiad := 0.0) -> void:
 	_ekw_tw.tween_property(self, "ekw_roll", 0.0, czas)
 
 
+## Przy upadku z wysokości albo ogłuszeniu coś drobnego może wypaść z kieszeni spodni (bez klapek).
+func wypadnij_z_kieszeni(szansa: float) -> void:
+	if tryb_bazy or randf() > szansa or ekw.kieszenie.items.is_empty():
+		return
+	var kand := ekw.kieszenie.items.filter(func(e): return (e["p"] as Przedmiot).szer() * (e["p"] as Przedmiot).wys() <= 1 and not (e["p"] as Przedmiot).dane.get("oznaczony", false))
+	if kand.is_empty():
+		return
+	var p: Przedmiot = kand.pick_random()["p"]
+	ekw.kieszenie.usun(p)
+	ekw.zmieniony.emit()
+	var l := upusc(p)
+	komunikat.emit("Coś wypadło ci z kieszeni: " + p.nazwa())
+	if l:
+		l.rzut_z = global_position + Vector3.UP * 0.9
+
+
 ## Ogłuszenie (trafienie w hełm): biały błysk, pisk w uszach, przytłumiony dźwięk, drżenie i spowolnienie.
 func ogluszenie(sila: float, tekst: String) -> void:
 	oglusz = maxf(oglusz, 1.0 + sila * 3.0)
+	if sila > 0.6:
+		wypadnij_z_kieszeni(0.25)
 	_odrzut_cel += Vector2(randf_range(-3.0, 3.0), randf_range(2.0, 5.0)) * sila
 	_trafienie_shake = maxf(_trafienie_shake, sila * 1.5)
 	if sila > 0.4:
@@ -441,6 +459,8 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			_w_powietrzu = false
 			var wys := _y_spadania - global_position.y
 			cialo.upadek(wys)
+			if wys > 2.2:
+				wypadnij_z_kieszeni(0.45)
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.graj_3d("krok", global_position, get_parent(), 0.0, 0.8)
 		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
@@ -552,10 +572,20 @@ func uzyj_leku(med: Przedmiot, szybki := true, czesc := "") -> void:
 		komunikat.emit("Nie ma czego leczyć" + ((" (" + Cialo.NAZWY[czesc].to_lower() + ")") if czesc != "" else ""))
 		return
 	var czas := float(md["czas"]) * (1.0 if szybki else 1.5)
+	var przet: bool = med.dane.get("przeterminowany", false)
+	if przet:
+		czas *= 1.4     # zbrylony proszek, sklejony opatrunek – idzie opornie
 	Dzwiek.graj("leczenie", -6.0)
 	Gra.emituj_halas(global_position, 4.0, self)
 	var nazwa: String = med.nazwa() + ((" → " + Cialo.NAZWY[czesc].to_lower()) if czesc != "" else "")
 	zacznij_akcje(nazwa, czas, func():
+		if przet and efekt in ["krwawienie_lekkie", "bol"] and randf() < 0.3:
+			med.dane["uzycia"] -= 1
+			if med.dane["uzycia"] <= 0:
+				ekw.usun_przedmiot(med)
+			ekw.zmieniony.emit()
+			komunikat.emit("Przeterminowany – nie zadziałał")
+			return
 		var opis := cialo.lecz(efekt, md, med, czesc)
 		if efekt in ["krwawienie_lekkie", "krwawienie_ciezkie", "zlamanie"] and opis != "":
 			med.dane["uzycia"] -= 1

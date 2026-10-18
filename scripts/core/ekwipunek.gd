@@ -224,7 +224,7 @@ func brzek() -> float:
 			continue
 		for e in (s as Siatka).items:
 			var p: Przedmiot = e["p"]
-			if p.typ() in METAL_LUZEM or p.id in METAL_LUP:
+			if (p.typ() in METAL_LUZEM or p.id in METAL_LUP) and not p.dane.get("wyciszony", false):
 				b += 0.55 if p.typ() == "amunicja" and p.ilosc <= 12 else 0.35
 	_brzek = minf(6.0, b)
 	return _brzek

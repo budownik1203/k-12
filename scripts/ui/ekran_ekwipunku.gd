@@ -657,10 +657,22 @@ func _przebuduj() -> void:
 		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_srodek.add_child(l2)
 	# prawy: przeszukiwany pojemnik / skrytka
+	if _btn_sort and is_instance_valid(_btn_sort):
+		_btn_sort.queue_free()
+		_btn_sort = null
 	if _prawa_siatka != null:
 		var naz := ("Skrytka · stół roboczy (montaż dodatków)" if _warsztat else "Skrytka") if _pojemnik == null else _pojemnik.nazwa
 		_prawy_tytul.text = naz.to_upper()
 		_prawa_ui = _siatka_ui(_prawa_siatka, "prawy")
+		if tryb_bazy and _pojemnik == null:
+			var bs := Button.new()
+			bs.text = "Sortuj skrytkę"
+			bs.add_theme_font_size_override("font_size", 12)
+			bs.pressed.connect(func():
+				if not _prawa_siatka.sortuj():
+					_komunikat("Nie da się ułożyć – za ciasno")
+				_odswiez())
+			_sortuj_btn(bs)
 		if _pojemnik != null:
 			_prawa_ui.widoczne = _pojemnik.odkryte
 		if _warstwa and _pojemnik != null:
@@ -1212,6 +1224,17 @@ func _zdejmij_z_ciala(p: Przedmiot, s: Siatka) -> void:
 	gracz.zacznij_akcje("Zdejmowanie: " + p.nazwa(), czas, koniec, "zdejmowanie")
 
 
+var _btn_sort: Button = null
+
+
+func _sortuj_btn(b: Button) -> void:
+	if _btn_sort and is_instance_valid(_btn_sort):
+		_btn_sort.queue_free()
+	_btn_sort = b
+	_prawy.add_child(b)
+	_prawy.move_child(b, 1)
+
+
 func _napis_swiat(t: String, rozm: int, k: Color, gruby: bool) -> Label:
 	var l := Motyw.etykieta(t, rozm, k, Motyw.mono_b() if gruby else Motyw.cond())
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
@@ -1649,6 +1672,42 @@ func _wyrzuc_reka(p: Przedmiot, z: Dictionary) -> void:
 		_po_zmianie())
 
 
+## Narzędzie pod ręką (a w schronie także w skrytce).
+func _znajdz_narzedzie(pid: String) -> Przedmiot:
+	var zr: Array = ekw.siatki_pod_reka()
+	if tryb_bazy:
+		zr.append(Gra.skrytka)
+	for s2 in zr:
+		for e in (s2 as Siatka).items:
+			if (e["p"] as Przedmiot).id == pid:
+				return e["p"]
+	return null
+
+
+## Czynność z narzędziem (czyszczenie broni, owijanie taśmą): zużywa jedno użycie, trwa, z animacją.
+func _uzyj_narzedzia(p: Przedmiot, pid: String, czas: float, nazwa: String, efekt: Callable) -> void:
+	var n := _znajdz_narzedzie(pid)
+	if n == null:
+		_komunikat("Brak: " + Dane.nazwa(pid).to_lower())
+		return
+	var zuzyj := func():
+		var u := int(n.dane.get("uzycia", int(n.defn().get("uzycia", 1)))) - 1
+		n.dane["uzycia"] = u
+		if u <= 0:
+			if not ekw.usun_przedmiot(n) and tryb_bazy:
+				Gra.skrytka.usun(n)
+			_komunikat(n.nazwa() + " – zużyte")
+		efekt.call()
+		ekw.zmieniony.emit()
+		_odswiez()
+	if tryb_bazy or gracz == null:
+		zuzyj.call()
+		return
+	if not gracz.akcja.is_empty() or _zajete():
+		return
+	gracz.zacznij_akcje(nazwa + ": " + p.nazwa(), czas, zuzyj, "ogladaj", 0, Callable(), {"id": p.id})
+
+
 ## Obejrzenie nieznanego przedmiotu: dłoń obraca go przed oczami (trwa), po ciemku się nie da.
 func _obejrzyj(p: Przedmiot) -> void:
 	if not p.nieznany():
@@ -1719,7 +1778,7 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ, M_CZYSC, M_TASMA }
 const M_DOD := 100
 
 
@@ -1743,6 +1802,10 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 	if t == "magazynek" and not bool(p.dane.get("sprawdzony", true)):
 		_menu.add_item("Przelicz naboje", M_SPRAWDZ)
 	_menu.add_item("Odznacz ★" if p.dane.get("oznaczony", false) else "Oznacz ★", M_OZNACZ)
+	if t == "bron" and float(p.dane.get("stan", 100.0)) < 99.0:
+		_menu.add_item("Wyczyść (zestaw)" if _znajdz_narzedzie("zestaw_czyszczacy") != null else "Wyczyść (brak zestawu)", M_CZYSC)
+	if (t in Ekwipunek.METAL_LUZEM or p.id in Ekwipunek.METAL_LUP) and not p.dane.get("wyciszony", false) and t != "bron":
+		_menu.add_item("Owiń taśmą" if _znajdz_narzedzie("tasma") != null else "Owiń taśmą (brak taśmy)", M_TASMA)
 	if t == "bron" and gracz:
 		_menu.add_item("Oglądaj / dodatki", M_OGLADAJ)
 	if t == "bron":
@@ -1825,6 +1888,18 @@ func _menu_akcja(id: int) -> void:
 			return
 		M_OBEJRZYJ:
 			_obejrzyj(p)
+			return
+		M_CZYSC:
+			_uzyj_narzedzia(p, "zestaw_czyszczacy", 6.0, "Czyszczenie", func():
+				p.dane["stan"] = minf(100.0, float(p.dane.get("stan", 100.0)) + 45.0)
+				p.dane["zaciecie"] = false
+				_komunikat("Broń wyczyszczona: %d%%" % int(p.dane["stan"])))
+			return
+		M_TASMA:
+			_uzyj_narzedzia(p, "tasma", 2.0, "Owijanie taśmą", func():
+				p.dane["wyciszony"] = true
+				ekw._brzek = -1.0
+				_komunikat("Owinięte taśmą – nie będzie brzęczeć"))
 			return
 		M_OZNACZ:
 			if p.dane.get("oznaczony", false):
@@ -2091,6 +2166,13 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 	var typy := {"bron": "Broń", "magazynek": "Magazynek", "amunicja": "Amunicja", "med": "Środek medyczny",
 		"pojemnik": "Pojemnik", "pancerz": "Ochrona", "lup": "Łup", "klucz": "Klucz", "latarka": "Wyposażenie"}
 	t += "[color=#8c8670]%s · %.2f kg · %d bonów[/color]\n" % [typy.get(d.get("typ", ""), ""), p.waga(), p.wartosc()]
+	if p.typ() == "bron":
+		var st := float(p.dane.get("stan", 100.0))
+		t += "[color=%s]Stan: %d%%%s[/color]\n" % ["#8c8670" if st > 60 else "#d9a35a", int(st), "" if st > 60 else (" – brudna, zacina się częściej" if st > 25 else " – zapuszczona, wyczyść ją")]
+	if p.dane.get("przeterminowany", false):
+		t += "[color=#d9a35a]Przeterminowany (data ważności: %d) – działa opornie, czasem wcale[/color]\n" % int(p.dane.get("rok", 1979))
+	if p.dane.get("wyciszony", false):
+		t += "[color=#8c8670]Owinięty taśmą – nie brzęczy[/color]\n"
 	match d.get("typ", ""):
 		"bron":
 			var b: Dictionary = d["bron"]

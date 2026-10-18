@@ -163,6 +163,34 @@ func dodaj(p: Przedmiot) -> bool:
 	return true
 
 
+## Ułożenie od nowa: broń, magazynki, amunicja, leki, reszta; większe najpierw. Gdy się nie zmieści – bez zmian.
+func sortuj() -> bool:
+	var stare := items.duplicate()
+	var kol := {"bron": 0, "pojemnik": 1, "pancerz": 2, "magazynek": 3, "amunicja": 4, "med": 5, "dodatek": 6}
+	var lista := items.map(func(e): return e["p"])
+	lista.sort_custom(func(a, b):
+		var ka: int = kol.get((a as Przedmiot).typ(), 9)
+		var kb: int = kol.get((b as Przedmiot).typ(), 9)
+		if ka != kb:
+			return ka < kb
+		var sa := (a as Przedmiot).szer() * (a as Przedmiot).wys()
+		var sb := (b as Przedmiot).szer() * (b as Przedmiot).wys()
+		if sa != sb:
+			return sa > sb
+		return (a as Przedmiot).id < (b as Przedmiot).id)
+	items.clear()
+	for p in lista:
+		var m := wolne_miejsce(p)
+		if m.is_empty():
+			items = stare
+			zmieniona.emit()
+			return false
+		(p as Przedmiot).obrot = m["rot"]
+		items.append({"p": p, "x": m["x"], "y": m["y"]})
+	zmieniona.emit()
+	return true
+
+
 func masa() -> float:
 	var s := 0.0
 	for e in items:

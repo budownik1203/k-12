@@ -14,6 +14,7 @@ func _ready() -> void:
 	collision_mask = 0
 	monitoring = false
 	set_meta("interakcja", self)
+	add_to_group("lup_swiat")
 	_model = ModelePrzedmiotow.wezel(przedmiot)
 	_model.rotation.y = randf() * TAU
 	add_child(_model)

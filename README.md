@@ -47,6 +47,9 @@ pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kie
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzie kolejka – dłoń przekłada po kolei),
 **Shift+LPM** dzieli stos na pół (w rajdzie każde przełożenie robi dłoń – trwa, a trafienie w trakcie wytrąca przedmiot), **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).
+PPM na broni: **Wyczyść** (zestaw do czyszczenia – brudna broń zacina się częściej); PPM na metalowym przedmiocie:
+**Owiń taśmą** (przestaje brzęczeć w biegu). Szabrownicy zbierają leżące rzeczy i okradają ciała – nie zostawiaj
+plecaka bez opieki.
 Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem kliknięciem otwierasz konkretne kieszenie
 (zamek, klamry, rzep, ściągacz – każda z animacją); **Załóż** zapina je i zakłada plecak. Kontener bezpieczny tak samo
 (**Wyjmij kontener**, potem zatrzaski i wieko).

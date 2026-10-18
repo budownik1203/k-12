@@ -44,6 +44,11 @@ func wypelnij(tabela: String, losowan: int, rng: RandomNumberGenerator) -> void:
 				p = Gra.nowy_naladowany(pid, am2[0])
 		if d["typ"] == "magazynek":
 			p.dane["sprawdzony"] = false
+		if d["typ"] == "med" and rng.randf() < 0.3:
+			p.dane["przeterminowany"] = true
+			p.dane["rok"] = rng.randi_range(1974, 1986)
+		if d["typ"] == "bron":
+			p.dane["stan"] = rng.randf_range(30.0, 85.0)
 		if d["typ"] == "lup" and rng.randf() < 0.75:
 			p.dane["nieznany"] = true     # trzeba obejrzeć, żeby wiedzieć, co to
 		siatka.dodaj(p)

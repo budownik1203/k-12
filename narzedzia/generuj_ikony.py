@@ -321,6 +321,18 @@ def draw(pid, d, W, H):
         d.rectangle([13, 3, 19, 7], fill=CZERWIEN)
         d.rectangle([9, 34, 23, 46], fill=BIEL)
         d.rectangle([11, 38, 21, 42], fill=CZERWIEN)
+    elif pid == "tasma":
+        d.ellipse([4, 4, 28, 28], fill=(40, 40, 44))
+        d.ellipse([7, 7, 25, 25], fill=(60, 60, 66))
+        d.ellipse([11, 11, 21, 21], fill=(150, 130, 90))
+        d.ellipse([13, 13, 19, 19], fill=(0, 0, 0, 0))
+        d.line([(24, 18), (30, 26)], fill=(40, 40, 44), width=3)
+    elif pid == "zestaw_czyszczacy":
+        shaded_rect(d, [4, 8, 36, 26], (80, 86, 60))
+        d.rectangle([8, 12, 32, 14], fill=MOSIADZ)
+        d.line([(38, 16), (60, 16)], fill=METAL_J, width=2)
+        shaded_rect(d, [52, 12, 60, 20], (150, 120, 70))
+        d.ellipse([40, 20, 50, 28], fill=(200, 180, 90))
     elif pid == "papierosy":
         shaded_rect(d, [7, 5, 25, 27], (200, 196, 170))
         d.rectangle([7, 12, 25, 18], fill=CZERWIEN)

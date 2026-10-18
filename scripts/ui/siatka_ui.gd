@@ -166,6 +166,18 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			ci.draw_texture_rect(tex, Rect2(r.get_center() - ts * 0.5, ts), false)
+	if p.typ() == "pancerz":
+		# wgniecenia i przetarcia proporcjonalne do zużycia
+		var mx := float(p.defn()["pancerz"]["wytrzymalosc"])
+		var ub := 1.0 - float(p.dane.get("wytrz", mx)) / maxf(1.0, mx)
+		var rr := RandomNumberGenerator.new()
+		rr.seed = hash(p)
+		for i in int(ub * 9.0):
+			var c := r.position + Vector2(rr.randf_range(6, r.size.x - 6), rr.randf_range(6, r.size.y - 6))
+			ci.draw_circle(c, rr.randf_range(1.5, 3.0), Color(0.05, 0.05, 0.05, 0.6))
+			ci.draw_line(c, c + Vector2(rr.randf_range(-4, 4), rr.randf_range(-4, 4)), Color(0.75, 0.72, 0.6, 0.5), 1.0)
+	if p.typ() == "bron" and float(p.dane.get("stan", 100.0)) < 60.0:
+		ci.draw_rect(Rect2(r.position + Vector2(3, r.size.y - 5), Vector2((r.size.x - 6) * float(p.dane.get("stan", 100.0)) / 100.0, 2)), Color(0.85, 0.55, 0.25, 0.85))
 	if p.dane.get("oznaczony", false):
 		ci.draw_string(Motyw.mono_b(), r.position + Vector2(r.size.x - 13, 13), "★", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.92, 0.78, 0.35))
 	if p.nieznany():

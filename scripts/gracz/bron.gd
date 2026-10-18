@@ -780,9 +780,12 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		_reka_p.ustaw_chwyt("strzal")
 		_spust_t = 0.07
 	_odskok = 1.0
-	# zacięcie: rzadkie, częstsze przy długich seriach (gorąca broń)
+	# zużycie: każdy strzał brudzi broń (nagar), tłumik szybciej
+	przedmiot.dane["stan"] = maxf(0.0, float(przedmiot.dane.get("stan", 100.0)) - (0.12 if _bez_plomienia else 0.08))
+	# zacięcie: rzadkie, częstsze przy długich seriach (gorąca broń) i w brudnej broni
 	if not bd.has("wewnetrzny") and przedmiot.dane.get("komora", "") != "":
-		var szansa := 0.0035 + bloom * 0.002
+		var stan_b := float(przedmiot.dane.get("stan", 100.0))
+		var szansa := (0.0035 + bloom * 0.002) * (1.0 + (100.0 - stan_b) / 35.0)
 		if randf() < szansa:
 			przedmiot.dane["zaciecie"] = true
 	if ads < 0.5:

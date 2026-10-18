@@ -577,6 +577,9 @@ var _wrog_testowy = null
 func _zrzut_vm(katalog: String) -> void:
 	DirAccess.make_dir_recursive_absolute(katalog)
 	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--szaber") and w.frakcja == "szabrownik" and w.posterunek.is_empty():
+			_wrog_testowy = w
+			continue
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--zwloki"):
 			_wrog_testowy = w
 			w.set_physics_process(false)
@@ -771,6 +774,27 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--szaber"):
+		var w0 = _wrog_testowy
+		if w0 == null:
+			print("SZABER: brak szabrownika")
+			return
+		# gracz daleko i niewidoczny: wróg nie walczy
+		gracz.global_position = w0.global_position + Vector3(0, 30, 0)
+		gracz.set_physics_process(false)
+		var l := LupNaZiemi.new()
+		l.przedmiot = Przedmiot.nowy("zegarek")
+		swiat.add_child(l)
+		var kier: Vector3 = -w0.global_basis.z
+		l.global_position = w0._najblizszy_na_siatce(w0.global_position + kier * 3.0) + Vector3.UP * 0.2
+		w0.stan = "patrol"
+		w0._szaber_skan = 0.0
+		var t0 := 0.0
+		while t0 < 40.0 and is_instance_valid(l):
+			await get_tree().create_timer(0.5).timeout
+			t0 += 0.5
+		print("SZABER: po %.0f s stan=%s, zegarek zabrany=%s, w łupie wroga: %s" % [t0, w0.stan, not is_instance_valid(l), w0.lup.any(func(x): return x.id == "zegarek")])
+		return
 	if OS.get_cmdline_user_args().has("--nowe"):
 		var ek := Gra.ekw
 		var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
@@ -818,6 +842,21 @@ func _zrzut_animacji(katalog: String) -> void:
 		ek.siatka_plecaka().dodaj(Przedmiot.nowy("klucz_nastawny"))
 		ek._brzek = -1.0
 		print("brzęk: %.2f" % ek.brzek())
+		# taśma: owinięcie konserwy
+		ek.kieszenie.dodaj(Przedmiot.nowy("tasma"))
+		var kons: Przedmiot = null
+		for e in ek.siatka_plecaka().items:
+			if (e["p"] as Przedmiot).id == "konserwa":
+				kons = e["p"]
+		ekran_ekw._uzyj_narzedzia(kons, "tasma", 2.0, "Owijanie taśmą", func(): kons.dane["wyciszony"] = true)
+		while not gracz.akcja.is_empty():
+			await get_tree().process_frame
+		ek._brzek = -1.0
+		print("brzęk po taśmie: %.2f, taśma użyć: %s" % [ek.brzek(), str(ekran_ekw._znajdz_narzedzie("tasma").dane.get("uzycia"))])
+		var sk := Siatka.new(6, 4)
+		for pid in ["konserwa", "kb47", "bandaz", "mag_kb47", "zegarek"]:
+			sk.dodaj(Przedmiot.nowy(pid))
+		print("sortowanie: ", sk.sortuj(), " pierwszy: ", sk.items[0]["p"].id)
 		return
 	if OS.get_cmdline_user_args().has("--reka"):
 		# przekładanie ręką: z kieszeni do rozłożonego plecaka (przeciągnięcie), potem trafienie w trakcie

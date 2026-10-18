@@ -601,6 +601,8 @@ func _physics_process(delta: float) -> void:
 			_szukanie(delta)
 		"ucieczka":
 			_ucieczka(delta)
+		"szaber":
+			_szaber(delta)
 	_ruch(delta)
 	_animuj(delta)
 
@@ -653,15 +655,93 @@ func alarm_od_oddzialu(pos: Vector3) -> void:
 		_decyzja_t = 0.0
 
 
+var _szaber_cel: Node3D = null
+var _szaber_t := 0.0
+var _szaber_skan := 0.0
+
+
 func _patrol(delta: float) -> void:
 	_kucanie_cel = 0.0
 	biegnie = false
+	# szabrownicy (i czasem najemnicy) wypatrują leżących rzeczy, ciał i porzuconych plecaków
+	_szaber_skan -= delta
+	if _szaber_skan <= 0.0:
+		_szaber_skan = randf_range(2.5, 4.0)
+		var chetny := frakcja == "szabrownik" or (frakcja == "najemnik" and cecha != "ostrozny")
+		if chetny:
+			var cel := _szukaj_lupu()
+			if cel:
+				_szaber_cel = cel
+				_szaber_cel.set_meta("szabrowany", self)
+				_szaber_t = randf_range(3.0, 5.0)
+				stan = "szaber"
+				_napis(["O, coś leży.", "Zobaczmy, co tu mamy.", "Moje!"].pick_random())
+				return
 	_patrol_t -= delta
 	if _patrol_t <= 0.0 or (_agent.is_navigation_finished() and cel_ruchu != Vector3.ZERO):
 		_patrol_t = randf_range(4.0, 9.0)
 		var r := randf_range(2.0, 7.0)
 		var p := global_position + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * r
 		_idz(_najblizszy_na_siatce(p))
+
+
+func _szukaj_lupu() -> Node3D:
+	var best: Node3D = null
+	var bd := 9.0
+	for n in get_tree().get_nodes_in_group("lup_swiat"):
+		var w := n as Node3D
+		if w == null or not is_instance_valid(w) or w == self or w.is_ancestor_of(self) or self.is_ancestor_of(w):
+			continue
+		var kto = w.get_meta("szabrowany", null)
+		if kto != null and is_instance_valid(kto) and kto != self and not kto.cialo.martwy and kto.stan == "szaber":
+			continue
+		if w is Pojemnik and ((w as Pojemnik).pusty() or not String((w as Pojemnik).nazwa).begins_with("Zwłoki")):
+			continue
+		var d := global_position.distance_to(w.global_position)
+		if d < bd and absf(w.global_position.y - global_position.y) < 1.5:
+			bd = d
+			best = w
+	return best
+
+
+## Szaber: podejście, przyklęk, grzebanie; zabiera leżące rzeczy albo najcenniejsze z ciała (trafią do jego łupu).
+func _szaber(delta: float) -> void:
+	biegnie = false
+	if _szaber_cel == null or not is_instance_valid(_szaber_cel):
+		stan = "patrol"
+		return
+	var cel := _szaber_cel.global_position
+	if global_position.distance_to(cel) > 1.1:
+		_kucanie_cel = 0.0
+		_idz(_najblizszy_na_siatce(cel))
+		return
+	_idz(global_position)
+	_kucanie_cel = 1.0
+	_obroc_do(cel, delta, 3.0)
+	var przed := _szaber_t
+	_szaber_t -= delta
+	if int(przed * 1.4) != int(_szaber_t * 1.4):
+		Dzwiek.graj_3d("szukanie", global_position + Vector3.UP * 0.4, get_parent(), -8.0, randf_range(0.9, 1.1), 14.0)
+	if _szaber_t > 0.0:
+		return
+	if _szaber_cel is LupNaZiemi:
+		lup.append((_szaber_cel as LupNaZiemi).przedmiot)
+		_szaber_cel.queue_free()
+	elif _szaber_cel is Pojemnik:
+		var wz := []
+		for c in (_szaber_cel as Pojemnik).lista_czesci():
+			for e in (c["siatka"] as Siatka).items:
+				wz.append([e["p"], c["siatka"]])
+		wz.sort_custom(func(a, b): return (a[0] as Przedmiot).wartosc() > (b[0] as Przedmiot).wartosc())
+		for i in mini(2, wz.size()):
+			(wz[i][1] as Siatka).usun(wz[i][0])
+			lup.append(wz[i][0])
+	_napis(["Się przyda.", "Nie twoje, nie moje – teraz moje.", "Dobre."].pick_random())
+	if is_instance_valid(_szaber_cel) and _szaber_cel.has_meta("szabrowany"):
+		_szaber_cel.remove_meta("szabrowany")
+	_szaber_cel = null
+	_kucanie_cel = 0.0
+	stan = "patrol"
 
 
 func _czujny(delta: float) -> void:
@@ -1247,6 +1327,7 @@ func _zwloki() -> void:
 	pj.czas_na_przedmiot = 0.5
 	pj.niski = true
 	pj.wys_wnetrza = 0.25
+	pj.add_to_group("lup_swiat")
 	# przeszukiwanie ciała po kolei: kieszenie kurtki, spodni, ładownice, worek/plecak; pancerz i hełm
 	# trzeba odpiąć i zdjąć (trwa)
 	var kurtka := Siatka.new(2, 2)
@@ -1263,6 +1344,7 @@ func _zwloki() -> void:
 	elif bron.dane["mag"] != null:
 		bron.dane["mag"].dane["naboje"] = maxi(0, _w_magazynku - 1)
 		bron.dane["komora"] = amunicja_id if _w_magazynku > 0 else ""
+	bron.dane["stan"] = randf_range(35.0, 80.0)    # broń z ciała: zaniedbana
 	var l := LupNaZiemi.new()
 	l.przedmiot = bron
 	var bw: Node3D = _czesci.get("bron")
