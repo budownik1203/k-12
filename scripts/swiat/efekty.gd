@@ -343,7 +343,7 @@ static func kurz(rodzic: Node3D, pos: Vector3, sila := 1.0, kolor := Color(0.55,
 	for i in n:
 		var mi := MeshInstance3D.new()
 		var q := QuadMesh.new()
-		q.size = Vector2(0.1, 0.1) * (0.7 + sila * 0.3)
+		q.size = Vector2(0.16, 0.16) * (0.7 + sila * 0.3)
 		mi.mesh = q
 		var m: StandardMaterial3D = _mat_dym.duplicate()
 		m.albedo_color = Color(kolor.r, kolor.g, kolor.b, 0.0)
@@ -356,7 +356,7 @@ static func kurz(rodzic: Node3D, pos: Vector3, sila := 1.0, kolor := Color(0.55,
 		var cel := mi.global_position + Vector3(cos(kat), 0.0, sin(kat)) * randf_range(0.08, 0.25) * sila + Vector3(0, randf_range(0.05, 0.18), 0)
 		var dl := randf_range(0.9, 1.6)
 		var t := mi.create_tween().set_parallel(true)
-		t.tween_property(m, "albedo_color:a", 0.28 * minf(1.0, sila), 0.12)
+		t.tween_property(m, "albedo_color:a", 0.5 * minf(1.0, 0.4 + sila * 0.6), 0.1)
 		t.tween_property(mi, "scale", Vector3.ONE * randf_range(2.5, 4.0), dl).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 		t.tween_property(mi, "global_position", cel, dl).set_ease(Tween.EASE_OUT)
 		t.tween_property(m, "albedo_color:a", 0.0, dl * 0.8).set_delay(dl * 0.2)
@@ -381,7 +381,7 @@ static func iskry(rodzic: Node3D, pos: Vector3, kier: Vector3, ile := 14) -> voi
 	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.0
 	var box := BoxMesh.new()
-	box.size = Vector3(0.006, 0.006, 0.02)
+	box.size = Vector3(0.012, 0.012, 0.045)
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color(1.0, 0.75, 0.35)
 	m.emission_enabled = true

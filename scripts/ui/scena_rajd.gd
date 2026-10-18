@@ -977,6 +977,11 @@ func _zrzut_animacji(katalog: String) -> void:
 		gracz.upusc(Gra.nowy_naladowany("kb47", "a_762"))
 		await _klatki(8)
 		await _zapisz(katalog, "lup_rzut_lot")
+		await get_tree().create_timer(0.45).timeout
+		await _zapisz(katalog, "lup_rzut_kurz")
+		Efekty.iskry(swiat, gracz.global_position - gracz.global_basis.z * 1.0 + Vector3.UP * 0.5, Vector3.UP)
+		await get_tree().create_timer(0.08).timeout
+		await _zapisz(katalog, "lup_iskry")
 		await _klatki(40)
 		await _zapisz(katalog, "lup_rzut_lezy")
 		return
