@@ -828,6 +828,9 @@ func _walka_z_posterunku(delta: float) -> void:
 
 
 func _posterunek(delta: float) -> void:
+	if not posterunek.has("pos"):
+		stan = "patrol"
+		return
 	biegnie = false
 	_kucanie_cel = 0.55
 	_idz(posterunek["pos"])
