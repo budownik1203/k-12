@@ -73,7 +73,25 @@ func typ() -> String:
 
 
 func nazwa() -> String:
+	if nieznany():
+		return nazwa_ogolna()
 	return defn().get("nazwa", id)
+
+
+## Znaleziony w strefie i jeszcze nieobejrzany: znasz tylko kształt i ciężar.
+func nieznany() -> bool:
+	return bool(dane.get("nieznany", false))
+
+
+const MIEKKIE := ["papierosy", "teczka_akt", "kartka_mieso", "mapa", "maska_gazowa", "kaseta", "ikona"]
+
+
+func nazwa_ogolna() -> String:
+	if id in MIEKKIE:
+		return "Zawiniątko" if waga() < 0.5 else "Pakunek"
+	if waga() > 3.0:
+		return "Ciężki metalowy przedmiot"
+	return "Metalowy drobiazg" if szer() * wys() <= 1 else "Metalowy przedmiot"
 
 
 ## Rozmiar bez obrotu. Stosy amunicji rosną z liczbą sztuk: garść 1x1, potem pudełko.
@@ -158,6 +176,10 @@ func etykieta() -> String:
 		"amunicja":
 			return str(ilosc)
 		"magazynek":
+			if not bool(dane.get("sprawdzony", true)):
+				# nieprzeliczony: tylko na wagę i oko
+				var f := float(dane["naboje"]) / maxf(1.0, float(defn()["magazynek"]["pojemnosc"]))
+				return "pełny?" if f >= 0.9 else ("~½+" if f >= 0.5 else ("mało" if f > 0.15 else ("resztki" if f > 0.0 else "pusty?")))
 			return "%d/%d" % [dane["naboje"], defn()["magazynek"]["pojemnosc"]]
 		"bron":
 			var n := 0

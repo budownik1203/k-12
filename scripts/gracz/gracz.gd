@@ -464,6 +464,12 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			var gl := -14.0 if kucanie > 0.5 else (-4.0 if moze_biec else -9.0)
 			Dzwiek.graj_3d("krok", global_position, get_parent(), gl + prog * 1.5)
 			var zasieg := 2.5 if kucanie > 0.5 else (11.0 if moze_biec else 6.0)
+			# brzęk luźnego metalu w plecaku i kieszeniach (w biegu najgłośniej, przy kucaniu prawie wcale)
+			var brz := ekw.brzek() * (1.0 if moze_biec else (0.15 if kucanie > 0.5 else 0.45))
+			if brz > 0.8:
+				zasieg += brz
+				if randf() < 0.5:
+					Dzwiek.graj_3d("klik", global_position + Vector3.UP * 0.9, get_parent(), -20.0 + minf(8.0, brz), randf_range(0.55, 0.8), 12.0)
 			Gra.emituj_halas(global_position, zasieg * (1.0 + prog * 0.15), self)
 
 

@@ -1274,6 +1274,7 @@ func _zwloki() -> void:
 	if not bd.has("wewnetrzny"):
 		for i in zapas_mag:
 			var m := Gra.magazynek(bd["magazynki"][0], amunicja_id, randi_range(5, _pojemnosc()))
+			m.dane["sprawdzony"] = false
 			if not ladownice.dodaj(m):
 				plecak.dodaj(m)
 	else:
@@ -1283,6 +1284,8 @@ func _zwloki() -> void:
 	if helm:
 		na_ciele.dodaj(helm)
 	for p in lup:
+		if p.typ() == "lup" and randf() < 0.6:
+			p.dane["nieznany"] = true
 		if not (kurtka.dodaj(p) or spodnie.dodaj(p) or plecak.dodaj(p)):
 			var lp := LupNaZiemi.new()
 			lp.przedmiot = p

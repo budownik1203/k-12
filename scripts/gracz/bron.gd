@@ -487,6 +487,8 @@ func _animuj_przeladowanie(f: float) -> void:
 	var p_przod: Vector3 = Vector3(md["przod"])
 	var chwyt := p_mag + Vector3(0, -0.035, 0.0)           # dłoń na magazynku
 	var kamizelka := chwyt + Vector3(-0.06, -0.32, 0.12)    # poza kadrem, przy kamizelce
+	if not job.is_empty() and gracz and job.get("siatka") == gracz.ekw.kieszenie:
+		kamizelka = chwyt + Vector3(-0.12, -0.5, 0.2)        # niżej: kieszeń spodni
 	var reka := Vector3.ZERO
 	var mag := Vector3.ZERO
 	var szybkie: bool = job.get("szybkie", false)
@@ -855,7 +857,7 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 	if z.is_empty():
 		komunikat.emit("Brak załadowanych magazynków (napełnij: G w ekwipunku)")
 		return
-	var t := float(bd["przeladowanie"]) * (1.0 if z["szybki"] else 1.7)
+	var t := float(bd["przeladowanie"]) * float(z.get("mnoznik", 1.0 if z["szybki"] else 1.7))
 	if szybkie:
 		t *= 0.7
 	if przedmiot.dane["komora"] == "":
@@ -866,7 +868,9 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 	stan_t = 0.0
 	stan_total = t
 	Dzwiek.graj("przeladowanie", -4.0)
-	if not z["szybki"]:
+	if z["siatka"] == ekw.kieszenie:
+		komunikat.emit("Magazynek z kieszeni – dłużej niż z ładownicy")
+	elif not z["szybki"]:
 		komunikat.emit("Magazynek z plecaka – dłuższe przeładowanie")
 
 

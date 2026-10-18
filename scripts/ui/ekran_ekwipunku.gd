@@ -311,6 +311,13 @@ func przelacz_pojemnik(co: String) -> void:
 		return
 	if _szybki and co == "kamizelka":
 		czas = 0.22
+	if co == "plecak" and czas > 0.0:
+		# pełny plecak zdejmuje się i kładzie wolniej (i głośniej)
+		var m := _siatka_pojemnika(co).masa()
+		czas += clampf(m * 0.06, 0.0, 1.4)
+		if m > 12.0:
+			gracz.komunikat.emit("Ciężki plecak – zdejmujesz go powoli")
+			Gra.emituj_halas(gracz.global_position, 6.0 + m * 0.2, gracz)
 	_otwieranie = co
 	_otw_t = 0.0
 	_otw_czas = czas
@@ -408,6 +415,8 @@ func zamknij_animowany(po := Callable()) -> void:
 	if gracz and not tryb_bazy:
 		if "plecak" in otwarte:
 			czas += 0.95 + (_r3d.ile_otwartych("plecak") * 0.3 if _r3d else 0.0)
+			if ekw.siatka_plecaka():
+				czas += clampf(ekw.siatka_plecaka().masa() * 0.05, 0.0, 1.2)
 		if "bezpieczny" in otwarte:
 			czas += 0.55 + (_r3d.ile_otwartych("bezpieczny") * 0.25 if _r3d else 0.0)
 		if "kamizelka" in otwarte and czas == 0.0:
@@ -1628,12 +1637,40 @@ func _cel_kolejki(do_pojemnika: bool) -> Vector2:
 func _wyrzuc_reka(p: Przedmiot, z: Dictionary) -> void:
 	if _zajete():
 		return
+	if p.dane.get("oznaczony", false):
+		_komunikat("★ Oznaczony – odznacz go (PPM), żeby wyrzucić")
+		_odswiez()
+		return
 	var cel := Vector2(_root.size.x * 0.62, _root.size.y * 0.92)
 	_animuj(p, z, cel, func():
 		if _w_zrodle(p, z):
 			_usun_ze_zrodla(p, z)
 			gracz.upusc(p)
 		_po_zmianie())
+
+
+## Obejrzenie nieznanego przedmiotu: dłoń obraca go przed oczami (trwa), po ciemku się nie da.
+func _obejrzyj(p: Przedmiot) -> void:
+	if not p.nieznany():
+		return
+	if tryb_bazy or gracz == null:
+		p.dane.erase("nieznany")
+		_odswiez()
+		return
+	if not gracz.akcja.is_empty() or _zajete():
+		return
+	var sc = get_tree().get_first_node_in_group("ui_rajdu")
+	var swiatlo: float = sc.oswietlenie(gracz.kamera.global_position - gracz.kamera.global_basis.z * 0.4) if sc and sc.has_method("oswietlenie") else 1.0
+	if swiatlo < 0.3:
+		_komunikat("Za ciemno – poświeć latarką, żeby obejrzeć")
+		return
+	var czas := 1.2 + p.szer() * p.wys() * 0.15
+	gracz.zacznij_akcje("Oglądanie: " + p.nazwa(), czas, func():
+		p.dane.erase("nieznany")
+		gracz.komunikat.emit("To " + p.nazwa().to_lower() + " (%d bonów)" % p.wartosc())
+		Dzwiek.graj("klik", -12.0, 0.9)
+		_odswiez()
+		, "ogladaj", 0, Callable(), {"id": p.id})
 
 
 ## Podział stosu na pół (Shift+klik): druga połowa w wolnym miejscu tej samej siatki.
@@ -1682,7 +1719,7 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ }
 const M_DOD := 100
 
 
@@ -1691,6 +1728,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 	_menu_p = p
 	_menu_zrodlo = z
 	var t := p.typ()
+	if p.nieznany():
+		_menu.add_item("Obejrzyj", M_OBEJRZYJ)
 	if t == "med" and not tryb_bazy and gracz:
 		_menu.add_item("Użyj", M_UZYJ)
 	if t == "latarka" and not tryb_bazy and gracz:
@@ -1701,6 +1740,9 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 			_menu.add_item("Rozładuj", M_ROZLADUJ)
 	if p.stos_max() > 1 and p.ilosc > 1 and z["typ"] == "siatka":
 		_menu.add_item("Podziel stos [Shift]", M_PODZIEL)
+	if t == "magazynek" and not bool(p.dane.get("sprawdzony", true)):
+		_menu.add_item("Przelicz naboje", M_SPRAWDZ)
+	_menu.add_item("Odznacz ★" if p.dane.get("oznaczony", false) else "Oznacz ★", M_OZNACZ)
 	if t == "bron" and gracz:
 		_menu.add_item("Oglądaj / dodatki", M_OGLADAJ)
 	if t == "bron":
@@ -1781,6 +1823,29 @@ func _menu_akcja(id: int) -> void:
 		M_PODZIEL:
 			_podziel(p, z["siatka"])
 			return
+		M_OBEJRZYJ:
+			_obejrzyj(p)
+			return
+		M_OZNACZ:
+			if p.dane.get("oznaczony", false):
+				p.dane.erase("oznaczony")
+			else:
+				p.dane["oznaczony"] = true
+			_odswiez()
+			return
+		M_SPRAWDZ:
+			if tryb_bazy or gracz == null:
+				p.dane["sprawdzony"] = true
+				_odswiez()
+				return
+			if not gracz.akcja.is_empty():
+				return
+			gracz.zacznij_akcje("Przeliczanie: " + p.nazwa(), 1.4, func():
+				p.dane["sprawdzony"] = true
+				gracz.komunikat.emit("%s: %d nab." % [p.nazwa(), int(p.dane["naboje"])])
+				_odswiez()
+				, "rozladowanie", 0, Callable(), {"id": p.id, "amun": String(p.dane.get("amunicja", "a_762"))})
+			return
 		M_WEZ:
 			if z["typ"] == "siatka" and _czesc_zdejmowana(z["siatka"]):
 				_zdejmij_z_ciala(p, z["siatka"])
@@ -1858,6 +1923,7 @@ func _zaplanuj_ladowanie(mag: Przedmiot, amun: String, ile: int, zabierz: Callab
 			return
 		mag.dane["amunicja"] = amun
 		mag.dane["naboje"] += 1
+		mag.dane["sprawdzony"] = true     # liczysz wkładane naboje
 		Dzwiek.graj("klik", -12.0, randf_range(1.1, 1.3))
 		ekw.zmieniony.emit()
 	var koniec := func():
@@ -1935,6 +2001,7 @@ func _rozladuj(p: Przedmiot) -> void:
 				gracz.przerwij_akcje()
 				return
 			p.dane["naboje"] = int(p.dane["naboje"]) - 1
+			p.dane["sprawdzony"] = true
 			if int(p.dane["naboje"]) <= 0:
 				p.dane["amunicja"] = ""
 		else:
@@ -2000,11 +2067,25 @@ func _hover(p: Przedmiot) -> void:
 		_tooltip.visible = false
 		return
 	_tooltip_txt.text = opis_przedmiotu(p)
+	# łup w meblu / na zwłokach: ile będziesz dźwigać po wzięciu
+	if _pojemnik != null and not tryb_bazy:
+		var w0 := ekw.waga()
+		var w1 := w0 + p.waga()
+		var progi := [18.0, 28.0, 40.0]
+		var nazwy := ["lekki", "obciążony", "przeciążony", "krytyczny"]
+		var pr0 := progi.filter(func(x): return w0 >= x).size()
+		var pr1 := progi.filter(func(x): return w1 >= x).size()
+		var kol := "#d9c27a" if pr1 > pr0 else "#8c8670"
+		_tooltip_txt.text += "\n[color=%s]Po wzięciu: %.1f kg (%s)%s[/color]" % [kol, w1, nazwy[pr1], "  ▲ próg obciążenia" if pr1 > pr0 else ""]
+	if p.dane.get("oznaczony", false):
+		_tooltip_txt.text += "\n[color=#d9c27a]★ oznaczony – nie wyrzucisz go przypadkiem[/color]"
 	_tooltip.visible = true
 	_tooltip.reset_size()
 
 
 static func opis_przedmiotu(p: Przedmiot) -> String:
+	if p.nieznany():
+		return "[b]%s[/b]\n[color=#8c8670]%.1f kg · wartość nieznana[/color]\nNie wiesz, co to jest. [PPM] Obejrzyj – trzeba światła." % [p.nazwa(), p.waga()]
 	var d := p.defn()
 	var t := "[b]%s[/b]\n" % p.nazwa()
 	var typy := {"bron": "Broń", "magazynek": "Magazynek", "amunicja": "Amunicja", "med": "Środek medyczny",

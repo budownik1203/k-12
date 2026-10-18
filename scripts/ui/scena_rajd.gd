@@ -771,6 +771,54 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--nowe"):
+		var ek := Gra.ekw
+		var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+		kb.dane["mag"].dane["naboje"] = 0
+		kb.dane["komora"] = ""
+		ek.sloty["glowna"] = kb
+		ek.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")
+		# magazynki tylko w plecaku
+		for sg in ek.siatki(true):
+			for e in (sg as Siatka).items.duplicate():
+				if (e["p"] as Przedmiot).typ() in ["magazynek", "amunicja"]:
+					(sg as Siatka).usun(e["p"])
+		ek.siatka_plecaka().poloz(Gra.magazynek("mag_kb47", "a_762", 30), 0, 2, false)
+		gracz._wybierz_bron("glowna")
+		await _klatki(30)
+		print("ograniczony: ", ek.ograniczony, " magazynek pod ręką: ", not ek.znajdz_magazynek(["mag_kb47"]).is_empty())
+		ekran_ekw.otworz(null)
+		await _klatki(3)
+		ekran_ekw.przelacz_pojemnik("plecak")
+		await get_tree().create_timer(2.6).timeout
+		ekran_ekw._synchronizuj_dostep()
+		print("plecak rozłożony, zapięty – magazynek: ", not ek.znajdz_magazynek(["mag_kb47"]).is_empty())
+		var gui: SiatkaUI = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
+		ekran_ekw._klik_kieszeni(gui, 1, "plecak")
+		while ekran_ekw._zajete():
+			await get_tree().process_frame
+		await get_tree().create_timer(0.2).timeout
+		ekran_ekw._synchronizuj_dostep()
+		print("komora otwarta – magazynek: ", not ek.znajdz_magazynek(["mag_kb47"]).is_empty())
+		# nieznany przedmiot
+		var nz := Przedmiot.nowy("zegarek")
+		nz.dane["nieznany"] = true
+		ek.kieszenie.dodaj(nz)
+		print("nazwa przed: ", nz.nazwa())
+		ekran_ekw._obejrzyj(nz)
+		await get_tree().create_timer(0.8).timeout
+		await _zapisz(katalog, "nw_ogladanie")
+		while not gracz.akcja.is_empty():
+			await get_tree().process_frame
+		print("nazwa po: ", nz.nazwa())
+		var m2 := Gra.magazynek("mag_kb47", "a_762", 17)
+		m2.dane["sprawdzony"] = false
+		print("etykieta nieprzeliczonego: ", m2.etykieta())
+		ek.siatka_plecaka().dodaj(Przedmiot.nowy("konserwa"))
+		ek.siatka_plecaka().dodaj(Przedmiot.nowy("klucz_nastawny"))
+		ek._brzek = -1.0
+		print("brzęk: %.2f" % ek.brzek())
+		return
 	if OS.get_cmdline_user_args().has("--reka"):
 		# przekładanie ręką: z kieszeni do rozłożonego plecaka (przeciągnięcie), potem trafienie w trakcie
 		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")

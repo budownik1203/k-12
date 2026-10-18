@@ -196,6 +196,40 @@ func _dodaj_do(s: Siatka, p: Przedmiot) -> bool:
 	return false
 
 
+## Jak daleko sięga ręka: ładownica kamizelki pod ręką, kieszeń spodni wolniej, rozłożony plecak najwolniej.
+func mnoznik_dostepu(s: Siatka) -> float:
+	if s == siatka_kamizelki():
+		return 1.0
+	if s == kieszenie:
+		return 1.35
+	return 1.8
+
+
+const METAL_LUZEM := ["bron", "magazynek", "amunicja", "dodatek", "klucz"]
+const METAL_LUP := ["konserwa", "klucz_nastawny", "kombinerki", "kanister", "gasnica", "akumulator", "lornetka",
+	"lampa_elektronowa", "maszyna_do_pisania", "telefon", "radio", "wodka", "spirytus", "przewody", "latarka"]
+var _brzek := -1.0
+var _brzek_kl := 0
+
+
+## Hałas luźnego metalu: przedmioty w plecaku i kieszeniach obijają się o siebie (w ładownicach kamizelki
+## siedzą ciasno). Stos amunicji luzem brzęczy mocniej niż pudełko.
+func brzek() -> float:
+	if _brzek >= 0.0 and Engine.get_process_frames() - _brzek_kl < 30:
+		return _brzek
+	_brzek_kl = Engine.get_process_frames()
+	var b := 0.0
+	for s in [kieszenie, siatka_plecaka()]:
+		if s == null:
+			continue
+		for e in (s as Siatka).items:
+			var p: Przedmiot = e["p"]
+			if p.typ() in METAL_LUZEM or p.id in METAL_LUP:
+				b += 0.55 if p.typ() == "amunicja" and p.ilosc <= 12 else 0.35
+	_brzek = minf(6.0, b)
+	return _brzek
+
+
 func czy_szybka(s: Siatka) -> bool:
 	return s == kieszenie or s == siatka_kamizelki()
 
@@ -240,9 +274,11 @@ func znajdz_magazynek(mag_ids: Array) -> Dictionary:
 			var p: Przedmiot = e["p"]
 			if p.id in mag_ids and p.dane["naboje"] > 0:
 				var szybki := czy_szybka(s)
-				var score: int = p.dane["naboje"] + (1000 if szybki else 0)
+				var mn := mnoznik_dostepu(s)
+				# najpierw najbliżej ręki, potem najpełniejszy
+				var score: int = p.dane["naboje"] + int((2.0 - mn) * 2000.0)
 				if best.is_empty() or score > best["score"]:
-					best = {"p": p, "siatka": s, "szybki": szybki, "score": score}
+					best = {"p": p, "siatka": s, "szybki": szybki, "score": score, "mnoznik": mn}
 	return best
 
 

@@ -42,6 +42,10 @@ func wypelnij(tabela: String, losowan: int, rng: RandomNumberGenerator) -> void:
 			var am2 := Dane.amunicja_dla(d["bron"]["kaliber"])
 			if not am2.is_empty() and rng.randf() < 0.5:
 				p = Gra.nowy_naladowany(pid, am2[0])
+		if d["typ"] == "magazynek":
+			p.dane["sprawdzony"] = false
+		if d["typ"] == "lup" and rng.randf() < 0.75:
+			p.dane["nieznany"] = true     # trzeba obejrzeć, żeby wiedzieć, co to
 		siatka.dodaj(p)
 
 

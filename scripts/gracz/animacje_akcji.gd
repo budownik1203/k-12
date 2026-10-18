@@ -67,6 +67,20 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 		"otwieranie":
 			prawa.ustaw_chwyt("otwarta")
 			lewa.visible = false
+		"ogladaj":
+			var pm := ModelePrzedmiotow.wezel(Przedmiot.nowy(id), true)
+			var ab: AABB = pm.get_meta("aabb", AABB())
+			var najw := maxf(ab.size.x, maxf(ab.size.y, ab.size.z))
+			if najw > 0.25:
+				pm.scale = Vector3.ONE * (0.25 / najw)
+			var piv := Node3D.new()
+			add_child(piv)
+			piv.add_child(pm)
+			pm.position = -Vector3(0, ab.size.y * 0.5, 0) * pm.scale.x
+			_rek["model"] = piv
+			piv.set_meta("roz", minf(najw, 0.25))
+			lewa.ustaw_chwyt("magazynek")
+			prawa.ustaw_chwyt("szczypta")
 		"bolostop":
 			_rek["strzykawka"] = _wezel([
 				Bryly.walec(Vector3(0, 0, 0.05), Vector3(0, 0, -0.06), 0.011, 0.011, "opakowanie", 10),
@@ -154,6 +168,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_podnies(f, dol)
 		"otwieranie":
 			_siegnij(f, dol)
+		"ogladaj":
+			_ogladaj(t, f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
 		_:
@@ -370,3 +386,18 @@ func _siegnij(f: float, dol: Vector3) -> void:
 	p = p.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
 	_uloz(prawa, p, Vector3(-0.15, -0.1, -1.0), Vector3(0.3, 1.0, 0.2))
 	prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")
+
+
+func _ogladaj(t: float, f: float, dol: Vector3) -> void:
+	# przedmiot uniesiony przed oczy (drobiazg bliżej): lewa dłoń trzyma od spodu, prawa obraca go palcami
+	var m: Node3D = _rek["model"]
+	var roz: float = m.get_meta("roz", 0.1)
+	var odl := lerpf(0.26, 0.44, clampf(roz / 0.25, 0.0, 1.0))
+	var sr := Vector3(0.0, -0.06 + sin(t * 1.3) * 0.004, -odl + smoothstep(0.0, 0.3, f) * 0.03) + dol
+	m.position = sr
+	m.rotation = Vector3(0.5 + sin(t * 1.7) * 0.35, f * TAU * 0.75, sin(t * 2.3) * 0.2)
+	var o := roz * 0.5 + 0.03
+	_uloz(lewa, sr + Vector3(-o - 0.05, -0.06, 0.02), Vector3(0.7, 0.35, -0.6), Vector3(-0.2, -1.0, 0.1))
+	_uloz(prawa, sr + Vector3(o + 0.06, -0.01 + sin(t * 3.0) * 0.008, 0.02), Vector3(-0.75, 0.15, -0.55), Vector3(0.2, 1.0, 0.3))
+	lewa.celuj_lokiec(Vector3(-0.28, -0.5, 0.0), self)
+	prawa.celuj_lokiec(Vector3(0.28, -0.5, 0.0), self)

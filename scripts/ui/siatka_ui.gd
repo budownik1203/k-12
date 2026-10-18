@@ -166,6 +166,11 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			ci.draw_texture_rect(tex, Rect2(r.get_center() - ts * 0.5, ts), false)
+	if p.dane.get("oznaczony", false):
+		ci.draw_string(Motyw.mono_b(), r.position + Vector2(r.size.x - 13, 13), "★", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.92, 0.78, 0.35))
+	if p.nieznany():
+		ci.draw_rect(r.grow(-2), Color(0.05, 0.05, 0.04, 0.72))
+		ci.draw_string(Motyw.mono_b(), r.get_center() + Vector2(-5, 7), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.86, 0.8, 0.62, 0.8))
 	var et := p.etykieta()
 	if et != "":
 		var f := Motyw.mono_b()

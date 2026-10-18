@@ -140,6 +140,9 @@ func rozpocznij_rajd() -> void:
 ##         "wartosc_poczatkowa": int, "utracone": Array, "zdrowie": Dictionary, "zdarzenia": Array}
 func _odblokuj_ekw() -> void:
 	if ekw:
+		# w schronie wszystko rozpoznane (spokojnie obejrzane przy stole)
+		for p in ekw.wszystkie():
+			(p as Przedmiot).dane.erase("nieznany")
 		ekw.ograniczony = false
 		ekw.plecak_rozlozony = false
 		ekw.bezp_rozlozony = false
