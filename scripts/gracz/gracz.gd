@@ -309,6 +309,7 @@ func _physics_process(delta: float) -> void:
 	_akcje(delta)
 	_interakcje(we_aktywne)
 	_bron(delta, we_aktywne)
+	_dzwieki_ciala(delta)
 	if we_aktywne and Input.is_action_just_pressed("latarka"):
 		if latarka_w_rece:
 			latarka_wlaczona = not latarka_wlaczona
@@ -462,7 +463,7 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			if wys > 2.2:
 				wypadnij_z_kieszeni(0.45)
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
-			Dzwiek.graj_3d("krok", global_position, get_parent(), 0.0, 0.8)
+			Dzwiek.krok(global_position, get_parent(), clampf(-6.0 + wys * 3.0, -6.0, 3.0), 0.8)
 		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
 			velocity.y = 3.6
 			wytrzymalosc -= 10.0
@@ -482,7 +483,10 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		if _krok > dl:
 			_krok = 0.0
 			var gl := -14.0 if kucanie > 0.5 else (-4.0 if moze_biec else -9.0)
-			Dzwiek.graj_3d("krok", global_position, get_parent(), gl + prog * 1.5)
+			Dzwiek.krok(global_position, get_parent(), gl + prog * 1.5, 0.95 if prog >= 2 else 1.0)
+			# szelest ubrania i oporządzenia (przy kucaniu i obciążeniu częściej słychać siebie)
+			if randf() < (0.35 if kucanie > 0.5 else 0.15 + prog * 0.08):
+				Dzwiek.graj_3d(Dzwiek.wariant("szelest"), global_position + Vector3.UP * 1.0, get_parent(), -22.0 + prog * 2.0, randf_range(0.85, 1.15), 6.0)
 			var zasieg := 2.5 if kucanie > 0.5 else (11.0 if moze_biec else 6.0)
 			# brzęk luźnego metalu w plecaku i kieszeniach (w biegu najgłośniej, przy kucaniu prawie wcale)
 			var brz := ekw.brzek() * (1.0 if moze_biec else (0.15 if kucanie > 0.5 else 0.45))
@@ -491,6 +495,25 @@ func _ruch(delta: float, aktywne: bool) -> void:
 				if randf() < 0.5:
 					Dzwiek.graj_3d("klik", global_position + Vector3.UP * 0.9, get_parent(), -20.0 + minf(8.0, brz), randf_range(0.55, 0.8), 12.0)
 			Gra.emituj_halas(global_position, zasieg * (1.0 + prog * 0.15), self)
+
+
+var _oddech_t := 0.0
+var _serce_t := 0.0
+
+
+## Oddech po wysiłku (zadyszka przy niskiej wytrzymałości) i bicie serca przy ciężkich ranach.
+func _dzwieki_ciala(delta: float) -> void:
+	_oddech_t -= delta
+	if wytrzymalosc < 40.0 and _oddech_t <= 0.0:
+		var f := 1.0 - wytrzymalosc / 40.0
+		Dzwiek.graj("oddech", lerpf(-20.0, -9.0, f), lerpf(1.0, 1.25, f))
+		_oddech_t = lerpf(2.4, 1.7, f)
+	var hp := cialo.procent()
+	_serce_t -= delta
+	if hp < 0.4 and _serce_t <= 0.0:
+		var f2 := 1.0 - hp / 0.4
+		Dzwiek.graj("serce", lerpf(-16.0, -4.0, f2), 1.0)
+		_serce_t = lerpf(1.0, 0.55, f2)
 
 
 func _sufit_nisko() -> bool:

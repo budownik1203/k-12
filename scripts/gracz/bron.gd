@@ -669,12 +669,15 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		# sama latarka: tylko animacja wyjmowania
 		if stan != "gotowa":
 			stan_t += delta
+			_graj_fazy()
 			if stan_t >= stan_total:
 				stan = "gotowa"
+				_fazy_dzw = []
 		return
 	# stany czasowe
 	if stan != "gotowa":
 		stan_t += delta
+		_graj_fazy()
 		if stan == "ladowanie_wewn" and we.get("strzal", false):
 			_koniec_stanu()  # przerwanie ładowania strzelby strzałem
 		elif stan_t >= stan_total:
@@ -691,7 +694,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		stan_total = 1.3
 		_byl_pusty = true
 		r_trzymany = -99.0
-		Dzwiek.graj("przeladowanie", -6.0, 1.15)
+		_fazy_dzw = [[0.25, _zamek_dzw(), -5.0], [0.75, _zamek_dzw(), -6.0]]
 		return
 	if we.get("przeladuj", false):
 		r_trzymany += delta
@@ -709,8 +712,8 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		r_trzymany = 0.0
 	if we.get("tryb", false) and bd["tryby"].size() > 1:
 		przedmiot.dane["tryb"] = (int(przedmiot.dane["tryb"]) + 1) % bd["tryby"].size()
+		Dzwiek.graj("przelacznik", -8.0)
 		komunikat.emit("Tryb ognia: " + ("ogień ciągły" if bd["tryby"][przedmiot.dane["tryb"]] == "auto" else "pojedynczy"))
-		Dzwiek.graj("klik", -8.0)
 	if we.get("sprawdz", false):
 		stan = "sprawdzanie"
 		stan_t = 0.0
@@ -872,7 +875,8 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 		stan = "ladowanie_wewn"
 		stan_t = 0.0
 		stan_total = float(bd["przeladowanie"]) * 0.5
-		Dzwiek.graj("przeladowanie", -6.0, 1.2)
+		# łamanie lufy, wkładanie naboju (zamknięcie – po ostatnim)
+		_fazy_dzw = [[0.0, "obrzyn_lam", -6.0], [0.7, "naboj_wloz", -8.0]]
 		return
 	var z := ekw.znajdz_magazynek(bd["magazynki"])
 	if z.is_empty():
@@ -888,14 +892,35 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 	stan = "przeladowanie"
 	stan_t = 0.0
 	stan_total = t
-	Dzwiek.graj("przeladowanie", -4.0)
+	# fazy: wypięcie starego magazynka, wpięcie nowego, (pusta komora) przeciągnięcie zamka
+	_fazy_dzw = [[0.12, "mag_wyjmij", -6.0], [0.58 if _byl_pusty else 0.8, "mag_wloz", -4.0]]
+	if _byl_pusty:
+		_fazy_dzw.append([0.86, _zamek_dzw(), -4.0])
 	if z["siatka"] == ekw.kieszenie:
 		komunikat.emit("Magazynek z kieszeni – dłużej niż z ładownicy")
 	elif not z["szybki"]:
 		komunikat.emit("Magazynek z plecaka – dłuższe przeładowanie")
 
 
+var _fazy_dzw: Array = []
+
+
+func _zamek_dzw() -> String:
+	return "zamek_pist" if bd.get("slot", "") == "pistolet" else "zamek_kb"
+
+
+## Dźwięki mechanizmu w kolejnych fazach czynności (ułamki czasu stanu).
+func _graj_fazy() -> void:
+	if _fazy_dzw.is_empty() or stan_total <= 0.0:
+		return
+	var f := stan_t / stan_total
+	while not _fazy_dzw.is_empty() and f >= float(_fazy_dzw[0][0]):
+		var fz: Array = _fazy_dzw.pop_front()
+		Dzwiek.graj(fz[1], fz[2], randf_range(0.97, 1.03))
+
+
 func _koniec_stanu() -> void:
+	_fazy_dzw = []
 	var s := stan
 	stan = "gotowa"
 	match s:
@@ -907,10 +932,12 @@ func _koniec_stanu() -> void:
 				if przedmiot.dane["wewn"] == 0 or przedmiot.dane["wewn_typ"] == "":
 					przedmiot.dane["wewn_typ"] = wz["id"]
 				przedmiot.dane["wewn"] += 1
-				Dzwiek.graj("klik", -6.0, 0.8)
 				if przedmiot.dane["wewn"] < int(bd["wewnetrzny"]) and gracz.ekw.policz_amunicje(bd["kaliber"]) > 0:
 					stan = "ladowanie_wewn"
 					stan_t = 0.0
+					_fazy_dzw = [[0.7, "naboj_wloz", -8.0]]
+				else:
+					Dzwiek.graj("obrzyn_zamk", -5.0)
 		"sprawdzanie":
 			komunikat.emit(opis_amunicji())
 		"usuwanie":

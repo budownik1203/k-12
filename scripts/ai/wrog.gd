@@ -456,6 +456,7 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 		_napis(["Krwawię! Osłaniajcie!", "Trafili mnie! Krwawię!", "Medyka!"].pick_random())
 	else:
 		_napis(["Dostałem!", "Trafiony!", "Kurwa, boli!"].pick_random())
+
 	# reakcja: wie, skąd strzelano (gracz, inna frakcja albo mutant)
 	if od_kogo is Node3D and wrogi(od_kogo):
 		gracz = od_kogo
@@ -692,7 +693,7 @@ func _szukaj_lupu() -> Node3D:
 		var w := n as Node3D
 		if w == null or not is_instance_valid(w) or w == self or w.is_ancestor_of(self) or self.is_ancestor_of(w):
 			continue
-		var kto = w.get_meta("szabrowany", null)
+		var kto = w.get_meta("szabrowany") if w.has_meta("szabrowany") else null
 		if kto != null and is_instance_valid(kto) and kto != self and not kto.cialo.martwy and kto.stan == "szaber":
 			continue
 		if w is Pojemnik and ((w as Pojemnik).pusty() or not String((w as Pojemnik).nazwa).begins_with("Zwłoki")):
@@ -1028,7 +1029,11 @@ func _strzelaj(delta: float) -> void:
 			_przeladowanie = float(bron.defn()["bron"]["przeladowanie"]) * 1.1
 			_przeladowanie_max = _przeladowanie
 			_napis(["Przeładowuję!", "Osłaniaj!", "Pusty!"].pick_random())
-			Dzwiek.graj_3d("przeladowanie", global_position, get_parent(), -4.0)
+			Dzwiek.graj_3d("mag_wyjmij", global_position + Vector3.UP * 1.2, get_parent(), -4.0, 1.0, 18.0)
+			get_tree().create_timer(_przeladowanie * 0.6).timeout.connect(func():
+				if is_instance_valid(self) and stan != "martwy":
+					Dzwiek.graj_3d("mag_wloz", global_position + Vector3.UP * 1.2, get_parent(), -3.0, 1.0, 18.0)
+					Dzwiek.graj_3d("zamek_kb", global_position + Vector3.UP * 1.2, get_parent(), -4.0, 1.0, 20.0))
 		else:
 			# bez amunicji – ucieczka
 			morale = 0.0
@@ -1158,7 +1163,7 @@ func _ruch(delta: float) -> void:
 		_krok_t += pozioma * delta
 		if _krok_t > (0.85 if biegnie else 0.65):
 			_krok_t = 0.0
-			Dzwiek.graj_3d("krok_wrog", global_position, get_parent(), -2.0 if biegnie else -8.0, 0.9, 25.0)
+			Dzwiek.krok(global_position, get_parent(), -1.0 if biegnie else -7.0, 0.9, 25.0)
 
 
 func _animuj(delta: float) -> void:
@@ -1292,11 +1297,36 @@ func _napis(t: String) -> void:
 		return
 	_napis_t = 4.0
 	get_tree().call_group("hud", "napis_wroga", nazwa_jednostki, t, global_position)
+	_glos(t)
+
+
+## Głos do okrzyku (syntezowany, bez słów – barwa stała dla danej postaci): krzyk alarmu, komenda,
+## ranny albo przyciszone mruknięcie. Głos słychać dalej niż kroki – i zdradza pozycję.
+func _glos(t: String, rodzaj := "") -> void:
+	if rodzaj == "":
+		var krzyk := ["Kontakt", "Tam", "Widzę", "Mam go", "Strzały", "Uwaga", "Obcy", "Zacię", "Odwrót", "Spadam"]
+		if ["Dostałem", "Trafi", "boli", "Krwawię", "Medyka"].any(func(k): return t.contains(k)):
+			rodzaj = "ranny"
+		elif t.ends_with("...") or not t.contains("!"):
+			rodzaj = "szept"
+		elif krzyk.any(func(k): return t.contains(k)):
+			rodzaj = "krzyk"
+		else:
+			rodzaj = "komenda"
+	var id := get_instance_id()
+	var barwa := int(id % 3)
+	var wys := 0.92 + float(id % 7) * 0.025
+	var nazwa := "glos_szept" if rodzaj == "szept" else ("glos_smierc" if rodzaj == "smierc" else "glos_%s_%d" % [rodzaj, barwa])
+	var db: float = {"szept": -14.0, "komenda": -4.0, "krzyk": 0.0, "ranny": -2.0, "smierc": -3.0}.get(rodzaj, -4.0)
+	var zas: float = {"szept": 9.0, "komenda": 30.0, "krzyk": 40.0, "ranny": 30.0, "smierc": 25.0}.get(rodzaj, 30.0)
+	Dzwiek.graj_3d(nazwa, global_position + Vector3.UP * 1.6, get_parent(), db, wys, zas)
 
 
 # ------------------------------------------------------------------ śmierć
 
 func _smierc(_przyczyna: String) -> void:
+	if randf() < 0.75:
+		_glos("", "smierc")
 	stan = "martwy"
 	collision_layer = 0
 	collision_mask = Balistyka.WARSTWA_SWIAT

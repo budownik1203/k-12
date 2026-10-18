@@ -105,6 +105,18 @@ static func luska(rodzic: Node3D, pos: Vector3, w_prawo: Vector3, srut := false)
 	p.global_position = pos
 	p.emitting = true
 	p.finished.connect(p.queue_free)
+	# brzęk łuski o podłogę (strzałowa – głuchy plastik)
+	var tree := rodzic.get_tree()
+	var gdzie := pos + w_prawo * 0.6
+	var space := rodzic.get_world_3d().direct_space_state
+	var r := space.intersect_ray(PhysicsRayQueryParameters3D.create(gdzie, gdzie + Vector3.DOWN * 3.0, Balistyka.WARSTWA_SWIAT))
+	var spad := 1.3
+	if not r.is_empty():
+		gdzie = r["position"]
+		spad = pos.y - gdzie.y
+	tree.create_timer(clampf(0.22 + sqrt(maxf(0.0, spad) / 4.9), 0.25, 0.9)).timeout.connect(func():
+		if is_instance_valid(rodzic) and rodzic.is_inside_tree():
+			Dzwiek.graj_3d("luska_srut" if srut else Dzwiek.wariant("luska"), gdzie, rodzic, -12.0, randf_range(0.92, 1.08), 14.0))
 
 
 static var _mat_plomien: StandardMaterial3D

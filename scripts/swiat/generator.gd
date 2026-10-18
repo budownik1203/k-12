@@ -1482,3 +1482,41 @@ func _klucz_w_rajdzie() -> void:
 		return
 	var pj: Pojemnik = kandydaci[rng.randi() % kandydaci.size()]
 	pj.siatka.dodaj(Przedmiot.nowy("klucz_piwnica"))
+
+
+# ------------------------------------------------------------------ akustyka
+
+const PODLOGA_DZWIEK := {"lastryko": "lastryko", "parkiet": "parkiet", "kafelki": "kafelki", "beton": "beton"}
+
+
+## Komórka siatki pod punktem świata (albo Vector2i(-1,-1) poza mapą).
+func komorka_w(p: Vector3) -> Vector2i:
+	var k := Vector2i(floori(p.x / C), floori(p.z / C))
+	return k if komorki.has(k) else Vector2i(-1, -1)
+
+
+## Rodzaj podłoża pod punktem (do dźwięku kroków): lastryko / parkiet / kafelki / beton / gruz.
+func podloze(p: Vector3) -> String:
+	var k := komorka_w(p)
+	if k.x < 0:
+		return "gruz"
+	var mats: Array = komorki[k].get("mats", [])
+	var r: Rect2 = komorki[k].get("rect", Rect2())
+	# w przejściu (poza prostokątem pokoju) – podłoga korytarza
+	if komorki[k]["typ"] != "korytarz" and not r.grow(0.1).has_point(Vector2(p.x, p.z)):
+		return "lastryko"
+	if mats.size() > 1:
+		return PODLOGA_DZWIEK.get(mats[1], "beton")
+	return "beton"
+
+
+## Akustyka miejsca: typ pomieszczenia i jego wielkość (m²) – do pogłosu.
+func akustyka_w(p: Vector3) -> Dictionary:
+	var k := komorka_w(p)
+	if k.x < 0:
+		return {"typ": "zewnatrz", "pole": 400.0}
+	var r: Rect2 = komorki[k].get("rect", Rect2())
+	var typ: String = komorki[k]["typ"]
+	if typ != "korytarz" and not r.grow(0.1).has_point(Vector2(p.x, p.z)):
+		typ = "korytarz"
+	return {"typ": typ, "pole": r.get_area()}

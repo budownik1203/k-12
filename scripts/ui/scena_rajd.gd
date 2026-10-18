@@ -62,6 +62,17 @@ func _ready() -> void:
 	Sterowanie.menu_otwarte = false
 	Dzwiek.graj("start_rajdu", -6.0)
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
+	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
+	Dzwiek.podloze_fn = gen.podloze
+	Dzwiek.akustyka_fn = gen.akustyka_w
+	Dzwiek.ambient("wiatr", self, -22.0)
+	_napiecie = Dzwiek.ambient("napiecie", self, -60.0)
+	for i in 3:
+		var bz := Dzwiek.petla_3d("brzeczenie", swiat, -16.0, 7.0)
+		if bz:
+			bz.stream_paused = true
+			_brzeczenie.append(bz)
+	_tlo_t = randf_range(6.0, 14.0)
 	var args := OS.get_cmdline_user_args()
 	if args.has("--zrzuty"):
 		_tryb_testu = "zrzuty"
@@ -127,6 +138,63 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 
 var _cull_t := 0.0
 var _start_ms := 0
+var _brzeczenie: Array = []
+var _napiecie: AudioStreamPlayer
+var _napiecie_cel := 0.0
+var _tlo_t := 10.0
+
+
+func _exit_tree() -> void:
+	Dzwiek.podloze_fn = Callable()
+	Dzwiek.akustyka_fn = Callable()
+
+
+## Odgłosy strefy: kapanie, skrzypienie budynku, odległe strzelaniny i wycie – losowo, z różnych stron.
+func _tlo_strefy(delta: float) -> void:
+	_tlo_t -= delta
+	if _tlo_t > 0.0:
+		return
+	_tlo_t = randf_range(9.0, 26.0)
+	var gp := gracz.global_position
+	var ak: Dictionary = gen.akustyka_w(gp)
+	var los := randf()
+	var kier := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	if los < 0.35:
+		# kapanie blisko (piwnice, klatki i magazyny częściej)
+		var ile := 3 if ak["typ"] in ["piwnica", "klatka", "magazyn"] else 1
+		for i in ile:
+			var p := gp + kier * randf_range(2.0, 6.0) + Vector3.UP * 2.2
+			get_tree().create_timer(i * randf_range(0.6, 1.4)).timeout.connect(func():
+				if is_instance_valid(swiat):
+					Dzwiek.graj_3d(Dzwiek.wariant("kapanie"), p, swiat, -10.0, randf_range(0.9, 1.1), 12.0))
+	elif los < 0.6:
+		Dzwiek.graj_3d("skrzyp_budynku", gp + kier * randf_range(6.0, 14.0) + Vector3.UP * 3.0, swiat, -6.0, randf_range(0.8, 1.1), 30.0)
+	elif los < 0.88:
+		# odległa wymiana ognia gdzieś w strefie (2D, ściszona – za wiele ścian na okluzję)
+		Dzwiek.graj(Dzwiek.wariant("strzaly_daleko"), randf_range(-24.0, -15.0), randf_range(0.9, 1.05))
+	else:
+		Dzwiek.graj("wycie", randf_range(-26.0, -18.0), randf_range(0.85, 1.1))
+
+
+## Dron napięcia: narasta, gdy wrogowie w pobliżu są czujni lub walczą.
+func _napiecie_tick(delta: float) -> void:
+	if _napiecie == null:
+		return
+	var gp := gracz.global_position
+	var n := 0.0
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if not is_instance_valid(w) or str(w.get("stan")) == "martwy":
+			continue
+		var d := (w as Node3D).global_position.distance_to(gp)
+		if d > 30.0:
+			continue
+		var czujnosc := clampf(float(w.get("wykrycie") if w.get("wykrycie") != null else 0.0), 0.0, 1.0)
+		if str(w.get("stan")) in ["walka", "atak", "skok", "poscig"]:
+			czujnosc = 1.0
+		n = maxf(n, (1.0 - d / 30.0) * (0.35 + czujnosc * 0.65))
+	_napiecie_cel = n
+	var db := lerpf(-50.0, -10.0, _napiecie_cel) + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8))
+	_napiecie.volume_db = move_toward(_napiecie.volume_db, db, delta * (12.0 if db > _napiecie.volume_db else 4.0))
 
 
 func _process(delta: float) -> void:
@@ -153,6 +221,16 @@ func _process(delta: float) -> void:
 		bliskie.sort_custom(func(a, b): return a[0] < b[0])
 		for i in bliskie.size():
 			(bliskie[i][1] as Light3D).shadow_enabled = i < 3
+		# brzęczenie świetlówek: 3 najbliższe świecące lampy
+		for i in _brzeczenie.size():
+			var bz: AudioStreamPlayer3D = _brzeczenie[i]
+			if i < bliskie.size() and bliskie[i][0] < 8.0 * 8.0:
+				bz.global_position = (bliskie[i][1] as Node3D).global_position
+				bz.stream_paused = false
+			else:
+				bz.stream_paused = true
+		_napiecie_tick(0.3)
+	_tlo_strefy(delta)
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).rajd_czas = czas
 	if _tryb_testu == "test" and czas > 1.0 and czas - delta <= 1.0:
