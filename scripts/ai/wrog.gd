@@ -284,7 +284,16 @@ func _bryly(boxes: Array) -> MeshInstance3D:
 		elif c.r < 0.11 and c.g < 0.11 and c.b < 0.11:
 			m = "but"
 			k = Color.WHITE
-		cz.append({"t": "box", "c": bx[0], "s": s3, "m": m, "k": k, "f": faza, "r": rot})
+		# wydłużone bryły bez obrotu (ramiona, przedramiona, uda, łydki) jako walce – okrągłe kończyny
+		var mx := maxf(s3.x, maxf(s3.y, s3.z))
+		var drugi := (s3.x + s3.y + s3.z - mx) * 0.5
+		if rot == Vector3.ZERO and s3.y == mx and mx > drugi * 2.2 and m != "but":
+			var srod: Vector3 = bx[0]
+			var r0 := (s3.x + s3.z) * 0.25 * 1.08
+			cz.append({"t": "walec", "a": srod + Vector3(0, s3.y * 0.5, 0), "b": srod - Vector3(0, s3.y * 0.5, 0),
+				"r0": r0, "r1": r0 * 0.88, "m": m, "k": k, "n": 8, "kat": PI / 8.0})
+			continue
+		cz.append({"t": "box", "c": bx[0], "s": s3, "m": m, "k": k, "f": minf(s3.x, minf(s3.y, s3.z)) * 0.3, "r": rot})
 	var mi := Bryly.instancja(cz, false)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	return mi

@@ -330,7 +330,20 @@ func _animuj_przeladowanie(f: float) -> void:
 		var e := smoothstep(0.78, 1.0, f)
 		mag = Vector3.ZERO
 		reka = chwyt.lerp(p_przod, e)
-		if _byl_pusty and f > 0.84 and f < 0.95:
+		if _byl_pusty and not jest_pistolet():
+			# pusta komora: lewa dłoń sięga do rączki zamka po prawej stronie i przeciąga ją do tyłu
+			var raczka := Vector3(0.05, 0.075, -0.09) + (p_przod - Vector3(md.get("lozysko", p_przod)))
+			var t := (f - 0.78) / 0.22
+			if t < 0.35:
+				reka = chwyt.lerp(raczka, smoothstep(0.0, 0.35, t))
+			elif t < 0.6:
+				reka = raczka + Vector3(0, 0, 0.07) * smoothstep(0.35, 0.5, t)
+				if t > 0.5 and t < 0.56:
+					_kick_rot.z += 0.012
+					_kick.z += 0.002
+			else:
+				reka = (raczka + Vector3(0, 0, 0.07)).lerp(p_przod, smoothstep(0.6, 1.0, t))
+		elif _byl_pusty and f > 0.84 and f < 0.95:
 			# zamek: szarpnięcie broni przy przeładowaniu z pustą komorą
 			_kick_rot.z += 0.012
 			_kick.z += 0.002
@@ -340,6 +353,18 @@ func _animuj_przeladowanie(f: float) -> void:
 		mag_node.position = mag
 	if _lewa:
 		_lewa.position = reka - p_przod if not jest_pistolet() else (reka - p_przod) * 0.7
+	# palce lewej dłoni: otwarta przy sięganiu, zaciśnięta na magazynku, chwyt rączki zamka, powrót na łoże
+	if _lewa and _reka_l and is_instance_valid(_reka_l):
+		var poza := "pistolet" if jest_pistolet() else "lozysko"
+		if f < 0.16:
+			poza = "otwarta"
+		elif f < 0.78:
+			poza = "magazynek"
+		elif _byl_pusty and not jest_pistolet() and f < 0.93:
+			poza = "piesc"
+		elif f < 0.9:
+			poza = "otwarta"
+		_reka_l.ustaw_chwyt(poza)
 
 
 var _wcisniety := false
@@ -479,6 +504,9 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		# gwiazda + języki ognia wzdłuż lufy; przy celowaniu gwiazda bez środka – cel zostaje widoczny
 		var sk := 0.65 if bd["slot"] == "pistolet" else (1.35 if bd["kaliber"] == "12/70" else 1.0)
 		Efekty.plomien_wylotu(model, Transform3D(Basis(), Vector3(md["lufa"])), sk, ads)
+	if _reka_p and is_instance_valid(_reka_p):
+		_reka_p.ustaw_chwyt("strzal")
+		_spust_t = 0.07
 	if ads < 0.5:
 		Efekty.dym_wylotu(gracz.get_parent(), wylot, -kamera.global_basis.z, 0.6 if _bez_plomienia else 1.0)
 	if not bd.has("wewnetrzny"):
@@ -638,8 +666,15 @@ func dodaj_sway(mysz: Vector2) -> void:
 	_sway += mysz * 0.00035
 
 
+var _spust_t := 0.0
+
+
 func _process(delta: float) -> void:
 	_anim_akcji_t += delta
+	if _spust_t > 0.0:
+		_spust_t -= delta
+		if _spust_t <= 0.0 and _reka_p and is_instance_valid(_reka_p):
+			_reka_p.ustaw_chwyt("spust")
 	if _reka_l and is_instance_valid(_reka_l) and gracz and gracz.get("cialo"):
 		_reka_l.ustaw_zdrowie(gracz.cialo.procent(), gracz.cialo.krwawi() > 0)
 	_opusc = move_toward(_opusc, 1.0 if (_anim_akcji != "" and _anim_akcji != "montaz") else 0.0, delta * 4.0)

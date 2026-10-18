@@ -16,6 +16,10 @@ var _waga: Label
 var _interakcja: Label
 var _kolko: KolkoPostepu
 var _pasek: Control
+var _bron_t := 3.0
+var _bron_ost := ""
+var _pasek_t := 4.0
+var _pasek_ost := ""
 var _znacznik := 0.0          # znacznik trafienia przy celowniku
 var _znacznik_zabity := false
 var _pomoc: PanelContainer
@@ -269,7 +273,26 @@ func _process(delta: float) -> void:
 		linie_b.append("latarka: " + ("WŁ" if gracz.latarka_wlaczona else "wył") + "  [L]")
 	elif gracz.bron.ma_latarke_broni():
 		linie_b.append("latarka na broni: " + ("WŁ" if gracz.latarka_broni_wl else "wył") + "  [L]")
-	_bron.text = "\n".join(linie_b)
+	# bez stałego HUD-u (jak w Iron Blight): opis broni i pasek pojawiają się na chwilę po zmianie,
+	# zdrowie pokazuje zegarek na lewym nadgarstku
+	var tekst_b := "\n".join(linie_b)
+	if tekst_b != _bron_ost:
+		_bron_ost = tekst_b
+		_bron_t = 2.5
+	_bron.text = tekst_b
+	_bron_t = maxf(0.0, _bron_t - delta)
+	_bron.modulate.a = clampf(_bron_t / 0.6, 0.0, 1.0)
+	var klucz_p := "%s|%s" % [gracz.aktywny_slot, gracz.latarka_w_rece]
+	for a in ["bron1", "bron2", "bron3", "pasek1", "pasek2", "pasek3", "pasek4", "pasek5", "pasek6"]:
+		if InputMap.has_action(a) and Input.is_action_just_pressed(a):
+			_pasek_t = 3.0
+	if klucz_p != _pasek_ost:
+		_pasek_ost = klucz_p
+		_pasek_t = 3.0
+	_pasek_t = maxf(0.0, _pasek_t - delta)
+	_pasek.modulate.a = clampf(_pasek_t / 0.6, 0.0, 1.0)
+	_cialo.visible = false
+	_waga.visible = prog >= 2
 	# interakcja
 	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	# akcja: kółko pod celownikiem (w ekwipunku kółko jest przy kursorze)
@@ -290,6 +313,7 @@ func _process(delta: float) -> void:
 		if Input.is_action_just_pressed("wyjscia") and not Sterowanie.blokada:
 			_wyjscia_t = 8.0
 		_wyjscia_t -= delta
+		_czas.visible = _wyjscia_t > 0.0
 		if _wyjscia_t > 0.0:
 			var linie := ["WYJŚCIA ZE STREFY:"]
 			for w in rajd.info["wyjscia"]:
