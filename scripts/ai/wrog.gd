@@ -1035,6 +1035,13 @@ func _strzelaj(delta: float) -> void:
 			_strzal_t = randf_range(0.5, 1.1)
 	else:
 		_strzal_t += randf_range(0.25, 0.7)
+	# zaniedbana broń wroga też się zacina: przerwa na przeładowanie zamka, okrzyk
+	var stan_b := float(bron.dane.get("stan", 70.0))
+	if not bd.has("wewnetrzny") and randf() < 0.004 * (1.0 + (100.0 - stan_b) / 30.0):
+		_strzal_t = randf_range(1.4, 2.2)
+		_napis(["Zacięcie!", "Kurwa, zacięło!", "Zacięło mi się!"].pick_random())
+		Dzwiek.graj_3d("sucho", global_position, get_parent(), -2.0, 0.9)
+		return
 	_w_magazynku -= 1
 	var ad: Dictionary = Dane.def(amunicja_id)["amunicja"]
 	var oko := _oko() + Vector3.UP * -0.1

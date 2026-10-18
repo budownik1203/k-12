@@ -457,8 +457,6 @@ func swiecenie_szkla(wl: bool) -> void:
 
 ## Animacja rąk przy akcji gracza (leczenie, napełnianie magazynków); "" kończy.
 func animacja_akcji(nazwa: String) -> void:
-	if nazwa in ["zdejmowanie"]:
-		nazwa = "schowaj"   # ręce przy zwłokach, poza kadrem (ekran przeszukiwania otwarty)
 	if nazwa == "montaz" and ogladanie and gracz and gracz.akcja.has("dod"):
 		_zacznij_montaz_podglad(gracz.akcja["dod"], bool(gracz.akcja.get("zdejmij", false)))
 	elif nazwa == "" and not _mont.is_empty():
@@ -764,6 +762,8 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	var srut := int(ad.get("srut", 1))
 	var baza: float = lerpf(float(bd["rozrzut_biodro"]) * przedmiot.mod("rozrzut_biodro"), float(bd["rozrzut_ads"]) * przedmiot.mod("rozrzut_ads"), ads)
 	var kat: float = baza * (1.0 + _ruch * 1.4) * lerpf(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) + bloom
+	# zabrudzona lufa i luzy: brudna broń trochę rozrzuca
+	kat *= 1.0 + (100.0 - float(przedmiot.dane.get("stan", 100.0))) / 260.0
 	var space := kamera.get_world_3d().direct_space_state
 	var od := kamera.global_position
 	var przod := -kamera.global_basis.z

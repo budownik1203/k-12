@@ -169,6 +169,10 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
 			ci.draw_texture_rect(tex, Rect2(r.get_center() - ts * 0.5, ts), false)
+	if p.dane.get("przeterminowany", false):
+		# zbrylone, wyblakłe – pomarańczowy wykrzyknik w rogu
+		ci.draw_rect(Rect2(r.position + Vector2(2, 2), Vector2(9, 11)), Color(0.55, 0.3, 0.08, 0.9))
+		ci.draw_string(Motyw.mono_b(), r.position + Vector2(4, 12), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 0.85, 0.5))
 	if p.typ() == "pancerz":
 		# wgniecenia i przetarcia proporcjonalne do zużycia
 		var mx := float(p.defn()["pancerz"]["wytrzymalosc"])

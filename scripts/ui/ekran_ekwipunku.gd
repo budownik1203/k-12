@@ -614,6 +614,9 @@ func _przebuduj() -> void:
 		wn.add_child(nag)
 		if co == "plecak" and not _warstwa:
 			wn.add_child(Zamek.new())
+		if co == "kamizelka" and _szybki and _warstwa and ekw.siatka_plecaka() != null:
+			# szybkie zerknięcie: co (mniej więcej) zostało w plecaku – czy warto go zdejmować
+			wn.add_child(_napis_swiat(_podsumowanie_plecaka(), 10, Color(0.8, 0.76, 0.62, 0.8), false))
 		var gui := _siatka_ui(siatka, co)
 		if _warstwa and _kieszenie.has(co):
 			gui.kieszenie = _kieszenie[co]
@@ -1219,7 +1222,7 @@ func _zdejmij_z_ciala(p: Przedmiot, s: Siatka) -> void:
 		Dzwiek.graj("rzep", -8.0, 0.9)
 		_przebuduj()
 	Dzwiek.graj("rzep", -10.0)
-	gracz.zacznij_akcje("Zdejmowanie: " + p.nazwa(), czas, koniec, "zdejmowanie")
+	gracz.zacznij_akcje("Zdejmowanie: " + p.nazwa(), czas, koniec, "zdejmowanie", 0, Callable(), {"id": p.id})
 
 
 var _btn_sort: Button = null
@@ -1231,6 +1234,28 @@ func _sortuj_btn(b: Button) -> void:
 	_btn_sort = b
 	_prawy.add_child(b)
 	_prawy.move_child(b, 1)
+
+
+func _podsumowanie_plecaka() -> String:
+	var lic := {}
+	for e in ekw.siatka_plecaka().items:
+		var p: Przedmiot = e["p"]
+		var k := ""
+		match p.typ():
+			"magazynek":
+				k = "mag. " + p.nazwa().get_slice(" ", 1)
+			"amunicja":
+				k = "amunicja " + String(p.defn()["amunicja"]["kaliber"])
+			"med":
+				k = p.nazwa().to_lower()
+		if k != "":
+			lic[k] = int(lic.get(k, 0)) + (p.ilosc if p.typ() == "amunicja" else 1)
+	if lic.is_empty():
+		return "W plecaku: nic do walki ani leczenia"
+	var cz := []
+	for k in lic:
+		cz.append("%s ×%d" % [k, lic[k]] if not String(k).begins_with("amunicja") else "%s (%d szt.)" % [k, lic[k]])
+	return "W plecaku (trzeba zdjąć): " + ", ".join(cz)
 
 
 func _napis_swiat(t: String, rozm: int, k: Color, gruby: bool) -> Label:

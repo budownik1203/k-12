@@ -269,8 +269,11 @@ func interakcja(g) -> void:
 		return
 	var czas := otworz_mebel()
 	if g.has_method("patrz_na"):
-		g.patrz_na(punkt_wnetrza(), 0.45, 0.35 if niski else 0.0)
+		# przy zwłokach przyklęk na jedno kolano (niżej), przy szafce kuchennej lekki przysiad
+		var przys := 0.62 if String(nazwa).begins_with("Zwłoki") else (0.35 if niski else 0.0)
+		g.patrz_na(punkt_wnetrza(), 0.5 if przys > 0.5 else 0.45, przys)
 	var otw := func(): get_tree().call_group("ui_rajdu", "otworz_pojemnik", self)
 	if czas <= 0.05:
 		czas = 0.45 if niski else 0.3
-	g.zacznij_akcje("Otwieranie: " + nazwa, czas, otw, "otwieranie")
+	var ruch: String = mebel.get("dzwiek", "zwloki" if String(nazwa).begins_with("Zwłoki") else "drzwi")
+	g.zacznij_akcje("Otwieranie: " + nazwa if not String(nazwa).begins_with("Zwłoki") else "Przeszukiwanie: " + nazwa.trim_prefix("Zwłoki: "), czas, otw, "otwieranie", 0, Callable(), {"id": ruch})

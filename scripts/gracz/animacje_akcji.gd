@@ -66,7 +66,19 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			lewa.visible = false
 		"otwieranie":
 			prawa.ustaw_chwyt("otwarta")
-			lewa.visible = false
+			lewa.visible = id in ["wieko", "zwloki"]
+		"zdejmowanie":
+			var pz := ModelePrzedmiotow.wezel(Przedmiot.nowy(id), true)
+			var piv2 := Node3D.new()
+			add_child(piv2)
+			piv2.add_child(pz)
+			var ab2: AABB = pz.get_meta("aabb", AABB())
+			var nw := maxf(ab2.size.x, ab2.size.z)
+			if nw > 0.3:
+				pz.scale = Vector3.ONE * (0.3 / nw)
+			_rek["model"] = piv2
+			lewa.ustaw_chwyt("piesc")
+			prawa.ustaw_chwyt("piesc")
 		"ogladaj":
 			var pm := ModelePrzedmiotow.wezel(Przedmiot.nowy(id), true)
 			var ab: AABB = pm.get_meta("aabb", AABB())
@@ -170,6 +182,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_siegnij(f, dol)
 		"ogladaj":
 			_ogladaj(t, f, dol)
+		"zdejmowanie":
+			_zdejmowanie(t, f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
 		_:
@@ -377,15 +391,48 @@ func _podnies(f: float, dol: Vector3) -> void:
 
 
 func _siegnij(f: float, dol: Vector3) -> void:
-	# prawa dłoń sięga przed siebie do uchwytu / wieka, chwyta i ciągnie do siebie, potem puszcza
+	# ruch zależny od mebla: drzwi – chwyt za uchwyt i odciągnięcie łukiem w bok, szuflada – pociągnięcie
+	# prosto do siebie, wieko – podważenie i uniesienie do góry, zwłoki – obie dłonie w dół do ciała
 	var gora := Vector3(0.12, -0.16, -0.3) + dol
-	var uchwyt := Vector3(0.05, -0.1, -0.6)
-	var e := smoothstep(0.0, 0.35, f)
-	var ciag := smoothstep(0.35, 0.8, f)
-	var p := gora.lerp(uchwyt, e) + Vector3(0.04, 0.0, 0.22) * ciag
-	p = p.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
-	_uloz(prawa, p, Vector3(-0.15, -0.1, -1.0), Vector3(0.3, 1.0, 0.2))
-	prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")
+	match id:
+		"szuflada":
+			var uch := Vector3(0.02, -0.2, -0.58)
+			var e := smoothstep(0.0, 0.3, f)
+			var c := smoothstep(0.32, 0.75, f)
+			var p := gora.lerp(uch, e) + Vector3(0, 0.0, 0.28) * c
+			p = p.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
+			_uloz(prawa, p, Vector3(-0.1, -0.35, -1.0), Vector3(0.2, 1.0, 0.1))
+			prawa.ustaw_chwyt("piesc" if f > 0.28 and f < 0.8 else "otwarta")
+		"wieko":
+			var kraw := Vector3(0.0, -0.3, -0.55)
+			var e2 := smoothstep(0.0, 0.3, f)
+			var u := smoothstep(0.35, 0.8, f)
+			var p2 := gora.lerp(kraw, e2) + Vector3(0, 0.32, -0.08) * u
+			p2 = p2.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.88, 1.0, f))
+			_uloz(prawa, p2, Vector3(0.0, -0.2 + u * 0.6, -1.0), Vector3(0.1, 1.0 - u * 1.4, 0.4 + u))
+			prawa.ustaw_chwyt("otwarta" if f < 0.3 or f > 0.85 else "lozysko")
+			lewa.visible = true
+			var p3 := p2 + Vector3(-0.22, 0.0, 0.02)
+			_uloz(lewa, p3, Vector3(0.0, -0.2 + u * 0.6, -1.0), Vector3(-0.1, 1.0 - u * 1.4, 0.4 + u))
+			lewa.ustaw_chwyt("otwarta" if f < 0.3 or f > 0.85 else "lozysko")
+		"zwloki":
+			lewa.visible = true
+			var cialo := Vector3(0.0, -0.42, -0.42)
+			var e4 := smoothstep(0.0, 0.5, f)
+			var gr := sin(f * 14.0) * 0.015 * smoothstep(0.4, 0.6, f)
+			_uloz(prawa, gora.lerp(cialo + Vector3(0.07, gr, 0), e4), Vector3(-0.2, -0.85, -0.45), Vector3(0.3, 0.3, 0.9))
+			_uloz(lewa, (gora + Vector3(-0.24, 0, 0)).lerp(cialo + Vector3(-0.09, -gr, 0.02), e4), Vector3(0.2, -0.85, -0.45), Vector3(-0.3, 0.3, 0.9))
+			prawa.ustaw_chwyt("szczypta" if f > 0.45 else "otwarta")
+			lewa.ustaw_chwyt("otwarta")
+		_:
+			var uchwyt := Vector3(0.05, -0.1, -0.6)
+			var e5 := smoothstep(0.0, 0.35, f)
+			var ciag := smoothstep(0.35, 0.8, f)
+			# drzwi: dłoń na uchwycie, potem łuk – drzwi odchodzą w bok i do siebie
+			var p5 := gora.lerp(uchwyt, e5) + Vector3(0.18 * ciag, 0.0, 0.22 * sin(ciag * PI * 0.5))
+			p5 = p5.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
+			_uloz(prawa, p5, Vector3(-0.15 - ciag * 0.4, -0.1, -1.0 + ciag * 0.3), Vector3(0.3, 1.0, 0.2))
+			prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")
 
 
 func _ogladaj(t: float, f: float, dol: Vector3) -> void:
@@ -401,3 +448,19 @@ func _ogladaj(t: float, f: float, dol: Vector3) -> void:
 	_uloz(prawa, sr + Vector3(o + 0.06, -0.01 + sin(t * 3.0) * 0.008, 0.02), Vector3(-0.75, 0.15, -0.55), Vector3(0.2, 1.0, 0.3))
 	lewa.celuj_lokiec(Vector3(-0.28, -0.5, 0.0), self)
 	prawa.celuj_lokiec(Vector3(0.28, -0.5, 0.0), self)
+
+
+func _zdejmowanie(t: float, f: float, dol: Vector3) -> void:
+	# przy ciele: dłonie szarpią rzepy i klamry w dole kadru, na końcu unoszą zdjęty pancerz / hełm
+	var m: Node3D = _rek["model"]
+	var cialo := Vector3(0.0, -0.24, -0.5) + dol
+	var szarp := sin(t * 9.0) * 0.025 * (1.0 - smoothstep(0.7, 0.8, f))
+	var unies := smoothstep(0.72, 1.0, f)
+	var srodek := cialo.lerp(Vector3(0.0, -0.1, -0.4) + dol, unies)
+	m.visible = true
+	m.position = srodek + Vector3(0, -0.05, 0)
+	m.rotation = Vector3(-0.9 + unies * 0.7, 0.2, 0.0)
+	_uloz(lewa, srodek + Vector3(-0.13, 0.02 + szarp, 0.03), Vector3(0.35, -0.6, -0.6), Vector3(-0.3, 0.6, 0.6))
+	_uloz(prawa, srodek + Vector3(0.13, 0.02 - szarp, 0.03), Vector3(-0.35, -0.6, -0.6), Vector3(0.3, 0.6, 0.6))
+	lewa.celuj_lokiec(Vector3(-0.3, -0.55, 0.0), self)
+	prawa.celuj_lokiec(Vector3(0.3, -0.55, 0.0), self)
