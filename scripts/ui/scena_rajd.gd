@@ -682,7 +682,10 @@ func _test_mechanik() -> void:
 		var l := gracz.upusc(Przedmiot.nowy("konserwa"))
 		await get_tree().create_timer(1.0).timeout
 		var d_l := Vector2(l.global_position.x - gracz.global_position.x, l.global_position.z - gracz.global_position.z).dot(Vector2(przod.x, przod.z))
-		ok = d_l < d_sc
+		# nic nie stoi między graczem a leżącym przedmiotem (nie przeleciał przez ścianę)
+		var q3 := PhysicsRayQueryParameters3D.create(gracz.global_position + Vector3.UP * 0.3, l.global_position + Vector3.UP * 0.1, Balistyka.WARSTWA_SWIAT)
+		q3.exclude = [gracz.get_rid()]
+		ok = space.intersect_ray(q3).is_empty()
 		print("D wyrzucenie przy ścianie: %.2f m przed graczem (ściana %.2f) %s" % [d_l, d_sc, "OK" if ok else "BLAD"])
 		bledy += 0 if ok else 1
 	# E: kłódka – wyłamanie
@@ -713,6 +716,20 @@ func _test_mechanik() -> void:
 	ok = znany and not pf.lista_czesci()[0]["znane"].has(drugi) and not pf.przeszukany()
 	print("F szukanie po wyjęciu: %s" % ("OK" if ok else "BLAD"))
 	bledy += 0 if ok else 1
+	# G: kolejka czynności – lek zlecony w trakcie innej czynności rusza po jej końcu
+	ek.ograniczony = true
+	var bz := Przedmiot.nowy("bolostop")
+	ek.kieszenie.dodaj(bz)
+	gracz.cialo.przeciwbol = 0.0
+	gracz.zacznij_akcje("Test", 0.6, func(): pass, "podnies")
+	gracz.uzyj_leku(bz, true)
+	var w_kolejce := gracz.kolejka_akcji.size()
+	await get_tree().create_timer(0.8).timeout
+	var ruszyl: bool = not gracz.akcja.is_empty() and String(gracz.akcja.get("typ", "")) == "leczenie_bolostop"
+	ok = w_kolejce == 1 and ruszyl
+	print("G kolejka czynności: zaplanowano %d, ruszyło %s %s" % [w_kolejce, ruszyl, "OK" if ok else "BLAD"])
+	bledy += 0 if ok else 1
+	gracz.przerwij_akcje(true)
 	print("TEST MECHANIK: błędów %d" % bledy)
 
 

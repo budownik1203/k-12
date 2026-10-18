@@ -738,6 +738,14 @@ func _szaber(delta: float) -> void:
 		for i in mini(2, wz.size()):
 			(wz[i][1] as Siatka).usun(wz[i][0])
 			lup.append(wz[i][0])
+	if wykrycie > 0.25 and gracz:
+		# zauważył kogoś przy łupie: zwiewa z tym, co zgarnął
+		_napis(["Spadam z tym!", "Moje, nie oddam!", "Zmywam się!"].pick_random())
+		stan = "ucieczka"
+		czas_bez_kontaktu = 6.0
+		_decyzja_t = 0.0
+		_szaber_cel = null
+		return
 	_napis(["Się przyda.", "Nie twoje, nie moje – teraz moje.", "Dobre."].pick_random())
 	if is_instance_valid(_szaber_cel) and _szaber_cel.has_meta("szabrowany"):
 		_szaber_cel.remove_meta("szabrowany")

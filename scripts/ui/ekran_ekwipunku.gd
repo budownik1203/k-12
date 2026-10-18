@@ -589,6 +589,8 @@ func _przebuduj() -> void:
 		var tytul: String = NAZWY_POJ[co]
 		if co in ["kamizelka", "plecak"] and ekw.sloty[co] != null:
 			tytul = ekw.sloty[co].nazwa() + _opis_red(ekw.sloty[co])
+		if co == "bezpieczny":
+			tytul += "  · zawartość przetrwa śmierć"
 		if _warstwa:
 			var lt := Motyw.etykieta(tytul.to_upper(), 11, Color(0.86, 0.8, 0.62, 0.85), Motyw.mono_b())
 			lt.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
@@ -1974,7 +1976,7 @@ func _menu_akcja(id: int) -> void:
 ## Napełnia magazynek: z podanego stosu albo z dowolnej pasującej amunicji w ekwipunku (i skrytce w bazie).
 func _napelnij(mag: Przedmiot, stos: Przedmiot, z_stosu: Dictionary) -> bool:
 	if gracz != null and not tryb_bazy and not gracz.akcja.is_empty():
-		_komunikat("Najpierw skończ: " + String(gracz.akcja["nazwa"]) + "  [X] przerywa")
+		gracz.zaplanuj(mag.nazwa(), func(): _napelnij(mag, stos, z_stosu))
 		return true
 	var md: Dictionary = mag.defn()["magazynek"]
 	var wolne: int = int(md["pojemnosc"]) - int(mag.dane["naboje"])

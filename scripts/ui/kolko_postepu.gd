@@ -25,6 +25,8 @@ func ustaw_z_gracza(g: Gracz) -> void:
 	postep = g.postep_kroku()
 	calosc = clampf(float(a["t"]) / maxf(0.01, float(a["czas"])), 0.0, 1.0)
 	tekst = String(a["nazwa"])
+	if not g.kolejka_akcji.is_empty():
+		tekst += "  → " + String(g.kolejka_akcji[0]["nazwa"]) + ("" if g.kolejka_akcji.size() < 2 else " (+%d)" % (g.kolejka_akcji.size() - 1))
 	licznik = ("%d/%d" % [int(a["zrobione"]), int(a["kroki"])]) if int(a["kroki"]) > 0 else ""
 	queue_redraw()
 

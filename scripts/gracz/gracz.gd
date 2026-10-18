@@ -537,9 +537,9 @@ func _bron(delta: float, aktywne: bool) -> void:
 		"bieg": _biegnie and Vector2(velocity.x, velocity.z).length() > 2.0,
 		"ruch": ruch, "kucanie": kucanie, "celnosc": cialo.mnoznik_celnosci(),
 	})
-	if not aktywne or not akcja.is_empty():
+	if not aktywne:
 		return
-	# pasek szybkiego dostępu 4-9
+	# pasek szybkiego dostępu 4-9 (w trakcie innej czynności – zaplanuj jako następną)
 	var pasek := ekw.pasek()
 	for i in 6:
 		if Input.is_action_just_pressed("pasek%d" % (i + 1)):
@@ -564,7 +564,11 @@ func uzyj_leku_efekt(efekty: Array) -> void:
 
 ## czesc: część ciała wybrana w panelu zdrowia ("" = najpilniejsza).
 func uzyj_leku(med: Przedmiot, szybki := true, czesc := "") -> void:
-	if tryb_bazy or not akcja.is_empty():
+	if tryb_bazy:
+		return
+	if not akcja.is_empty():
+		if String(akcja.get("typ", "")) != "leczenie_" + med.id:
+			zaplanuj(med.nazwa(), func(): uzyj_leku(med, szybki, czesc))
 		return
 	var md: Dictionary = med.defn()["med"]
 	var efekt: String = md["efekt"]
@@ -609,6 +613,8 @@ func zacznij_akcje(nazwa: String, czas: float, koniec: Callable, typ := "leczeni
 
 
 func przerwij_akcje(z_komunikatem := false) -> void:
+	if z_komunikatem:
+		kolejka_akcji.clear()
 	if akcja.is_empty():
 		return
 	if z_komunikatem:
@@ -647,6 +653,22 @@ func _akcje(delta: float) -> void:
 		akcja = {}
 		bron.animacja_akcji("")
 		k.call()
+		# zaplanowana następna czynność (np. bandaż po napełnieniu magazynka)
+		if akcja.is_empty() and not kolejka_akcji.is_empty():
+			var nast: Dictionary = kolejka_akcji.pop_front()
+			(nast["cb"] as Callable).call()
+
+
+## Kolejka czynności: zlecona w trakcie innej rusza po jej końcu (najwyżej 3). X czyści kolejkę.
+var kolejka_akcji: Array = []
+
+
+func zaplanuj(nazwa: String, cb: Callable) -> void:
+	if kolejka_akcji.size() >= 3:
+		komunikat.emit("Za dużo naraz – najpierw skończ")
+		return
+	kolejka_akcji.append({"nazwa": nazwa, "cb": cb})
+	komunikat.emit("Następnie: " + nazwa)
 
 
 # ------------------------------------------------------------------ interakcje

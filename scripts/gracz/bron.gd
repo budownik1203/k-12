@@ -557,6 +557,12 @@ func _animuj_przeladowanie(f: float) -> void:
 			var rb := Basis(Vector3(0, 0, 1), _roll_l)
 			_lewa.basis = rb
 			_lewa.position = (reka - p_przod + g) - rb * g
+			# łokieć idzie za dłonią: przy rączce zamka (prawa strona) niżej i bardziej w prawo
+			if _reka_l and is_instance_valid(_reka_l) and not md.has("chwyt_pionowy"):
+				var w := clampf(_roll_l / 1.45, 0.0, 1.0)
+				var lok_dom := g + Vector3(-0.22, -0.3, 0.28)
+				var lok_racz := (reka - p_przod + g) + Vector3(0.05, -0.3, 0.24)
+				_reka_l.celuj_lokiec(lok_dom.lerp(lok_racz, w), model)
 	# palce lewej dłoni: otwarta przy sięganiu, zaciśnięta na magazynku, chwyt rączki zamka, powrót na łoże
 	if _lewa and _reka_l and is_instance_valid(_reka_l):
 		var poza := "pistolet" if (jest_pistolet() or md.has("chwyt_pionowy")) else "lozysko"
