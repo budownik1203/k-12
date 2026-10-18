@@ -62,6 +62,18 @@ func util_aktywny(slot: String) -> bool:
 
 
 ## Czy przedmiot o danym id jest w aktywnym slocie wyposażenia (np. latarka gotowa do użycia).
+## Czy przedmiot o danym id jest gdziekolwiek w ekwipunku (siatki i sloty).
+func ma_przedmiot(pid: String) -> bool:
+	for s in siatki():
+		for e in (s as Siatka).items:
+			if (e["p"] as Przedmiot).id == pid:
+				return true
+	for k in sloty:
+		if sloty[k] != null and (sloty[k] as Przedmiot).id == pid:
+			return true
+	return false
+
+
 func ma_wyposazenie(pid: String) -> bool:
 	for i in liczba_utility():
 		var p: Przedmiot = sloty["util%d" % i]

@@ -49,6 +49,7 @@ var latarka_wlaczona := true
 var latarka_broni_wl := false   # latarka taktyczna na broni
 var _kop := 0.0                 # kopnięcie kamery po strzale
 var oglusz := 0.0               # ogłuszenie po trafieniu w hełm (sekundy, malejąco)
+var ruch_z_ekwipunkiem := false  # szybka kamizelka (2x Tab): wolny marsz z otwartymi ładownicami
 var ekw_pitch := 0.0            # widok przy ekwipunku: spojrzenie w dół, przechył, przysiad
 var ekw_roll := 0.0
 var ekw_glowa := 0.0
@@ -286,7 +287,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var we_aktywne := sterowanie and not Sterowanie.blokada
 	_rozgladanie(delta, we_aktywne)
-	_ruch(delta, we_aktywne)
+	_ruch(delta, we_aktywne or (sterowanie and ruch_z_ekwipunkiem))
 	_akcje(delta)
 	_interakcje(we_aktywne)
 	_bron(delta, we_aktywne)
@@ -403,6 +404,10 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	v *= [1.0, 0.9, 0.75, 0.5][prog] * cialo.mnoznik_ruchu()
 	if not akcja.is_empty():
 		v *= 0.45
+	if ruch_z_ekwipunkiem and Sterowanie.blokada:
+		# zerkanie w ładownice w marszu: tylko powoli, bez biegu
+		v = minf(v, PREDKOSC_KUC)
+		moze_biec = false
 	if oglusz > 0.0:
 		v *= 1.0 - 0.45 * minf(1.0, oglusz / 2.0)
 	if bron.ads > 0.5:
@@ -438,7 +443,7 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			cialo.upadek(wys)
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.graj_3d("krok", global_position, get_parent(), 0.0, 0.8)
-		if aktywne and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
+		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
 			velocity.y = 3.6
 			wytrzymalosc -= 10.0
 	else:
@@ -655,6 +660,8 @@ func upusc(p: Przedmiot) -> LupNaZiemi:
 func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := false) -> void:
 	if cialo.martwy:
 		return
+	# trafiony przy rozłożonym plecaku / przeszukiwaniu: zrywa się, sprzęt zostaje na ziemi
+	get_tree().call_group("ekran_ekwipunku", "zerwij_sie", "trafienie")
 	var wys: float = lerpf(WYS_STOJ, WYS_KUC, kucanie) + 0.12
 	var y: float = (punkt.y - global_position.y) / wys
 	var czesc := "nogi"

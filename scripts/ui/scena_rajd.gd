@@ -757,6 +757,40 @@ func _zrzut_animacji(katalog: String) -> void:
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
 		return
+	if OS.get_cmdline_user_args().has("--porzucenie"):
+		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_wojskowy")
+		Gra.ekw.siatka_plecaka().dodaj(Przedmiot.nowy("konserwa"))
+		ekran_ekw.otworz(null)
+		await _klatki(5)
+		ekran_ekw.przelacz_pojemnik("plecak")
+		await get_tree().create_timer(2.5).timeout
+		await _zapisz(katalog, "pz_0_rozlozony")
+		gracz.sterowanie = true
+		Input.action_press("tyl")
+		await get_tree().create_timer(0.8).timeout
+		Input.action_release("tyl")
+		await get_tree().create_timer(0.6).timeout
+		gracz.kamera.rotation.x = -0.6
+		await _klatki(5)
+		await _zapisz(katalog, "pz_1_porzucony")
+		var lz: Array = swiat.get_children().filter(func(x): return x is LupNaZiemi and x.przedmiot.id == "plecak_wojskowy")
+		print("plecak w slocie: ", Gra.ekw.sloty["plecak"], " na ziemi: ", lz.size(), " otwarty: ", ekran_ekw.otwarty)
+		if not lz.is_empty():
+			print("tekst: ", lz[0].tekst_interakcji(gracz))
+			lz[0].interakcja(gracz)
+			while not gracz.akcja.is_empty():
+				await get_tree().process_frame
+			print("po zalozeniu: ", Gra.ekw.sloty["plecak"] != null, " konserwa: ", Gra.ekw.siatka_plecaka().items.size() if Gra.ekw.siatka_plecaka() else -1)
+		# szybka kamizelka w marszu
+		ekran_ekw.otworz(null)
+		await _klatki(2)
+		ekran_ekw.szybka_kamizelka()
+		var p0 := gracz.global_position
+		Input.action_press("przod")
+		await get_tree().create_timer(1.0).timeout
+		Input.action_release("przod")
+		print("marsz z kamizelka: %.2f m, otwarty: %s" % [gracz.global_position.distance_to(p0), ekran_ekw.otwarty])
+		return
 	if OS.get_cmdline_user_args().has("--zwloki"):
 		# wróg pada przed graczem, gracz przeszukuje ciało po częściach i zdejmuje pancerz
 		gracz.sterowanie = false

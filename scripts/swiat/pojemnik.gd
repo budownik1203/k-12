@@ -115,7 +115,39 @@ func odkryj_wszystko() -> void:
 		c["odkryte"] = (c["siatka"] as Siatka).items.size()
 
 
+## Zamknięta na kłódkę skrzynia / szafka: klucz otwiera od razu, narzędziem (kombinerki, klucz nastawny)
+## wyłamuje się szybciej, gołymi rękami i kolbą – długo; wyłamywanie słychać daleko.
+func _wylam(g) -> void:
+	if g.ekw.ma_przedmiot(zamkniety_kluczem):
+		zamkniety_kluczem = ""
+		Dzwiek.graj_3d("klik", global_position, get_parent(), -6.0, 0.8)
+		interakcja(g)
+		return
+	var narzedzie: bool = g.ekw.ma_przedmiot("kombinerki") or g.ekw.ma_przedmiot("klucz_nastawny")
+	var czas := 3.2 if narzedzie else 6.5
+	if g.has_method("patrz_na"):
+		g.patrz_na(punkt_wnetrza(), 0.45, 0.35 if niski else 0.0)
+	var halas := func():
+		Dzwiek.graj_3d("lom", global_position + Vector3.UP * 0.5, get_parent(), -4.0, randf_range(0.9, 1.1), 30.0)
+		Gra.emituj_halas(global_position, 16.0 if narzedzie else 22.0, g)
+	halas.call()
+	var t := get_tree().create_timer(czas * 0.5)
+	t.timeout.connect(func():
+		if not g.akcja.is_empty() and String(g.akcja.get("nazwa", "")).begins_with("Wyłamywanie"):
+			halas.call())
+	g.zacznij_akcje(("Wyłamywanie kłódki" if narzedzie else "Wyłamywanie kłódki (kolbą)") + ": " + nazwa, czas, func():
+		zamkniety_kluczem = ""
+		var kl = mebel.get("klodka")
+		if kl and is_instance_valid(kl):
+			(kl as Node3D).queue_free()
+		Dzwiek.graj_3d("upadek_metal", global_position + Vector3.UP * 0.3, get_parent(), -6.0, 1.2)
+		g.komunikat.emit("Kłódka puściła")
+		, "otwieranie")
+
+
 func tekst_interakcji(_g) -> String:
+	if zamkniety_kluczem != "":
+		return "Wyłam kłódkę: " + nazwa + (" (masz narzędzie)" if _g and (_g.ekw.ma_przedmiot("kombinerki") or _g.ekw.ma_przedmiot("klucz_nastawny")) else " (kolbą – głośno, długo)")
 	var stan := "" if not zaczety() else (" (przeszukane)" if przeszukany() else " (częściowo)")
 	if pusty() and zaczety():
 		stan = " (puste)"
@@ -185,6 +217,9 @@ func _dzwiek(dz: String, otw: bool) -> void:
 ## otwiera drzwi / szufladę / wieko – dopiero wtedy widać zawartość.
 func interakcja(g) -> void:
 	if not g.akcja.is_empty():
+		return
+	if zamkniety_kluczem != "":
+		_wylam(g)
 		return
 	var czas := otworz_mebel()
 	if g.has_method("patrz_na"):

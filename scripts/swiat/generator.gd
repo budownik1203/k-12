@@ -1241,6 +1241,11 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 			var mm := ModeleMebli.zbuduj(id)
 			inst = mm["wezel"]
 			pj.mebel = mm
+			# część skrzyń i szafek ubraniowych na kłódkę (lepszy łup, ale trzeba wyłamać)
+			if id in ["skrzynia_wojskowa", "szafka_metalowa", "skrzynia"] and rng.randf() < 0.3:
+				pj.zamkniety_kluczem = "klodka"
+				pj.wypelnij(info["pojemnik"], 2, rng)
+				mm["klodka"] = ModeleMebli.klodka(inst, id)
 		korzen = pj
 	elif z_kolizja and id not in BEZ_KOLIZJI:
 		var sb := StaticBody3D.new()

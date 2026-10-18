@@ -45,8 +45,12 @@ Latarka, mapa i kompas działają tylko na slotach wyposażenia (pas + 0–2 z k
 do wyjść w liście [O], kompas – pasek kierunków u góry ekranu. Amunicja luzem to garść (1x1), większy stos robi się
 pudełkiem (1x2). Kamizelki i plecaki mają przegródki (osobne ładownice i kieszenie).
 
-W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** szybko przenosi, **PPM** menu
-(użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć). Amunicję upuść na magazynek, żeby go napełnić
+W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzie kolejka – dłoń przekłada po kolei),
+**Shift+LPM** dzieli stos na pół, **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).
+Szafki, szuflady i skrzynie otwiera się w świecie (**F**), zawartość odkrywa się stopniowo – po ciemku wolniej.
+Ciała przeszukuje się po kieszeniach; pancerz i hełm z ciała zdejmuje się kliknięciem (trwa). Zamknięte na kłódkę
+skrzynie i szafki wyłamuje się (z kombinerkami lub kluczem nastawnym szybciej). Przytrzymany ruch przy rozłożonym
+plecaku – zrywasz się i plecak zostaje na ziemi (podejdź i **F**, żeby go założyć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
 w panelu zdrowia leczy właśnie ją.
 Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu

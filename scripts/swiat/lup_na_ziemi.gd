@@ -68,7 +68,17 @@ func _upadek() -> void:
 	Gra.emituj_halas(global_position, clampf(4.0 + w * 1.5, 4.0, 14.0), get_tree().get_first_node_in_group("gracz"))
 
 
-func tekst_interakcji(_g) -> String:
+func _do_zalozenia(g) -> String:
+	# porzucony plecak / kamizelka / pancerz: od razu na plecy, jeśli slot wolny
+	var sl := Ekwipunek.slot_dla(przedmiot)
+	if sl in ["plecak", "kamizelka", "pancerz", "helm"] and g.ekw.sloty.get(sl) == null:
+		return sl
+	return ""
+
+
+func tekst_interakcji(g) -> String:
+	if _do_zalozenia(g) != "":
+		return "Załóż: " + przedmiot.nazwa()
 	return "Podnieś: " + przedmiot.nazwa()
 
 
@@ -77,6 +87,17 @@ func interakcja(g) -> void:
 		return
 	# schylenie się i sięgnięcie po przedmiot (krótka czynność, przerywalna); cięższe dłużej
 	_podnoszony = true
+	var sl := _do_zalozenia(g)
+	if sl != "":
+		var cz: float = {"plecak": 1.8, "kamizelka": 2.2, "pancerz": 4.0, "helm": 1.2}[sl]
+		g.zacznij_akcje("Zakładanie: " + przedmiot.nazwa(), cz, func():
+			_podnoszony = false
+			if is_instance_valid(self) and g.ekw.zaloz(sl, przedmiot):
+				Dzwiek.graj("plecak", -6.0)
+				queue_free()
+			, "podnies")
+		get_tree().create_timer(cz + 0.5).timeout.connect(func(): _podnoszony = false)
+		return
 	var czas := clampf(0.6 + przedmiot.waga() * 0.06, 0.6, 1.4)
 	g.zacznij_akcje("Podnoszenie: " + przedmiot.nazwa(), czas, func():
 		_podnoszony = false

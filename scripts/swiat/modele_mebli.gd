@@ -272,3 +272,19 @@ static func wartosci_startowe(kroki: Array) -> Array:
 			k2.append((zm[0] as Node).get_indexed(NodePath(String(zm[1]))))
 		out.append(k2)
 	return out
+
+
+## Kłódka na przodzie mebla (znika po wyłamaniu – patrz Pojemnik).
+static func klodka(n: Node3D, id: String) -> Node3D:
+	var poz := Vector3(0, 0.42, 0.3)
+	match id:
+		"szafka_metalowa":
+			poz = Vector3(0.2, 1.0, 0.25)
+		"skrzynia":
+			poz = Vector3(0, 0.5, 0.31)
+	var k := _wezel(n, poz)
+	_mi(k, [_b(Vector3(0, -0.02, 0.012), Vector3(0.04, 0.035, 0.016), "mosiadz", Color.WHITE, 0.004),
+		B.walec(Vector3(-0.012, 0.0, 0.012), Vector3(-0.012, 0.02, 0.012), 0.003, 0.003, "metal_jasny", 6),
+		B.walec(Vector3(0.012, 0.0, 0.012), Vector3(0.012, 0.02, 0.012), 0.003, 0.003, "metal_jasny", 6),
+		B.walec(Vector3(-0.012, 0.02, 0.012), Vector3(0.012, 0.02, 0.012), 0.003, 0.003, "metal_jasny", 6)])
+	return k

@@ -72,10 +72,13 @@ var _kolejka: Array = []       # [{"p", "z"}]
 var _zajete_t := 0.0
 var _zajete_calk := 0.0
 var _kolko_przel: KolkoPostepu
+var _ucieczka_t := 0.0
+var _podp_ucieczka: Label
 
 
 func _ready() -> void:
 	layer = 20
+	add_to_group("ekran_ekwipunku")
 	ekw = Gra.ekw
 	_buduj()
 	_root.visible = false
@@ -302,6 +305,8 @@ func przelacz_pojemnik(co: String) -> void:
 	_otwieranie = co
 	_otw_t = 0.0
 	_otw_czas = czas
+	if gracz and co != "kamizelka":
+		gracz.ruch_z_ekwipunkiem = false
 	if _r3d:
 		_r3d.otworz(co, _siatka_pojemnika(co), czas)
 	if co in ["kamizelka", "plecak", "bezpieczny"]:
@@ -316,6 +321,8 @@ func przelacz_pojemnik(co: String) -> void:
 ## 2x Tab w rajdzie: szybki dostęp do kamizelki (zerknięcie w dół, bez panelu oporządzenia).
 func szybka_kamizelka() -> void:
 	_szybki = true
+	if gracz:
+		gracz.ruch_z_ekwipunkiem = true
 	_lp.visible = false
 	_gora.visible = false
 	if not "kamizelka" in otwarte and _otwieranie == "":
@@ -466,6 +473,9 @@ func zamknij() -> void:
 	_otwieranie = ""
 	otwarte = []
 	_szybki = false
+	_ucieczka_t = 0.0
+	if gracz:
+		gracz.ruch_z_ekwipunkiem = false
 	if _r3d:
 		_r3d.zamknij_wszystko(0.4)
 		_r3d = null
@@ -842,6 +852,25 @@ func _process(delta: float) -> void:
 				var cc := _root.size * 0.5 if pk2 == null else (pk2 as Vector2)
 				c.position = cc - (c as Control).size * 0.5
 	_kolejka_krok(delta)
+	# ucieczka od rozłożonego plecaka: przytrzymany ruch porzuca go na ziemi
+	var plecak_rozl := not tryb_bazy and gracz != null and ("plecak" in otwarte or _otwieranie == "plecak")
+	if _podp_ucieczka == null and not tryb_bazy:
+		_podp_ucieczka = Motyw.etykieta("[W/S/A/D – przytrzymaj] zerwij się i uciekaj (plecak zostaje na ziemi)", 12, Color(0.85, 0.6, 0.4, 0.85), Motyw.mono())
+		_podp_ucieczka.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_podp_ucieczka.offset_top = -70
+		_podp_ucieczka.offset_left = -330
+		_podp_ucieczka.offset_right = 330
+		_podp_ucieczka.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_root.add_child(_podp_ucieczka)
+	if _podp_ucieczka:
+		_podp_ucieczka.visible = plecak_rozl
+	if plecak_rozl:
+		var rusza := Input.is_action_pressed("przod") or Input.is_action_pressed("tyl") or Input.is_action_pressed("lewo") or Input.is_action_pressed("prawo")
+		_ucieczka_t = _ucieczka_t + delta if rusza else 0.0
+		if _ucieczka_t > 0.35:
+			_ucieczka_t = 0.0
+			zerwij_sie("ucieczka")
+			return
 	if _kolko_przel == null:
 		_kolko_przel = KolkoPostepu.new()
 		_kolko_przel.promien = 9.0
@@ -1009,6 +1038,34 @@ func _napis_swiat(t: String, rozm: int, k: Color, gruby: bool) -> Label:
 	l.add_theme_constant_override("shadow_offset_x", 1)
 	l.add_theme_constant_override("shadow_offset_y", 1)
 	return l
+
+
+## Zerwanie się od rozłożonego sprzętu (trafienie, ucieczka): bez pakowania – plecak zostaje na ziemi.
+func zerwij_sie(powod: String) -> void:
+	if not otwarty or tryb_bazy or gracz == null or _chowanie:
+		return
+	var plecak_otw := "plecak" in otwarte or _otwieranie == "plecak"
+	if not plecak_otw and _pojemnik == null and not ("bezpieczny" in otwarte):
+		if powod == "trafienie" and ("kamizelka" in otwarte or _otwieranie != ""):
+			zamknij()
+		return
+	if plecak_otw and ekw.sloty["plecak"] != null:
+		var pl: Przedmiot = ekw.sloty["plecak"]
+		var gdzie: Vector3 = gracz.global_position - gracz.global_basis.z * 0.7
+		if _r3d and _r3d.ma("plecak"):
+			var w: Node3D = _r3d._modele["plecak"]["wezel"]
+			if is_instance_valid(w):
+				gdzie = w.global_position
+		ekw.sloty["plecak"] = null
+		ekw.zmieniony.emit()
+		if _r3d:
+			_r3d._usun("plecak")
+		var l := LupNaZiemi.new()
+		l.przedmiot = pl
+		gracz.get_parent().add_child(l)
+		l.global_position = gdzie + Vector3.UP * 0.2
+		gracz.komunikat.emit(("Trafiony! " if powod == "trafienie" else "") + "Plecak zostaje na ziemi – [F] przy nim, żeby założyć")
+	zamknij()
 
 
 func _szuk_swiatlo() -> float:
