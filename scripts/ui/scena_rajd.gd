@@ -139,9 +139,19 @@ func _process(delta: float) -> void:
 	if _cull_t <= 0.0:
 		_cull_t = 0.3
 		var gp := gracz.global_position
+		var bliskie := []
 		for l in info["lampy"]:
 			if is_instance_valid(l):
-				(l as Light3D).visible = (l as Node3D).global_position.distance_squared_to(gp) < 34.0 * 34.0
+				var d2 := (l as Node3D).global_position.distance_squared_to(gp)
+				(l as Light3D).visible = d2 < 34.0 * 34.0
+				if d2 < 16.0 * 16.0 and (l as Light3D).light_energy > 0.15:
+					bliskie.append([d2, l])
+				else:
+					(l as Light3D).shadow_enabled = false
+		# prawdziwe cienie od 3 najbliższych lamp (jak w Iron Blight: ławka i drzewo rzucają cień od latarni)
+		bliskie.sort_custom(func(a, b): return a[0] < b[0])
+		for i in bliskie.size():
+			(bliskie[i][1] as Light3D).shadow_enabled = i < 3
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).rajd_czas = czas
 	if _tryb_testu == "test" and czas > 1.0 and czas - delta <= 1.0:

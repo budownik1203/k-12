@@ -57,7 +57,7 @@ static func box(st: SurfaceTool, c: Vector3, s: Vector3, col: Color, rot := Vect
 	]
 	for f in faces:
 		var n: Vector3 = b * f[0]
-		var shade: float = 0.82 + 0.18 * clampf(n.y * 0.6 + n.x * 0.2 + 0.4, 0.0, 1.0)
+		var shade: float = 0.93 + 0.07 * clampf(n.y * 0.6 + n.x * 0.2 + 0.4, 0.0, 1.0)
 		var cc := Color(col.r * shade, col.g * shade, col.b * shade)
 		var pts := []
 		for v in f[1]:

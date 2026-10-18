@@ -3,7 +3,7 @@ extends RefCounted
 ## Buduje widok 3D w niskiej rozdzielczości (SubViewport skalowany bez wygładzania) z post-processem PS1.
 ## Interfejs (HUD, ekwipunek) rysuje się poza nim w pełnej rozdzielczości.
 
-const POMNIEJSZENIE := 2   # 1/2 rozdzielczości: wciąż PS1, ale cel widać na kilkanaście metrów
+const POMNIEJSZENIE := 1   # pełna rozdzielczość (styl Iron Blight: pikselowe są tekstury, nie obraz)
 
 
 static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
@@ -20,7 +20,7 @@ static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
 	rodzic.add_child(kont)
 	var vp := SubViewport.new()
 	vp.name = "Viewport"
-	vp.msaa_3d = Viewport.MSAA_DISABLED
+	vp.msaa_3d = Viewport.MSAA_2X
 	vp.audio_listener_enable_3d = true
 	vp.handle_input_locally = false
 	vp.physics_object_picking = false
@@ -33,12 +33,24 @@ static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.005, 0.005, 0.008)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.42, 0.44, 0.52)
-	env.ambient_light_energy = ambient
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	# zimny, granatowy ambient nocy kontra ciepłe żółte lampy
+	env.ambient_light_color = Color(0.36, 0.42, 0.62)
+	env.ambient_light_energy = ambient * 1.6
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.15
+	env.tonemap_white = 6.0
+	env.glow_enabled = true
+	env.glow_intensity = 0.55
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 0.9
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 0.92
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.012, 0.012, 0.016)
-	env.fog_density = mgla
+	env.fog_light_color = Color(0.03, 0.035, 0.06)
+	env.fog_density = mgla * 0.7
 	env.fog_sky_affect = 0.0
 	var we := WorldEnvironment.new()
 	we.environment = env
