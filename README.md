@@ -47,7 +47,9 @@ pudełkiem (2x3). Siatka jest drobna (dawna kratka to 2x2 nowe): zegarek czy ban
 magazynek KB-47 2x4, KB-47 8x3 – małe rzeczy upycha się między dużymi. Kamizelki i plecaki mają przegródki
 (osobne ładownice i kieszenie). Stare zapisy przeliczają się same (pozycje x2, co nie pasuje – układane na nowo).
 Ikony przedmiotów to szkice jak z instrukcji obsługi z lat 70–80: rysunek tuszem z modelu 3D na pożółkłym, wyrwanym
-skrawku papieru (kreskowanie cieni, odnośniki z numerami, „Rys.”, linia wymiarowa przy broni). Generowanie:
+skrawku papieru (cienie paskami jak w ilustracjach technicznych, odnośniki z numerami, „Rys.” / „Рис.”, linia
+wymiarowa przy broni, na części rysunków wyblakła pieczątka – „ZATWIERDZONO”, „ОТК”, „ГОСТ 1050-74”…). Papier:
+szarozielony – sprzęt wojskowy, pożółkły – łup i rzeczy cywilne, biały – środki opatrunkowe. Generowanie:
 `godot --path . res://tests/render_ikon.tscn --rendering-driver opengl3 -- /tmp/ik` (z xvfb), potem
 `python3 narzedzia/ikony_szkic.py /tmp/ik`.
 
