@@ -113,7 +113,7 @@ func _draw() -> void:
 		for y in siatka.h:
 			for x in siatka.w:
 				var r := Rect2(Vector2(x, y) * KOM, Vector2(KOM, KOM))
-				if not siatka.dostepna(x, y):
+				if not siatka.dostepna(x, y) or (not proste_kieszenie and zakryta(Vector2i(x, y))):
 					continue
 				var c := Color(0.02, 0.02, 0.015, 0.95)
 				if not siatka.dostepna(x - 1, y):
@@ -246,11 +246,10 @@ func _rysuj_kieszenie() -> void:
 	var proste := proste_kieszenie
 	for ki in kieszenie.size():
 		var kz: Dictionary = kieszenie[ki]
-		if kz.has("uchwyt_l"):
-			_rysuj_uchwyt(kz)
+		if not proste:
+			# rajd z modelem 3D: stan kieszeni widać na samym modelu, element do chwycenia się świeci
+			continue
 		if bool(kz["otwarta"]):
-			if not proste:
-				continue
 			# otwarta: przerywany brzeg i uchwyt „zapnij”
 			var u := uchwyt_kieszeni(ki)
 			draw_rect(u, Color(0.1, 0.09, 0.07, 0.85))

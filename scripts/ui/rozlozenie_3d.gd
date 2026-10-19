@@ -235,6 +235,7 @@ func zamknij_kieszen(co: String, i: int) -> float:
 
 # ------------------------------------------------------------------ dłoń przy zapięciach
 
+var pokaz_reke := false      # dłoń przy zapięciach (wyłączona: tylko podświetlenie elementu)
 var _reka: Reka
 var _reka_cel := {}           # {"co", "i", "k"} – krok, przy którym pracuje dłoń
 var _reka_t := 9.0            # ile jeszcze dłoń zostaje przy zapięciu
@@ -309,6 +310,11 @@ func _process(delta: float) -> void:
 				w.rotation.y = move_toward(w.rotation.y, -0.32 if inne else 0.0, delta * 1.2)
 	_reka_t -= delta
 	_reka_klik = maxf(0.0, _reka_klik - delta * 5.0)
+	if not pokaz_reke:
+		# bez dłoni przy zapięciach – element do chwycenia tylko się podświetla
+		if _reka and is_instance_valid(_reka):
+			_reka.visible = false
+		return
 	var cel_lok := _SPOCZYNEK
 	var aktywna := false
 	if _reka_t > 0.0 and not _reka_cel.is_empty():
@@ -475,6 +481,93 @@ func _usun(co: String) -> void:
 
 func ma(co: String) -> bool:
 	return _modele.has(co)
+
+
+# ------------------------------------------------------------------ podświetlenie elementu do chwycenia
+
+static var _mat_podsw: ShaderMaterial
+static var _mat_podsw_akt: ShaderMaterial
+var _podsw := {}              # MeshInstance3D -> true (z nakładką podświetlenia)
+
+
+static func _mat_podswietlenia(sila: float) -> ShaderMaterial:
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_back;
+uniform vec3 kolor = vec3(1.0, 0.84, 0.52);
+uniform float sila = 0.5;
+void fragment() {
+	// delikatna poświata brzegów (fresnel), powoli pulsująca
+	float fr = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.2);
+	float puls = 0.7 + 0.3 * sin(TIME * 3.2);
+	ALBEDO = kolor * (0.14 + fr * 0.6) * sila * puls;
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.set_shader_parameter("sila", sila)
+	return m
+
+
+func _wezel_kroku(co: String, i: int, k: int) -> Node3D:
+	var e := _kieszen(co, i)
+	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
+		return null
+	var n := (e["kroki"][k][0] as Array)[0] as Node3D
+	return n if n != null and is_instance_valid(n) else null
+
+
+func _siatki_wezla(n: Node) -> Array:
+	var out := []
+	if n is MeshInstance3D:
+		out.append(n)
+	for c in n.get_children():
+		out.append_array(_siatki_wezla(c))
+	return out
+
+
+## Podświetla elementy do chwycenia: lista [[co, i, k, aktywny], ...] (aktywny – pod kursorem / trzymany).
+func podswietl(lista: Array) -> void:
+	if _mat_podsw == null:
+		_mat_podsw = _mat_podswietlenia(0.8)
+		_mat_podsw_akt = _mat_podswietlenia(1.25)
+	var nowe := {}
+	for el in lista:
+		var n := _wezel_kroku(el[0], el[1], el[2])
+		if n == null:
+			continue
+		for mi in _siatki_wezla(n):
+			nowe[mi] = bool(el[3]) or bool(nowe.get(mi, false))
+	for mi in _podsw.keys():
+		if not nowe.has(mi) and is_instance_valid(mi):
+			(mi as MeshInstance3D).material_overlay = null
+	for mi in nowe:
+		if is_instance_valid(mi):
+			(mi as MeshInstance3D).material_overlay = _mat_podsw_akt if nowe[mi] else _mat_podsw
+	_podsw = nowe
+
+
+## Obszar elementu kroku na ekranie (rzut jego obrysu) – kliknięcie w niego chwyta element.
+func obszar_ekran(co: String, i: int, k: int) -> Rect2:
+	var n := _wezel_kroku(co, i, k)
+	if n == null or _kam == null:
+		return Rect2()
+	var out := Rect2()
+	var jest := false
+	for mi in _siatki_wezla(n):
+		var m := mi as MeshInstance3D
+		var ab := m.get_aabb()
+		for c in 8:
+			var p = do_ekranu(m.global_transform * ab.get_endpoint(c))
+			if p == null:
+				continue
+			if not jest:
+				out = Rect2(p, Vector2.ZERO)
+				jest = true
+			else:
+				out = out.expand(p)
+	return out
 
 
 ## Punkt świata na ekranie (piksele okna) albo null, gdy za kamerą.

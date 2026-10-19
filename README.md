@@ -58,9 +58,9 @@ W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzi
 PPM na broni: **Wyczyść** (zestaw do czyszczenia – brudna broń zacina się częściej); PPM na metalowym przedmiocie:
 **Owiń taśmą** (przestaje brzęczeć w biegu). Szabrownicy zbierają leżące rzeczy i okradają ciała – nie zostawiaj
 plecaka bez opieki.
-Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem otwierasz konkretne kieszenie myszą: przy każdej
-kieszeni pulsuje podświetlony uchwyt (klamra, suwak, brzeg klapy) ze strzałką – chwytasz go i przeciągasz (klamrę
-wystarczy kliknąć; szybko – głośno). Koniec ruchu kończy krok dźwiękiem, następny uchwyt chwytasz osobno; zapinasz tak
+Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem otwierasz konkretne kieszenie myszą: element, za który
+trzeba chwycić (klamra, suwak, brzeg klapy), lekko się świeci, a pod kursorem jaśniej – chwytasz go i przeciągasz
+(klamrę wystarczy kliknąć; szybko – głośno). Stan i postęp otwierania widać na samej kieszeni. Koniec ruchu kończy krok dźwiękiem, następny uchwyt chwytasz osobno; zapinasz tak
 samo, chwytając uchwyt otwartej kieszeni. Kieszenie zostają takie, jak je zostawisz – otwarte gubią zawartość w biegu, przy skoku i trafieniu.
 **Załóż** zakłada plecak (otwarte kieszenie zostają otwarte). W ustawieniach: „proste otwieranie” – klik zamiast gestu. Kontener bezpieczny tak samo
 (**Wyjmij kontener**, potem zatrzaski i wieko).

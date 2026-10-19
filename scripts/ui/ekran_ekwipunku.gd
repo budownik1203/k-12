@@ -464,6 +464,9 @@ func _po_schowaniu(cb: Callable) -> void:
 
 
 func zamknij() -> void:
+	if _kursor != Input.CURSOR_ARROW:
+		_kursor = Input.CURSOR_ARROW
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	if not otwarty:
 		return
 	_upusc_drag(true)
@@ -1683,6 +1686,7 @@ var _gest := {}
 ## punkt na ekranie i kierunek, w którym trzeba go przeciągnąć. SiatkaUI rysuje je jako podświetlenie.
 func _uchwyty_kieszeni() -> void:
 	var t := Time.get_ticks_msec()
+	var podsw := []
 	for co in _kieszenie:
 		var gui: SiatkaUI = null
 		if _ramki.has(co) and is_instance_valid(_ramki[co]) and (_ramki[co] as Control).visible:
@@ -1724,9 +1728,48 @@ func _uchwyty_kieszeni() -> void:
 			e["uchwyt_kier"] = (-kier if zam else kier).normalized()
 			e["uchwyt_rodz"] = rodz
 			e["uchwyt_akt"] = not _gest.is_empty() and _gest["co"] == co and int(_gest["i"]) == i
+			e["obszar"] = _r3d.obszar_ekran(co, i, k)
+			podsw.append([co, i, k, e["uchwyt_akt"]])
 		if gui:
 			gui.proste_kieszenie = _proste()
 			gui.queue_redraw()
+	# pod kursorem: element jaśniej i kursor „ręki” (bez znaczników – tylko sam element się świeci)
+	var m := _root.get_global_mouse_position()
+	var pod := _uchwyt_pod(m)
+	for el in podsw:
+		if not pod.is_empty() and el[0] == pod["co"] and el[1] == pod["i"]:
+			el[3] = true
+	if _r3d:
+		_r3d.podswietl(podsw)
+	var kursor := Input.CURSOR_ARROW
+	if not _gest.is_empty():
+		kursor = Input.CURSOR_DRAG
+	elif not pod.is_empty():
+		kursor = Input.CURSOR_POINTING_HAND
+	if kursor != _kursor:
+		_kursor = kursor
+		Input.set_default_cursor_shape(kursor)
+
+
+var _kursor := Input.CURSOR_ARROW
+
+
+## Uchwyt pod kursorem: w obszarze elementu albo blisko jego punktu chwytu (najbliższy wygrywa).
+func _uchwyt_pod(m: Vector2) -> Dictionary:
+	var best := {}
+	var bd := INF
+	for co in _kieszenie:
+		var lst: Array = _kieszenie[co]
+		for i in lst.size():
+			var e: Dictionary = lst[i]
+			if not e.has("uchwyt"):
+				continue
+			var d := (e["uchwyt"] as Vector2).distance_to(m)
+			var w_obszarze: bool = (e.get("obszar", Rect2()) as Rect2).grow(5.0).has_point(m)
+			if (d < 26.0 or w_obszarze) and d < bd:
+				bd = d
+				best = {"co": co, "i": i}
+	return best
 
 
 ## Droga uchwytu na ekranie dla kroku (zamknięte -> otwarte); gdy model jej nie pokazuje (worek, blend shape) –
@@ -1743,18 +1786,7 @@ func _droga(co: String, i: int, k: int, f: float, rodz: String, e: Dictionary) -
 
 ## Kliknięcie: czy trafiło w uchwyt którejś kieszeni (do 24 px). Klamra – klik i gotowe; suwak / klapa – chwyt.
 func _chwyc_uchwyt(m: Vector2) -> bool:
-	var best := {}
-	var bd := 24.0
-	for co in _kieszenie:
-		var lst: Array = _kieszenie[co]
-		for i in lst.size():
-			var e: Dictionary = lst[i]
-			if not e.has("uchwyt"):
-				continue
-			var d := (e["uchwyt"] as Vector2).distance_to(m)
-			if d < bd:
-				bd = d
-				best = {"co": co, "i": i}
+	var best := _uchwyt_pod(m)
 	if best.is_empty():
 		return false
 	var co: String = best["co"]
