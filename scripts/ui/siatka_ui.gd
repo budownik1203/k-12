@@ -167,7 +167,7 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 		# duże przedmioty w małym slocie: ikona pomniejszona do ramki
 		var miesc := Vector2(ts.y, ts.x) if p.obrot else ts
 		# ikony rysowane w dawnej skali (32 px na grubą kratkę): dopasowane do ramki z zachowaniem proporcji
-		var sk := minf(1.15, minf((r.size.x - 3.0) / miesc.x, (r.size.y - 3.0) / miesc.y))
+		var sk := minf(2.0, minf((r.size.x - 3.0) / miesc.x, (r.size.y - 3.0) / miesc.y))
 		ts *= sk
 		if p.obrot:
 			# ikona obrócona o 90°

@@ -27,6 +27,10 @@ static func wezel(p: Przedmiot, vm := false) -> Node3D:
 		"bron":
 			var md := Modele.bron(p.id)
 			cz = (md.get("cialo3", []) as Array).duplicate()
+			# części ruchome (zamek, rączka, lufy obrzyna) w położeniu spoczynkowym
+			var ruch: Dictionary = md.get("ruchome", {})
+			for k in ruch:
+				cz.append_array(ruch[k]["czesci"])
 			if p.dane.get("mag") != null:
 				cz.append_array(md.get("mag3", []))
 			cz.append_array(_dodatki_broni(p, md))

@@ -46,6 +46,10 @@ do wyjść w liście [O], kompas – pasek kierunków u góry ekranu. Amunicja l
 pudełkiem (2x3). Siatka jest drobna (dawna kratka to 2x2 nowe): zegarek czy bandaż zajmują jedną kratkę,
 magazynek KB-47 2x4, KB-47 8x3 – małe rzeczy upycha się między dużymi. Kamizelki i plecaki mają przegródki
 (osobne ładownice i kieszenie). Stare zapisy przeliczają się same (pozycje x2, co nie pasuje – układane na nowo).
+Ikony przedmiotów to szkice jak z instrukcji obsługi z lat 70–80: rysunek tuszem z modelu 3D na pożółkłym, wyrwanym
+skrawku papieru (kreskowanie cieni, odnośniki z numerami, „Rys.”, linia wymiarowa przy broni). Generowanie:
+`godot --path . res://tests/render_ikon.tscn --rendering-driver opengl3 -- /tmp/ik` (z xvfb), potem
+`python3 narzedzia/ikony_szkic.py /tmp/ik`.
 
 W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzie kolejka – dłoń przekłada po kolei),
 **Shift+LPM** dzieli stos na pół (w rajdzie każde przełożenie robi dłoń – trwa, a trafienie w trakcie wytrąca przedmiot), **PPM** menu (użyj, rozładuj, napełnij, wyjmij magazynek, załóż, wyrzuć, podziel).

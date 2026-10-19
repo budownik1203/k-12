@@ -1,5 +1,8 @@
 """Generator ikon przedmiotów (pixel art, 32 px na kratkę siatki ekwipunku).
 
+ZASTĄPIONY przez szkice z dokumentacji (tests/render_ikon.tscn + narzedzia/ikony_szkic.py) –
+nie uruchamiać, nadpisałby ikony-szkice.
+
 Uruchomienie:  python3 narzedzia/generuj_ikony.py
 Czyta assets/dane/przedmioty.json, zapisuje assets/ikony/<id>.png.
 """
