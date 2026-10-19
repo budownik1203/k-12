@@ -244,6 +244,11 @@ def draw(pid, d, W, H):
         d.ellipse([16, 16, 28, 28], fill=SZKLO)
         d.ellipse([36, 16, 48, 28], fill=SZKLO)
         shaded_rect(d, [24, 36, 40, 60], METAL)
+    elif pid == "wytrych":
+        shaded_rect(d, [6, 6, 26, 26], (70, 40, 30))
+        d.line([(10, 22), (24, 8)], fill=METAL_J, width=2)
+        d.line([(12, 24), (26, 12)], fill=METAL_J, width=1)
+        d.line([(24, 8), (27, 6)], fill=METAL_J, width=2)
     elif pid == "kombinerki":
         poly(d, [(12, 2), (20, 2), (18, 26), (14, 26)], METAL_J)
         poly(d, [(8, 30), (15, 26), (14, 62), (6, 62)], CZERWIEN)

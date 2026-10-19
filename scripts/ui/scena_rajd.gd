@@ -27,6 +27,7 @@ func _ready() -> void:
 	gen = GeneratorBiomu.new()
 	info = gen.generuj(Gra.ziarno_rajdu, swiat)
 	await _nawigacja_ze_sprawdzeniem()
+	_postaw_drzwi()
 	# duża mapa: geometria dalej niż ~45 m nie jest rysowana (i tak ginie w mgle)
 	for mi in swiat.find_children("*", "GeometryInstance3D", true, false):
 		var gi := mi as GeometryInstance3D
@@ -100,6 +101,9 @@ func _ready() -> void:
 	elif args.has("--frakcje"):
 		_tryb_testu = "frakcje"
 		_test_frakcji.call_deferred()
+	elif args.has("--drzwi_ai"):
+		_tryb_testu = "drzwi_ai"
+		_test_drzwi_ai.call_deferred()
 	elif args.has("--test_bron"):
 		_tryb_testu = "bron"
 		_test_broni.call_deferred()
@@ -138,6 +142,49 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 
 var _cull_t := 0.0
 var _start_ms := 0
+
+
+## Skrzydła drzwi w otworach (po wypieczeniu nawigacji – ścieżki prowadzą przez otwory, a wrogowie
+## otwierają drzwi po drodze). Rodzaj wg pomieszczenia, część zamknięta, część uchylona, ślepe pokoje
+## czasem zamknięte na klucz.
+func _postaw_drzwi() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = Gra.ziarno_rajdu * 31 + 7
+	var start := gen.komorka_w(info["start"])
+	var bez_testu := not (OS.get_cmdline_user_args().has("--test") or OS.get_cmdline_user_args().has("--walka") or OS.get_cmdline_user_args().has("--frakcje") or OS.get_cmdline_user_args().has("--mutant"))
+	for m in info.get("drzwi", []):
+		if rng.randf() > 0.8:
+			continue
+		var pk: Vector2i = m["pokoj"]
+		var typ: String = info["komorki"][pk]["typ"] if info["komorki"].has(pk) else "pokoj"
+		var rodz := "fornir"
+		match typ:
+			"pokoj":
+				rodz = "skaj" if rng.randf() < 0.5 else "fornir"
+			"kuchnia", "administracja":
+				rodz = "emalia" if rng.randf() < 0.7 else "fornir"
+			"piwnica", "magazyn", "warsztat":
+				rodz = "metal" if rng.randf() < 0.5 else "fornir"
+		var d := Drzwi.new()
+		d.ustaw(m, rodz)
+		swiat.add_child(d)
+		var los := rng.randf()
+		if not bez_testu:
+			d.ustaw_kat(KAT_TESTU)
+		elif los < 0.45:
+			d.ustaw_kat(0.0)
+			var otwory := 0
+			for kier in info["komorki"][pk]["otwory"]:
+				otwory += (info["komorki"][pk]["otwory"][kier] as Array).size()
+			if otwory <= 1 and pk != start and rng.randf() < 0.4:
+				d.na_klucz = true
+		elif los < 0.7:
+			d.ustaw_kat(-rng.randf_range(0.25, 0.6))
+		else:
+			d.ustaw_kat(Drzwi.KAT_PELNY)
+
+
+const KAT_TESTU := -1.62
 var _brzeczenie: Array = []
 var _napiecie: AudioStreamPlayer
 var _napiecie_cel := 0.0
@@ -817,6 +864,9 @@ func _zrzut_vm(katalog: String) -> void:
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--szaber") and w.frakcja == "szabrownik" and w.posterunek.is_empty():
 			_wrog_testowy = w
 			continue
+		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--drzwi"):
+			_wrog_testowy = w
+			continue
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--zwloki"):
 			_wrog_testowy = w
 			w.set_physics_process(false)
@@ -923,6 +973,147 @@ func _zrzut_vm(katalog: String) -> void:
 	get_tree().quit()
 
 
+## Wrogowie chodzą po mapie z drzwiami (zamknięte, uchylone, na klucz): czy nie utykają pod drzwiami.
+func _test_drzwi_ai() -> void:
+	gracz.global_position += Vector3(0, 40, 0)
+	gracz.set_physics_process(false)
+	var drzwi := get_tree().get_nodes_in_group("drzwi")
+	var zamkn0 := drzwi.filter(func(d): return d.zamkniete()).size()
+	var pozycje := {}
+	var utkniety := {}
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		pozycje[w] = (w as Node3D).global_position
+	var droga := 0.0
+	for i in 120:
+		await get_tree().create_timer(0.5).timeout
+		for w in pozycje.keys():
+			if not is_instance_valid(w):
+				continue
+			var p: Vector3 = (w as Node3D).global_position
+			droga += p.distance_to(pozycje[w])
+			pozycje[w] = p
+			for d in drzwi:
+				if d.zamkniete() and p.distance_to(d.global_position) < 1.3:
+					utkniety[w] = float(utkniety.get(w, 0.0)) + 0.5
+	var zamkn1 := drzwi.filter(func(d): return d.zamkniete()).size()
+	var max_ut := 0.0
+	for w in utkniety:
+		max_ut = maxf(max_ut, utkniety[w])
+	print("TEST DRZWI AI: drzwi %d, zamkniętych %d -> %d, wyważonych %d, droga wrogów %.0f m, najdłużej pod zamkniętymi %.1f s" % [drzwi.size(), zamkn0, zamkn1,
+		drzwi.filter(func(d): return d.wywazone).size(), droga, max_ut])
+	print("TEST DRZWI AI: " + ("OK" if max_ut < 8.0 else "UTKNIĘCIE"))
+	get_tree().quit()
+
+
+## Test drzwi: otwieranie, uchylanie, zamykanie, wyważanie, wróg otwierający drzwi, podsłuch, przestrzał.
+func _test_drzwi(katalog: String) -> void:
+	var bledy := 0
+	var lista := get_tree().get_nodes_in_group("drzwi")
+	print("DRZWI: %d skrzydeł, zamkniętych %d, na klucz %d, metalowych %d" % [lista.size(), lista.filter(func(d): return d.zamkniete()).size(),
+		lista.filter(func(d): return d.na_klucz).size(), lista.filter(func(d): return d.rodzaj == "metal").size()])
+	if lista.is_empty():
+		print("TEST DRZWI: brak drzwi")
+		return
+	var kom := []
+	gracz.komunikat.connect(func(t): kom.append(t))
+	var sw := OmniLight3D.new()
+	sw.omni_range = 6.0
+	sw.light_energy = 1.4
+	gracz.kamera.add_child(sw)
+	# najbliższe drzwi, gracz po stronie przeciwnej do otwierania
+	var gp := gracz.global_position
+	lista.sort_custom(func(a, b): return a.global_position.distance_to(gp) < b.global_position.distance_to(gp))
+	var rodzaje := {}
+	for d0 in lista:
+		rodzaje[d0.rodzaj] = d0
+	var dr: Drzwi = lista[0]
+	var ustaw_przed := func(d: Drzwi, odl: float):
+		d.ustaw_kat(0.0)
+		var p: Vector3 = d.global_transform * Vector3(0, 0, -odl)
+		gracz.global_position = Vector3(p.x, d.global_position.y + 0.05, p.z)
+		gracz.velocity = Vector3.ZERO
+		var c: Vector3 = d.global_transform * Vector3(0, 0, 0)
+		gracz.look_at(Vector3(c.x, gracz.global_position.y, c.z), Vector3.UP)
+		gracz.kamera.rotation.x = -0.05
+	# zrzuty każdego rodzaju
+	for r in rodzaje:
+		ustaw_przed.call(rodzaje[r], 1.6)
+		await get_tree().create_timer(0.5).timeout
+		await _zapisz(katalog, "drzwi_%s" % r)
+		print("  %s: kat %.2f max %.2f poz %s n %s skrzydło %s zawias.rot %s" % [r, rodzaje[r].kat, rodzaje[r].max_kat, rodzaje[r].global_position, rodzaje[r].global_basis.z, rodzaje[r].skrzydlo.global_position, rodzaje[r]._zawias.rotation])
+	ustaw_przed.call(dr, 1.0)
+	await get_tree().create_timer(0.4).timeout
+	# uchylenie kucając
+	gracz.kucanie = 1.0
+	dr.interakcja(gracz)
+	await get_tree().create_timer(2.2).timeout
+	await _zapisz(katalog, "drzwi_uchylone")
+	print("  uchylone: %s kat %.2f" % [dr.rodzaj, dr.kat])
+	if not (dr.kat < -0.2 and dr.kat > -0.45):
+		print("  BŁĄD: uchylenie kat=%.2f" % dr.kat)
+		bledy += 1
+	gracz.kucanie = 0.0
+	await get_tree().create_timer(0.3).timeout
+	dr.interakcja(gracz)
+	await get_tree().create_timer(1.6).timeout
+	await _zapisz(katalog, "drzwi_otwarte")
+	if dr.kat > -1.0 and dr.max_kat < -1.0:
+		print("  BŁĄD: otwarcie kat=%.2f max=%.2f" % [dr.kat, dr.max_kat])
+		bledy += 1
+	dr.interakcja(gracz)
+	await get_tree().create_timer(1.4).timeout
+	if not dr.zamkniete():
+		print("  BŁĄD: zamknięcie kat=%.2f" % dr.kat)
+		bledy += 1
+	# przestrzał drewnianych drzwi: kula za drzwiami zostawia ślad na ścianie dalej
+	# wyważanie
+	dr.na_klucz = true
+	dr.wytrzymalosc = 2
+	var kopniecia := 0
+	while not dr.wywazone and kopniecia < 8:
+		dr.interakcja(gracz)
+		await get_tree().create_timer(1.2).timeout
+		kopniecia += 1
+	await get_tree().create_timer(0.8).timeout
+	await _zapisz(katalog, "drzwi_wywazone")
+	print("  wyważone po %d kopnięciach: %s, kat %.2f" % [kopniecia, dr.wywazone, dr.kat])
+	if not dr.wywazone:
+		bledy += 1
+	# podsłuch: wróg za zamkniętymi drzwiami
+	var d2: Drzwi = null
+	for d in lista:
+		if d != dr and d.rodzaj != "metal":
+			d2 = d
+			break
+	var w = _wrog_testowy
+	if d2 and w:
+		d2.na_klucz = false
+		ustaw_przed.call(d2, 0.8)
+		var za: Vector3 = d2.global_transform * Vector3(0, 0, 3.0)
+		w.global_position = w._najblizszy_na_siatce(za)
+		w.set_physics_process(false)
+		kom.clear()
+		await get_tree().create_timer(2.4).timeout
+		print("  podsłuch: %s" % [kom])
+		if not kom.any(func(t): return String(t).begins_with("Za drzwiami")):
+			print("  BŁĄD: podsłuch nic nie dał")
+			bledy += 1
+		# wróg idzie przez zamknięte drzwi – powinien je otworzyć
+		gracz.global_position = d2.global_transform * Vector3(2.5, 0.05, -3.0)
+		w.set_physics_process(true)
+		var cel: Vector3 = w._najblizszy_na_siatce(d2.global_transform * Vector3(0, 0, -3.0))
+		var t := 0.0
+		while t < 15.0 and d2.zamkniete():
+			w.stan = "szukanie"
+			w._idz(cel)
+			await get_tree().create_timer(0.3).timeout
+			t += 0.3
+		print("  wróg przy drzwiach po %.1f s, otwarte: %s (wróg %.1f m od drzwi)" % [t, not d2.zamkniete(), w.global_position.distance_to(d2.global_position)])
+		if d2.zamkniete():
+			bledy += 1
+	print("TEST DRZWI: błędów %d" % bledy)
+
+
 func _zapisz(katalog: String, nazwa: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + ".png"))
@@ -982,6 +1173,9 @@ func _zrzut_animacji(katalog: String) -> void:
 		gracz.bron.ogl_obrot = Vector2(0.9, 0.25)
 		await get_tree().create_timer(0.6).timeout
 		await _zapisz(katalog, "og_4_obrot")
+		return
+	if OS.get_cmdline_user_args().has("--drzwi"):
+		await _test_drzwi(katalog)
 		return
 	if OS.get_cmdline_user_args().has("--plecaki"):
 		for pid in ["worek", "plecak_turystyczny", "plecak_szturmowy", "chlebak", "plecak_wojskowy", "napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska"]:

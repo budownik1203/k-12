@@ -189,6 +189,10 @@ func _okluzja(pozycja: Vector3, rodzic: Node) -> float:
 	var r := space.intersect_ray(q)
 	if r.is_empty():
 		return 0.0
+	# ucho przy samych drzwiach (podsłuchiwanie): przez skrzydło słychać znacznie lepiej niż przez mur
+	var col: Object = r.get("collider")
+	if col and col.has_meta("drzwi") and ucho.distance_to(r["position"]) < 1.4:
+		return 0.25
 	# druga przeszkoda dalej = głębiej stłumione
 	var q2 := PhysicsRayQueryParameters3D.create((r["position"] as Vector3) + (ucho - od).normalized() * 0.35, ucho, Balistyka.WARSTWA_SWIAT)
 	return 1.0 if not space.intersect_ray(q2).is_empty() else 0.7

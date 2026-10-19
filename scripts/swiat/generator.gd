@@ -45,6 +45,7 @@ const WYSOKOSC_MONTAZU := {"hydrant": 0.9, "tablica_ogloszen": 1.3, "apteczka_sc
 var rng := RandomNumberGenerator.new()
 var swiat: Node3D
 var meble := {}
+var drzwi_miejsca: Array = []   # miejsca na skrzydła drzwi (stawiane po wypieczeniu nawigacji)
 var komorki := {}        # Vector2i -> {"typ", "glebokosc", "rect", "otwory", "okna", "strefy", "zajete", "meble", "mats"}
 var krawedzie := {}      # "a|b" -> {"a", "b", "otwarte", "c" (środek przejścia), "pa", "pb" (punkty po obu stronach)}
 var bud := Kit.Budowniczy.new()
@@ -94,7 +95,7 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	_wyjscia()
 	_klucz_w_rajdzie()
 	return {"start": start_pos, "start_rot": start_rot, "oslony": oslony, "spawny": spawny,
-		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy, "posterunki": posterunki}
+		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy, "posterunki": posterunki, "drzwi": drzwi_miejsca}
 
 
 # ------------------------------------------------------------------ układ (graf)
@@ -309,6 +310,14 @@ func _srodek(k: Vector2i) -> Vector3:
 
 # ------------------------------------------------------------------ przejścia
 
+## Miejsce na skrzydło drzwi: płaszczyzna otworu w f (oś przejścia), środek c, otwiera się w stronę `znak`
+## (do pomieszczenia `pokoj`).
+func _miejsce_drzwi(poziomo: bool, f: float, c: float, znak: float, pokoj: Vector2i, inny: Vector2i) -> Dictionary:
+	var p := Vector3(f, 0, c) if poziomo else Vector3(c, 0, f)
+	var nn := Vector3(znak, 0, 0) if poziomo else Vector3(0, 0, znak)
+	return {"p": p, "n": nn, "w": DRZWI_W, "h": DRZWI_H, "pokoj": pokoj, "inny": inny}
+
+
 ## Dla każdej krawędzi grafu buduje przejście: odcinek korytarza i/lub otwór drzwiowy w grubym murze.
 func _przejscia() -> void:
 	for key in krawedzie:
@@ -343,12 +352,14 @@ func _przejscia() -> void:
 			# korytarz dochodzi do muru pomieszczenia, w murze drzwi
 			var otw := [c - DRZWI_W * 0.5, c + DRZWI_W * 0.5, DRZWI_H, 0.0]
 			if ka:
+				drzwi_miejsca.append(_miejsce_drzwi(poziomo, fb - 0.07, c, 1.0, b, a))
 				_pasaz(poziomo, fa, fb - GRUB, c, KW, H, komorki[a]["mats"], a)
 				_pasaz(poziomo, fb - GRUB, fb, c, DRZWI_W, DRZWI_H, komorki[b]["mats"])
 				_sciana_osiowa(komorki[a]["mats"][0], not poziomo, fb - GRUB, c - KW * 0.5, c + KW * 0.5, -Vector2(d), [otw])
 				komorki[a]["otwory"][d].append([c - KW * 0.5, c + KW * 0.5, H, 0.0])
 				komorki[b]["otwory"][-d].append(otw)
 			else:
+				drzwi_miejsca.append(_miejsce_drzwi(poziomo, fa + 0.07, c, -1.0, a, b))
 				_pasaz(poziomo, fa, fa + GRUB, c, DRZWI_W, DRZWI_H, komorki[a]["mats"])
 				_pasaz(poziomo, fa + GRUB, fb, c, KW, H, komorki[b]["mats"], b)
 				_sciana_osiowa(komorki[b]["mats"][0], not poziomo, fa + GRUB, c - KW * 0.5, c + KW * 0.5, Vector2(d), [otw])
@@ -363,6 +374,8 @@ func _przejscia() -> void:
 				w = 2.4
 				h = 2.5
 			c = rng.randf_range(lo + w * 0.5, hi - w * 0.5) if hi - lo > w else (lo + hi) * 0.5
+			if w <= DRZWI_W + 0.01:
+				drzwi_miejsca.append(_miejsce_drzwi(poziomo, fb - 0.07, c, 1.0, b, a))
 			_pasaz(poziomo, fa, fb, c, w, h, komorki[a]["mats"])
 			komorki[a]["otwory"][d].append([c - w * 0.5, c + w * 0.5, h, 0.0])
 			komorki[b]["otwory"][-d].append([c - w * 0.5, c + w * 0.5, h, 0.0])

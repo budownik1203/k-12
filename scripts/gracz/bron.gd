@@ -835,13 +835,25 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	zmiana.emit()
 
 
-func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr: float, pen: float) -> void:
+func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr: float, pen: float, glebokosc := 0) -> void:
 	var q := PhysicsRayQueryParameters3D.create(od, od + kier * 150.0, MASKA_STRZALU)
 	q.collide_with_areas = true
 	var r := space.intersect_ray(q)
 	if r.is_empty():
 		return
 	var col: Object = r["collider"]
+	if col.has_meta("drzwi") and glebokosc < 2:
+		# drewniane drzwi kula przebija (słabsza), w blasze tylko iskry
+		var dr = col.get_meta("drzwi")
+		Efekty.slad(col as Node3D, r["position"], r["normal"])
+		if is_instance_valid(dr) and dr.rodzaj != "metal":
+			Efekty.czastki(gracz.get_parent(), r["position"], r["normal"], Color(0.55, 0.42, 0.3), 10, 2.5)
+			Dzwiek.graj_3d("trafienie_drewno", r["position"], gracz.get_parent(), -4.0)
+			_promien(space, r["position"] + kier * 0.08, kier, obr * 0.65, pen * 0.7, glebokosc + 1)
+		else:
+			Efekty.czastki(gracz.get_parent(), r["position"], r["normal"], Color(1.0, 0.8, 0.4), 6, 5.0)
+			Dzwiek.graj_3d("trafienie_pancerz", r["position"], gracz.get_parent(), -4.0)
+		return
 	if col.has_meta("czesc"):
 		var wl = col.get_meta("wlasciciel")
 		if is_instance_valid(wl) and wl.has_method("trafiony"):

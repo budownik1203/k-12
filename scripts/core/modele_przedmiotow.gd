@@ -405,6 +405,10 @@ static func _lup(id: String) -> Array:
 				_w(Vector3(-0.035, 0.07, -0.02), Vector3(-0.035, 0.074, -0.02), 0.022, 0.022, "metal_jasny", 10, Color(0.6, 0.7, 0.7)),
 				_w(Vector3(0.035, 0.07, -0.02), Vector3(0.035, 0.074, -0.02), 0.022, 0.022, "metal_jasny", 10, Color(0.6, 0.7, 0.7)),
 				_w(Vector3(0, 0.04, 0.07), Vector3(0, 0.04, 0.12), 0.035, 0.035, "metal_jasny", 12, Color(0.4, 0.45, 0.35))]
+		"wytrych":
+			return [_b(Vector3(0, 0.006, 0), Vector3(0.05, 0.012, 0.075), "skora_npc", 0.004, Color(0.4, 0.22, 0.15)),
+				_w(Vector3(-0.012, 0.014, 0.03), Vector3(-0.012, 0.014, -0.06), 0.0015, 0.0015, "metal_jasny", 5),
+				_w(Vector3(0.006, 0.014, 0.03), Vector3(0.01, 0.014, -0.055), 0.0015, 0.0015, "metal_jasny", 5)]
 		"kombinerki":
 			return [_b(Vector3(-0.012, 0.006, 0.04), Vector3(0.012, 0.012, 0.1), "czerwony", 0.003, Color.WHITE, Vector3(0, 6, 0)),
 				_b(Vector3(0.012, 0.006, 0.04), Vector3(0.012, 0.012, 0.1), "czerwony", 0.003, Color.WHITE, Vector3(0, -6, 0)),

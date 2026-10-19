@@ -59,6 +59,11 @@ skrzynie i szafki wyłamuje się (z kombinerkami lub kluczem nastawnym szybciej)
 plecaku – zrywasz się i plecak zostaje na ziemi (podejdź i **F**, żeby go założyć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
 w panelu zdrowia leczy właśnie ją.
+Drzwi: **F** otwiera i zamyka (klamka, skrzypienie, słychać to z daleka); **kucając F** uchyla je cicho na szparę
+(i tak samo cicho zamyka). Zamknięte na klucz otwiera się wytrychem (cicho, kilka sekund) albo wyważa kopniakami –
+głośno, metalowe dłużej. Wrogowie otwierają drzwi po drodze, a zamknięte na klucz wyważają. Stań nieruchomo przy
+zamkniętych drzwiach, żeby podsłuchać, co jest za nimi (przez skrzydło słychać lepiej niż przez mur). Drewniane
+drzwi kula przebija, metalowe nie.
 Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu
 **PPM** na broni. Kolimator, lunetę i chwyt montuje się tylko przy stole roboczym w schronie (podejdź i wciśnij **F**). Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
 
