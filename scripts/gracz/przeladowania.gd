@@ -130,16 +130,16 @@ static func obrzyn(b, szybkie: bool) -> Choreografia:
 		return _lufy_t(kat, float(ch.kanaly.get("lufy", 0.0))) * _lufy_t(kat, 0.0).affine_inverse() * baza
 	# chwyt za kryzy: dłoń za komorami, palce w przód wzdłuż luf, wnętrze w dół na łuski
 	# palce z lewej w poprzek czoła komór, opuszki na kryzach, wnętrze dłoni do czoła luf
-	var szczypta := Choreografia.dlon(false, Vector3(0.0, 0.0, 0.006), Vector3(0.55, 1, 0), Vector3(0.1, 0.0, -1), 0.125, 0.022)
+	var szczypta := Choreografia.dlon(false, Vector3(0.0, 0.0, 0.006), Vector3(0.55, 1, 0), Vector3(0.1, 0.0, -1), 0.14, 0.022)
 	var przy_komorach := func(s: float, dx := Vector3.ZERO) -> Callable:
 		return func() -> Transform3D:
 			var t := _komory_t(kat, float(ch.kanaly.get("lufy", 0.0)), s)
 			return Transform3D(t.basis, t.origin + dx) * szczypta
-	var otwarta_bron := [Vector3(0.35, 0.55, 0.25), Vector3(-0.07, 0.03, 0.03)]
+	var otwarta_bron := [Vector3(0.35, 0.55, 0.25), Vector3(-0.05, 0.05, -0.05)]
 	var otw: Dictionary = w_komorach.call(pelne)
 	# 1. kciuk na dźwigni, lufy opadają na zawiasie
 	ch.dodaj({"nazwa": "otworz", "t": 0.3, "ease": "przysp", "kanaly": {"lufy": 1.0}, "reka": na_loze, "obiekty": otw,
-		"bron": otwarta_bron, "dzw": [["klik", -12.0]], "dzw_k": [["obrzyn_lam", -5.0]], "kop_k": [Vector3(-0.03, 0, 0.0), Vector3(0, -0.004, 0)]})
+		"bron": otwarta_bron, "dzw": [["dzwignia", -8.0]], "dzw_k": [["obrzyn_lam", -5.0]], "kop_k": [Vector3(-0.03, 0, 0.0), Vector3(0, -0.004, 0)]})
 	if not do_wyjecia.is_empty():
 		if szybkie:
 			# szarpnięcie lufami w górę: łuski same wylatują przez ramię
@@ -159,14 +159,14 @@ static func obrzyn(b, szybkie: bool) -> Choreografia:
 				w_dloni["k%d" % k] = "reka"
 			# wyciągnięcie łusek wzdłuż osi luf
 			ch.dodaj({"t": 0.2, "ease": "hamuj", "reka": przy_komorach.call(0.105), "obiekty": w_dloni,
-				"dzw": [["naboj_wloz", -13.0]]})
+				"dzw": [["luska_wyjmij", -6.0]]})
 			# odrzucenie w bok
 			var odrzut := {}
 			for k in do_wyjecia:
 				odrzut["k%d" % k] = Vector3(-1.4, 0.4, 1.2)
-			ch.dodaj({"t": 0.14, "ease": "przysp", "reka": przy_komorach.call(0.14, Vector3(-0.07, 0.03, 0.03)), "obiekty": w_dloni,
+			ch.dodaj({"t": 0.14, "ease": "przysp", "reka": przy_komorach.call(0.14, Vector3(-0.08, 0.04, -0.02)), "obiekty": w_dloni,
 				"chwyt_k": "otwarta"})
-			ch.dodaj({"t": 0.06, "reka": przy_komorach.call(0.15, Vector3(-0.1, 0.02, 0.04)), "spadaj": odrzut,
+			ch.dodaj({"t": 0.06, "reka": przy_komorach.call(0.15, Vector3(-0.11, 0.03, -0.01)), "spadaj": odrzut,
 				"koniec": func(): _luski_spadly(b, do_wyjecia.size())})
 	var stan := {"wziete": 0, "id": "", "wlozone": false}
 	if not wkladane.is_empty():
@@ -272,7 +272,7 @@ static func obrzyn_sprawdz(b) -> Choreografia:
 	var na_loze := func() -> Transform3D:
 		return _lufy_t(kat, float(ch.kanaly["lufy"])) * _lufy_t(kat, 0.0).affine_inverse() * baza
 	ch.dodaj({"t": 0.35, "kanaly": {"lufy": 0.62}, "reka": na_loze, "obiekty": cele, "bron": [Vector3(0.62, 0.5, 0.5), Vector3(-0.05, 0.05, 0.06)],
-		"dzw": [["klik", -12.0]], "dzw_k": [["obrzyn_lam", -10.0]]})
+		"dzw": [["dzwignia", -10.0]], "dzw_k": [["obrzyn_lam", -10.0]]})
 	ch.dodaj({"t": 0.75, "reka": na_loze, "obiekty": cele, "bron": [Vector3(0.66, 0.54, 0.46), Vector3(-0.05, 0.05, 0.06)]})
 	ch.dodaj({"t": 0.14, "ease": "trzask", "kanaly": {"lufy": 0.0}, "reka": na_loze, "obiekty": cele, "bron": [Vector3(0.1, 0.1, 0.1), Vector3.ZERO],
 		"dzw_k": [["obrzyn_zamk", -6.0]], "kop_k": [Vector3(0.07, 0.02, 0.04), Vector3.ZERO]})
@@ -315,7 +315,7 @@ static func _lukowy(b, szybkie: bool, czas: float) -> Choreografia:
 	var wychyl := func(a: float, dol := 0.0) -> Transform3D:
 		return Transform3D(Basis(), Vector3(0, -dol, -dol * 0.25)) * Choreografia.obrot_wokol(zaczep, Vector3(a, 0, 0))
 	# dłoń obejmuje magazynek z lewej, palce na przedniej krawędzi, kciuk na zatrzasku z tyłu
-	var chwyt_mag := Choreografia.dlon(false, Vector3(0, -0.075, -0.19), Vector3(0, -1, -0.3), Vector3(1, 0, 0.1), 0.058, 0.026)
+	var chwyt_mag := Choreografia.dlon(false, Vector3(0, -0.075, -0.19), Vector3(0, -1, -0.3), Vector3(1, 0, 0.1), 0.05, 0.012)
 	var przechyl: Array = nadpisz.get("kb47", [Vector3(0.2, 0.5, -0.4), Vector3(-0.06, 0.08, 0.05)])
 	var pocz := _ladownica(b)
 	var mag_n: Node3D = null
@@ -356,7 +356,7 @@ static func _lukowy(b, szybkie: bool, czas: float) -> Choreografia:
 		var raczka := Choreografia.dlon(false, p_r, Vector3(0, 0, -1), Vector3(0.6, -0.8, 0), 0.07, 0.024)
 		var cofnieta := Transform3D(Basis(), Vector3(0, 0, 0.07)) * raczka
 		ch.dodaj({"t": 0.16, "reka": raczka, "chwyt": "otwarta", "chwyt_k": "piesc", "bron": [Vector3(0.1, 0.25, -0.15), Vector3(-0.01, 0.0, 0.02)],
-			"lok": Vector3(-0.05, -0.2, 0.3)})
+			"lok": Vector3(-0.14, -0.34, 0.06)})
 		ch.dodaj({"t": 0.1, "ease": "hamuj", "reka": cofnieta, "kanaly": {"raczka": 1.0}, "dzw": [["zamek_kb", -5.0]]})
 		ch.dodaj({"t": 0.05, "ease": "trzask", "reka": Transform3D(Basis(), Vector3(0, 0.01, 0.05)) * raczka, "kanaly": {"raczka": 0.0},
 			"chwyt": "otwarta", "kop_k": [Vector3(0.04, -0.03, 0.06), Vector3(0, 0, 0.008)]})
@@ -378,7 +378,7 @@ static func _w_chwycie(b, szybkie: bool, czas: float, pistolet: bool) -> Choreog
 	# dłoń pod stopką magazynka: wnętrze do góry, palce w prawo
 	var pod_stopka := Choreografia.dlon(false, dno + os_dol * 0.01, Vector3(0, 0, 1), -os_dol, 0.05, 0.022)
 	var dobicie := Choreografia.dlon(false, dno + os_dol * 0.03, Vector3(0, 0, 1), -os_dol, 0.045, 0.03)
-	var przechyl: Array = nadpisz.get("pw9" if pistolet else "pm63", [Vector3(0.2, 0.5, -0.4), Vector3(-0.04, 0.11, -0.01)] if pistolet else [Vector3(0.2, 0.5, -0.4), Vector3(-0.06, 0.08, 0.05)])
+	var przechyl: Array = nadpisz.get("pw9" if pistolet else "pm63", [Vector3(0.2, 0.5, -0.4), Vector3(-0.04, 0.16, -0.02)] if pistolet else [Vector3(0.2, 0.5, -0.4), Vector3(-0.06, 0.14, -0.02)])
 	var pocz := _ladownica(b)
 	ch.dodaj({"t": 0.12, "reka": pod_stopka, "bron": przechyl, "chwyt": "otwarta", "chwyt_k": "magazynek", "lok": Vector3(-0.12, -0.3, 0.22)})
 	if szybkie:
@@ -403,7 +403,7 @@ static func _w_chwycie(b, szybkie: bool, czas: float, pistolet: bool) -> Choreog
 		var zamek := Choreografia.dlon(false, p_z, Vector3(0, 0, -1), Vector3(0.15, -1, 0), 0.06, 0.02)
 		var skok: float = float(b._ruchome["zamek"]["dane"]["skok"]) if b._ruchome.has("zamek") else 0.03
 		ch.dodaj({"t": 0.16, "reka": Transform3D(Basis(), Vector3(0, 0, skok)) * zamek, "chwyt": "otwarta", "chwyt_k": "piesc",
-			"bron": [Vector3(0.15, 0.35, -0.3), Vector3(0.0, -0.01, -0.06) if pistolet else Vector3(0, 0, 0.0)], "lok": Vector3(-0.15, -0.15, 0.3)})
+			"bron": [Vector3(0.12, 0.45, -0.35), Vector3(-0.02, 0.08, -0.06) if pistolet else Vector3(-0.03, 0.04, 0.0)], "lok": Vector3(-0.12, -0.32, 0.1)})
 		ch.dodaj({"t": 0.07, "ease": "hamuj", "reka": Transform3D(Basis(), Vector3(0, 0, skok + 0.008)) * zamek, "kanaly": {"zamek": 1.15}})
 		ch.dodaj({"t": 0.05, "ease": "trzask", "reka": Transform3D(Basis(), Vector3(-0.02, 0.03, skok + 0.02)) * zamek, "kanaly": {"zamek": 0.0},
 			"chwyt": "otwarta", "dzw": [["zamek_pist" if pistolet else "zamek_kb", -4.0]], "kop_k": [Vector3(0.05, 0.02, 0.04), Vector3(0, 0, 0.006)]})
@@ -472,7 +472,7 @@ static func sprawdz_magazynek(b) -> Choreografia:
 	var wysun: Transform3D
 	if b.przedmiot.id == "kb47":
 		var zaczep := Vector3(0, 0.02, -0.205)
-		chwyt = Choreografia.dlon(false, Vector3(0, -0.075, -0.19), Vector3(0, -1, -0.3), Vector3(1, 0, 0.1), 0.058, 0.026)
+		chwyt = Choreografia.dlon(false, Vector3(0, -0.075, -0.19), Vector3(0, -1, -0.3), Vector3(1, 0, 0.1), 0.05, 0.012)
 		wysun = Transform3D(Basis(), Vector3(0, -0.018, -0.004)) * Choreografia.obrot_wokol(zaczep, Vector3(0.12, 0, 0))
 	else:
 		var kat := deg_to_rad(float(b.md.get("kat_chwytu", 10.0)))
@@ -486,5 +486,45 @@ static func sprawdz_magazynek(b) -> Choreografia:
 	ch.dodaj({"t": 0.1, "ease": "przysp", "obiekty": {"mag": Transform3D()}, "reka_przy": "mag", "dzw_k": [["mag_wloz", -8.0]],
 		"kop_k": [Vector3(0.02, 0, 0.01), Vector3.ZERO]})
 	ch.dodaj({"t": 0.26, "reka": b._reka_baza, "bron": [Vector3.ZERO, Vector3.ZERO], "chwyt": "pistolet" if (pistolet or b.md.has("chwyt_pionowy")) else "lozysko",
+		"lok": _zwykla_lok()})
+	return ch
+
+
+# ------------------------------------------------------------------ zacięcie
+
+## Usuwanie zacięcia: broń przekręcona oknem wyrzutowym do oka; pistolet / PM-63 – klepnięcie w stopkę
+## magazynka i przeciągnięcie zamka górą; KB-47 – rączka zamka do oporu, przytrzymana i puszczona.
+static func zaciecie(b) -> Choreografia:
+	var ch := _poczatek(b)
+	ch.kanaly = {"raczka": 0.0}
+	var pistolet: bool = b.jest_pistolet()
+	var okno := [Vector3(0.12, 0.3, -0.25), Vector3(-0.03, 0.06, 0.0)]
+	if b.przedmiot.id == "kb47":
+		var p_r := Vector3(0.033, 0.068, -0.086)
+		var raczka := Choreografia.dlon(false, p_r, Vector3(0, 0, -1), Vector3(0.6, -0.8, 0), 0.07, 0.024)
+		var cofnieta := Transform3D(Basis(), Vector3(0, 0, 0.07)) * raczka
+		ch.dodaj({"t": 0.3, "reka": raczka, "bron": okno, "chwyt": "otwarta", "chwyt_k": "piesc", "lok": Vector3(-0.14, -0.34, 0.06)})
+		ch.dodaj({"t": 0.22, "ease": "hamuj", "reka": cofnieta, "kanaly": {"raczka": 1.0}, "dzw": [["zamek_kb", -6.0]]})
+		ch.dodaj({"t": 0.25, "reka": cofnieta, "kanaly": {"raczka": 1.0}, "bron": [okno[0] + Vector3(0.0, 0.0, -0.15), okno[1]]})
+		ch.dodaj({"t": 0.06, "ease": "trzask", "reka": Transform3D(Basis(), Vector3(0, 0.01, 0.05)) * raczka, "kanaly": {"raczka": 0.0},
+			"chwyt": "otwarta", "kop_k": [Vector3(0.04, -0.03, 0.06), Vector3(0, 0, 0.008)]})
+	else:
+		var kat := deg_to_rad(float(b.md.get("kat_chwytu", 10.0)))
+		var os_dol := Basis.from_euler(Vector3(kat, 0, 0)) * Vector3(0, -1, 0)
+		var dno: Vector3 = Vector3(0, -0.21, 0.006) if not pistolet else Vector3(0, -0.088, 0.017)
+		var dobicie := Choreografia.dlon(false, dno + os_dol * 0.03, Vector3(0, 0, 1), -os_dol, 0.045, 0.03)
+		var p_z := Vector3(0, 0.058, 0.004) if pistolet else Vector3(0, 0.074, 0.018)
+		var zamek := Choreografia.dlon(false, p_z, Vector3(0, 0, -1), Vector3(0.15, -1, 0), 0.06, 0.02)
+		var skok: float = float(b._ruchome["zamek"]["dane"]["skok"]) if b._ruchome.has("zamek") else 0.03
+		# klepnięcie w magazynek
+		ch.dodaj({"t": 0.16, "reka": Transform3D(Basis(), os_dol * 0.06) * dobicie, "bron": okno, "chwyt": "otwarta", "lok": Vector3(-0.12, -0.3, 0.22)})
+		ch.dodaj({"t": 0.06, "ease": "trzask", "reka": dobicie, "dzw_k": [["mag_wloz", -9.0]], "kop_k": [Vector3(0.04, 0, 0), Vector3(0, 0.005, 0)]})
+		# zamek górą do tyłu i puszczony
+		ch.dodaj({"t": 0.22, "reka": zamek, "chwyt_k": "piesc", "lok": Vector3(-0.12, -0.32, 0.1)})
+		ch.dodaj({"t": 0.14, "ease": "hamuj", "reka": Transform3D(Basis(), Vector3(0, 0, skok)) * zamek, "kanaly": {"raczka": 1.0},
+			"dzw": [["zamek_pist" if pistolet else "zamek_kb", -6.0]]})
+		ch.dodaj({"t": 0.05, "ease": "trzask", "reka": Transform3D(Basis(), Vector3(-0.02, 0.03, skok + 0.02)) * zamek, "kanaly": {"raczka": 0.0},
+			"chwyt": "otwarta", "kop_k": [Vector3(0.05, 0.02, 0.04), Vector3(0, 0, 0.006)]})
+	ch.dodaj({"t": 0.28, "reka": b._reka_baza, "bron": [Vector3.ZERO, Vector3.ZERO], "chwyt": "pistolet" if (pistolet or b.md.has("chwyt_pionowy")) else "lozysko",
 		"lok": _zwykla_lok()})
 	return ch

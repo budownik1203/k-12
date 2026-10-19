@@ -722,6 +722,11 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		_byl_pusty = true
 		r_trzymany = -99.0
 		_fazy_dzw = [[0.25, _zamek_dzw(), -5.0], [0.75, _zamek_dzw(), -6.0]]
+		if _lewa and _reka_l:
+			# choreografia: klepnięcie / rączka zamka (dźwięki w niej)
+			_chor = Przeladowania.zaciecie(self)
+			stan_total = _chor.calosc
+			_fazy_dzw = []
 		return
 	if we.get("przeladuj", false):
 		r_trzymany += delta
@@ -878,7 +883,7 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	Gra.emituj_halas(gracz.global_position, halas, gracz)
 	if not bd.has("wewnetrzny"):
 		# praca zamka tuż przy uchu; po ostatnim naboju zamek staje w tyle (głośniejszy, suchy klik)
-		Dzwiek.graj("klik", -17.0, randf_range(0.55, 0.65))
+		Dzwiek.graj("mechanizm", -13.0, randf_range(0.92, 1.08) * (1.15 if bd["slot"] == "pistolet" else 1.0))
 		if przedmiot.dane.get("komora", "") == "" and _ruchome.has("zamek") and bool(_ruchome["zamek"]["dane"].get("blokada", false)):
 			get_tree().create_timer(0.05).timeout.connect(func(): Dzwiek.graj("klik", -7.0, 0.8))
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}

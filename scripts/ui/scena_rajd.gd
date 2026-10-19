@@ -2592,6 +2592,29 @@ func _test_przeladowan(katalog: String) -> void:
 			print("  po: magazynek %s, komora %s %s" % [m.dane["naboje"] if m else -1, p.dane["komora"], "OK" if ok else "BŁĄD"])
 			if not ok:
 				bledy += 1
+	# usuwanie zacięcia
+	for el in [["kb47", "glowna", "a_762"], ["pw9", "pistolet", "a_9x18"]]:
+		if tylko != "" and tylko != "zaciecie":
+			continue
+		var p: Przedmiot = Gra.nowy_naladowany(String(el[0]), String(el[2]))
+		p.dane["zaciecie"] = true
+		Gra.ekw.sloty[String(el[1])] = p
+		gracz._wybierz_bron(String(el[1]))
+		await _klatki(30)
+		b.zamroz = true
+		b.r_trzymany = 0.0
+		b.aktualizuj(0.016, {"przeladuj": true, "moze": true})
+		var tot: float = b.stan_total
+		for i in 6:
+			b.stan_t = tot * (float(i) + 0.5) / 6.0
+			await _klatki(2)
+			await _zapisz(katalog, "pr_zaciecie_%s_%d" % [el[0], i])
+		b.zamroz = false
+		while b.stan != "gotowa":
+			await get_tree().process_frame
+		print("  zacięcie %s: usunięte %s" % [el[0], not bool(p.dane.get("zaciecie", false))])
+		if bool(p.dane.get("zaciecie", false)):
+			bledy += 1
 	# zerknięcie na okienka magazynka
 	for el in [["kb47", "glowna", "a_762", 12], ["pm63", "glowna", "a_9x18", 25], ["pw9", "pistolet", "a_9x18", 3]]:
 		if tylko != "" and tylko != "sprawdz" and not String(el[0]).begins_with(tylko):

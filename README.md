@@ -25,7 +25,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | WSAD, Shift, Ctrl, Spacja | ruch, bieg, kucanie, skok |
 | Q / E | wychylenie zza osłony |
 | LPM / PPM | strzał / celowanie przez przyrządy |
-| R | przeładowanie (przytrzymaj: szybkie – nowy magazynek wybija stary, obrzyn wyrzuca łuski szarpnięciem); przy zacięciu – usunięcie zacięcia; strzał w trakcie ładowania obrzyna – zatrzaśnięcie luf |
+| R | przeładowanie (przytrzymaj: szybkie – nowy magazynek wybija stary, obrzyn wyrzuca łuski szarpnięciem); przy zacięciu – usunięcie zacięcia (klepnięcie w magazynek i zamek / rączka zamka do oporu); strzał w trakcie ładowania obrzyna – zatrzaśnięcie luf |
 | B / T | tryb ognia / sprawdzenie amunicji: zerknięcie na okienka magazynka (ile naboi widać), w obrzynie – uchylenie luf i rzut oka na komory |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
