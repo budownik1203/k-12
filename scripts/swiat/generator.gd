@@ -1516,12 +1516,12 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 	if info.get("pojemnik") != null and z_kolizja and k.x >= 0:
 		var pj := Pojemnik.new()
 		pj.nazwa = info["nazwa"]
-		var sw := 4
-		var sh := 3
+		var sw := 8
+		var sh := 6
 		match String(info["pojemnik"]):
-			"skrzynia_wojskowa": sw = 5; sh = 3
-			"szafa", "regal": sw = 5; sh = 4
-			"apteczka_scienna": sw = 3; sh = 2
+			"skrzynia_wojskowa": sw = 10; sh = 6
+			"szafa", "regal": sw = 10; sh = 8
+			"apteczka_scienna": sw = 6; sh = 4
 		pj.siatka = Siatka.new(sw, sh)
 		pj.wypelnij(info["pojemnik"], rng.randi_range(1, 4), rng)
 		if id in MONTOWANE_NA_SCIANIE:

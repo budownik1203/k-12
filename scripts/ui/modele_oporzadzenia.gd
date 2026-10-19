@@ -91,8 +91,8 @@ static func kieszenie_m(id: String, s: Siatka) -> Array:
 
 static func zbuduj(id: String, w := -1.0, d := -1.0, kieszenie: Array = []) -> Dictionary:
 	if w < 0.0 or kieszenie.is_empty():
-		var pj: Dictionary = Dane.def(id).get("pojemnik", {}) if id not in ["kontener", "bezpieczny"] else {"sw": 2, "sh": 2}
-		var s := Siatka.z_definicji(pj) if not pj.is_empty() else Siatka.new(2, 2)
+		var pj: Dictionary = Dane.def(id).get("pojemnik", {}) if id not in ["kontener", "bezpieczny"] else {"sw": 4, "sh": 4}
+		var s := Siatka.z_definicji(pj) if not pj.is_empty() else Siatka.new(4, 4)
 		var wd := wymiary(id, s)
 		if w < 0.0:
 			w = wd.x

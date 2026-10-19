@@ -1703,11 +1703,11 @@ func _zwloki() -> void:
 	pj.add_to_group("lup_swiat")
 	# przeszukiwanie ciała po kolei: kieszenie kurtki, spodni, ładownice, worek/plecak; pancerz i hełm
 	# trzeba odpiąć i zdjąć (trwa)
-	var kurtka := Siatka.new(2, 2)
-	var spodnie := Siatka.new(2, 2)
-	var ladownice := Siatka.new(4, 2)
-	var plecak := Siatka.new(5, 4)
-	var na_ciele := Siatka.new(5, 3)
+	var kurtka := Siatka.new(4, 4)
+	var spodnie := Siatka.new(4, 4)
+	var ladownice := Siatka.new(8, 4)
+	var plecak := Siatka.new(10, 8)
+	var na_ciele := Siatka.new(10, 6)
 	pj.siatka = kurtka
 	# broń z resztą amunicji w magazynku – wypada z rąk i leży obok (chyba że już ją rzucił, poddając się)
 	var bd: Dictionary = bron.defn()["bron"]

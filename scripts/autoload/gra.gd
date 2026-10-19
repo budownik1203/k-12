@@ -34,7 +34,7 @@ func _ready() -> void:
 
 func nowa_gra() -> void:
 	bony = 12000
-	skrytka = Siatka.new(10, 14, 0.0)
+	skrytka = Siatka.new(20, 28, 0.0)
 	ekw = Ekwipunek.new()
 	zdrowie = {}
 	potrzeby = {"glod": 80.0, "pragnienie": 80.0}

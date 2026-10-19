@@ -979,7 +979,7 @@ func _test_mechanik() -> void:
 	# A: kolejka przenoszenia przerwana zamknięciem – nic nie znika ani się nie dubluje
 	var pj := Pojemnik.new()
 	pj.nazwa = "Szafa testowa"
-	pj.siatka = Siatka.new(5, 4)
+	pj.siatka = Siatka.new(10, 8)
 	for pid in ["konserwa", "zegarek", "bandaz", "kompas"]:
 		pj.siatka.dodaj(Przedmiot.nowy(pid))
 	swiat.add_child(pj)
@@ -1064,7 +1064,7 @@ func _test_mechanik() -> void:
 	# E: kłódka – wyłamanie
 	var pk := Pojemnik.new()
 	pk.nazwa = "Skrzynia"
-	pk.siatka = Siatka.new(3, 2)
+	pk.siatka = Siatka.new(6, 4)
 	pk.zamkniety_kluczem = "klodka"
 	swiat.add_child(pk)
 	pk.global_position = gracz.global_position
@@ -1077,7 +1077,7 @@ func _test_mechanik() -> void:
 	# F: wyjęcie znalezionego przedmiotu nie odsłania kolejnego
 	var pf := Pojemnik.new()
 	pf.nazwa = "Szuflada"
-	pf.siatka = Siatka.new(4, 2)
+	pf.siatka = Siatka.new(8, 4)
 	for pid in ["zegarek", "kompas", "bandaz"]:
 		pf.siatka.dodaj(Przedmiot.nowy(pid))
 	swiat.add_child(pf)
@@ -1910,7 +1910,7 @@ func _zrzut_animacji(katalog: String) -> void:
 			await get_tree().process_frame
 		ek._brzek = -1.0
 		print("brzęk po taśmie: %.2f, taśma użyć: %s" % [ek.brzek(), str(ekran_ekw._znajdz_narzedzie("tasma").dane.get("uzycia"))])
-		var sk := Siatka.new(6, 4)
+		var sk := Siatka.new(12, 8)
 		for pid in ["konserwa", "kb47", "bandaz", "mag_kb47", "zegarek"]:
 			sk.dodaj(Przedmiot.nowy(pid))
 		print("sortowanie: ", sk.sortuj(), " pierwszy: ", sk.items[0]["p"].id)
@@ -2057,7 +2057,7 @@ func _zrzut_animacji(katalog: String) -> void:
 			var pj := Pojemnik.new()
 			pj.nazwa = String(mid)
 			pj.mebel_id = mid
-			pj.siatka = Siatka.new(5, 3)
+			pj.siatka = Siatka.new(10, 6)
 			var rng2 := RandomNumberGenerator.new()
 			rng2.seed = 3
 			pj.wypelnij("szafa", 4, rng2)

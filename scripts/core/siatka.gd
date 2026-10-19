@@ -246,17 +246,22 @@ func to_dict() -> Dictionary:
 	var arr := []
 	for e in items:
 		arr.append({"p": (e["p"] as Przedmiot).to_dict(), "x": e["x"], "y": e["y"]})
-	return {"w": w, "h": h, "r": redukcja, "i": arr}
+	return {"w": w, "h": h, "r": redukcja, "i": arr, "v": WERSJA}
+
+
+## Wersja siatki w zapisie: 2 = drobna siatka (dawna kratka = 2x2 nowe).
+const WERSJA := 2
 
 
 static func from_dict(d: Dictionary) -> Siatka:
-	var s := Siatka.new(int(d["w"]), int(d["h"]), float(d.get("r", 0.0)))
+	var k := 2 if int(d.get("v", 1)) < WERSJA else 1      # stary zapis: rozmiar i pozycje x2
+	var s := Siatka.new(int(d["w"]) * k, int(d["h"]) * k, float(d.get("r", 0.0)))
 	var reszta := []
 	for e in d.get("i", []):
 		var p := Przedmiot.from_dict(e["p"])
 		# stosy mogły zmienić rozmiar między wersjami: co nie pasuje, układamy na nowo
-		if s.moze(p, int(e["x"]), int(e["y"]), p.obrot):
-			s.items.append({"p": p, "x": int(e["x"]), "y": int(e["y"])})
+		if s.moze(p, int(e["x"]) * k, int(e["y"]) * k, p.obrot):
+			s.items.append({"p": p, "x": int(e["x"]) * k, "y": int(e["y"]) * k})
 		else:
 			reszta.append(p)
 	for p in reszta:

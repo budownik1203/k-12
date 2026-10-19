@@ -5,11 +5,17 @@ func _ready() -> void:
 	Gra.ZAPIS = "user://zapis_test.json"
 	var bledy := 0
 
-	var s := Siatka.new(4, 2, 0.3)
+	var s := Siatka.new(8, 3, 0.3)
 	var kb := Przedmiot.nowy("kb47")
-	bledy += _ok(s.dodaj(kb), "kb47 mieści się w 4x2")
+	bledy += _ok(s.dodaj(kb), "kb47 mieści się w 8x3")
 	bledy += _ok(not s.dodaj(Przedmiot.nowy("bandaz")), "pełna siatka odrzuca")
-	var a := Siatka.new(2, 2)
+	# drobna siatka: małe rzeczy zajmują mniej niż długie
+	var m := Siatka.new(4, 4)
+	bledy += _ok(m.dodaj(Przedmiot.nowy("bandaz")) and m.dodaj(Przedmiot.nowy("zegarek")) and m.dodaj(Przedmiot.nowy("mag_kb47")), "bandaż, zegarek i magazynek w 4x4")
+	# stary zapis (gruba siatka 2x2) – rozmiar i pozycje x2
+	var st := Siatka.from_dict({"w": 2, "h": 2, "r": 0.0, "i": [{"p": Przedmiot.nowy("bandaz").to_dict(), "x": 1, "y": 1}]})
+	bledy += _ok(st.w == 4 and st.h == 4 and st.pozycja(st.items[0]["p"]) == Vector2i(2, 2), "migracja starego zapisu siatki")
+	var a := Siatka.new(4, 3)
 	bledy += _ok(a.dodaj(Przedmiot.nowy("a_9x18", 30)), "amunicja 30")
 	bledy += _ok(a.dodaj(Przedmiot.nowy("a_9x18", 30)), "dokładanie do stosu")
 	bledy += _ok(a.policz("a_9x18") == 60, "stos 50+10 = 60 (jest %d)" % a.policz("a_9x18"))

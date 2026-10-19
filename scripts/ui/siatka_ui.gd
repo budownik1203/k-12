@@ -13,7 +13,7 @@ signal gest_koniec(ui: SiatkaUI, indeks: int)
 var _gest := -1
 var proste_kieszenie := true     # tryb prosty (klik w kieszeń) – w rajdzie z modelem 3D: chwytanie uchwytów
 
-const KOM := 34
+const KOM := 17          # drobna siatka: dawna kratka 34 px = 2x2 nowe
 
 var siatka: Siatka
 var tytul := ""
@@ -166,7 +166,8 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 		var ts := tex.get_size()
 		# duże przedmioty w małym slocie: ikona pomniejszona do ramki
 		var miesc := Vector2(ts.y, ts.x) if p.obrot else ts
-		var sk := minf(1.0, minf((r.size.x - 4.0) / miesc.x, (r.size.y - 4.0) / miesc.y))
+		# ikony rysowane w dawnej skali (32 px na grubą kratkę): dopasowane do ramki z zachowaniem proporcji
+		var sk := minf(1.15, minf((r.size.x - 3.0) / miesc.x, (r.size.y - 3.0) / miesc.y))
 		ts *= sk
 		if p.obrot:
 			# ikona obrócona o 90°

@@ -14,7 +14,7 @@ var _hover := false
 func ustaw(e: Ekwipunek, s: String, rozmiar: Vector2i) -> void:
 	ekw = e
 	slot = s
-	custom_minimum_size = Vector2(rozmiar) * SiatkaUI.KOM + Vector2(0, 16)
+	custom_minimum_size = Vector2(rozmiar) * SiatkaUI.KOM * 2.0 + Vector2(0, 16)   # rozmiar w grubych kratkach
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 

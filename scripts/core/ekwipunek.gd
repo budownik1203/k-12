@@ -17,8 +17,8 @@ const MAX_UTILITY := 4
 
 var sloty := {}
 var nowa_bron := ""          # slot, do którego właśnie trafiła podniesiona broń (gracz bierze ją do ręki)
-var kieszenie := Siatka.new(4, 1, 0.0)
-var bezpieczny := Siatka.new(2, 2, 0.0)   # kontener bezpieczny: przeżywa śmierć
+var kieszenie := Siatka.new(8, 2, 0.0)
+var bezpieczny := Siatka.new(4, 4, 0.0)   # kontener bezpieczny: przeżywa śmierć
 
 
 func _init() -> void:
@@ -533,7 +533,7 @@ func wartosc() -> int:
 func wyczysc() -> void:
 	for s in SLOTY:
 		sloty[s] = null
-	kieszenie = Siatka.new(4, 1, 0.0)
+	kieszenie = Siatka.new(8, 2, 0.0)
 	zmieniony.emit()
 
 
