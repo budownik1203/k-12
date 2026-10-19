@@ -148,6 +148,11 @@ func _ekw_zmieniony() -> void:
 	if tryb_bazy:
 		return
 	# puste ręce, a broń trafiła do slotu (podniesiona z ziemi / z łupu) – od razu w ręce
+	if ekw.nowe_zalozone != "":
+		var sl := ekw.nowe_zalozone
+		ekw.nowe_zalozone = ""
+		if ekw.sloty.get(sl) != null:
+			komunikat.emit("Założono: " + (ekw.sloty[sl] as Przedmiot).nazwa())
 	var nb := ekw.nowa_bron
 	ekw.nowa_bron = ""
 	if nb != "" and bron.przedmiot == null and not latarka_w_rece and ekw.sloty.get(nb) != null:
@@ -959,13 +964,49 @@ func _interakcje(aktywne: bool) -> void:
 	if r.is_empty():
 		return
 	var col: Object = r["collider"]
+	# przedmiot leżący tuż za/pod kończyną zwłok ma pierwszeństwo przed przeszukaniem ciała
+	if col is RigidBody3D and (col as Node).get_parent() is Ragdoll:
+		var q2 := PhysicsRayQueryParameters3D.create(od, od - kamera.global_basis.z * 2.3, MASKA_INTERAKCJI)
+		q2.collide_with_areas = true
+		var wykl: Array[RID] = [get_rid()]
+		for b in ((col as Node).get_parent() as Ragdoll).bryly.values():
+			wykl.append((b as CollisionObject3D).get_rid())
+		q2.exclude = wykl
+		var r2 := space.intersect_ray(q2)
+		if not r2.is_empty() and r2["collider"] is LupNaZiemi and (r2["position"] as Vector3).distance_to(r["position"]) < 0.45:
+			col = r2["collider"]
 	var cel: Object = col.get_meta("interakcja") if col.has_meta("interakcja") else null
+	if cel == null and not col.has_meta("interakcja"):
+		# promień ześlizgnął się obok cienkiej kończyny / przedmiotu na podłogę – sprawdź najbliższe otoczenie
+		var sf := PhysicsShapeQueryParameters3D.new()
+		var kula := SphereShape3D.new()
+		kula.radius = 0.16
+		sf.shape = kula
+		sf.transform = Transform3D(Basis(), r["position"])
+		sf.collision_mask = Balistyka.WARSTWA_INTERAKCJE
+		sf.collide_with_areas = true
+		sf.exclude = [get_rid()]
+		for h in space.intersect_shape(sf, 4):
+			var c2: Object = h["collider"]
+			if c2 and c2.has_meta("interakcja"):
+				cel = c2.get_meta("interakcja")
+				break
 	if cel == null or not is_instance_valid(cel):
 		return
 	cel_interakcji = cel
 	tekst_interakcji = cel.tekst_interakcji(self) if cel.has_method("tekst_interakcji") else "Użyj"
 	if aktywne and Input.is_action_just_pressed("interakcja") and cel.has_method("interakcja"):
 		cel.interakcja(self)
+
+
+## Kładzie przedmiot w konkretnym miejscu (odłożenie z ekwipunku tam, gdzie wskazał kursor).
+func poloz_na_ziemi(p: Przedmiot, gdzie: Vector3) -> LupNaZiemi:
+	var lup := LupNaZiemi.new()
+	lup.przedmiot = p
+	lup.rzut_z = gdzie + Vector3.UP * 0.18       # krótki spadek z dłoni
+	get_parent().add_child(lup)
+	lup.global_position = gdzie
+	return lup
 
 
 ## Upuszcza przedmiot na ziemię przed graczem.

@@ -42,6 +42,7 @@ var _agent: NavigationAgent3D
 var szansa_poddania := 0.6   # osaczony i bez szans: poddaje się zamiast uciekać
 var _model: Node3D
 var _czesci := {}
+var _ragdoll: Ragdoll = null
 var _percepcja_t := 0.0
 var _decyzja_t := 0.0
 var _strzal_t := 0.0
@@ -1662,24 +1663,15 @@ func _smierc(_przyczyna: String) -> void:
 		oddzial.strata(self)
 	if not _oslona.is_empty() and menedzer:
 		menedzer.zwolnij_oslone(self)
-	# upada w kierunku lotu pocisku: postrzelony z przodu – na plecy
-	var lk := global_basis.inverse() * _ost_kier
 	if _latarka:
 		_latarka.visible = false
-	# nogi się uginają, ręce opadają
-	var tk := create_tween().set_parallel(true)
-	for s2 in ["_l", "_p"]:
-		tk.tween_property(_czesci["kolano" + s2], "rotation:x", -1.4 + randf_range(-0.3, 0.3), 0.3)
-		tk.tween_property(_czesci["noga" + s2], "rotation:x", 0.7 + randf_range(-0.3, 0.3), 0.3)
-		tk.tween_property(_czesci["ramie" + s2], "rotation", Vector3(randf_range(-0.6, 0.6), 0, randf_range(-1.2, 1.2)), 0.45)
-		tk.tween_property(_czesci["lokiec" + s2], "rotation", Vector3(randf_range(-0.8, 0.2), 0, 0), 0.45)
-	tk.tween_property(_czesci["bron"], "position", Vector3(0.3, 0.1, -0.1), 0.4)
-	tk.tween_property(_czesci["glowa"], "rotation:x", randf_range(-0.5, 0.5), 0.5)
-	var t := create_tween()
-	t.tween_interval(0.12)
-	t.tween_property(_model, "rotation:x", deg_to_rad(86.0 * (1.0 if lk.z >= 0.0 else -1.0)), 0.55).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	t.parallel().tween_property(_model, "rotation:z", randf_range(-0.35, 0.35), 0.55)
-	t.parallel().tween_property(_model, "position", _model.position + Vector3(lk.x, 0, lk.z).normalized() * 0.35 + Vector3(0, 0.12, 0), 0.55)
+	# bezwładne ciało (ragdoll): upada zgodnie z kierunkiem kuli; broń wypada z rąk w _zwloki
+	if is_instance_valid(_czesci.get("bron")):
+		(_czesci["bron"] as Node3D).visible = false
+	_ragdoll = Ragdoll.z_postaci(get_parent(), _czesci, velocity, _ost_kier if _ost_kier.length() > 0.01 else -global_basis.z * -1.0)
+	get_tree().create_timer(0.45).timeout.connect(func():
+		if is_instance_valid(_ragdoll):
+			Dzwiek.graj_3d("upadek_miekki", _ragdoll.srodek(), get_parent(), -4.0, randf_range(0.8, 0.95)))
 	_zwloki.call_deferred()
 	zginal.emit(self)
 	get_tree().call_group("ui_rajdu", "zabity_wrog", self)
@@ -1760,11 +1752,18 @@ func _zwloki() -> void:
 		pj.czesci.append({"nazwa": "Chlebak", "siatka": plecak, "odkryte": 0, "zdejmowane": false})
 	if not na_ciele.items.is_empty():
 		pj.czesci.append({"nazwa": "Na ciele", "siatka": na_ciele, "odkryte": 0, "zdejmowane": true})
-	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(1.2, 0.5, 2.2)
-	cs.shape = bs
-	cs.position = Vector3(0, 0.25, 0)
-	pj.add_child(cs)
 	add_child(pj)
+	if _ragdoll and is_instance_valid(_ragdoll):
+		# przeszukiwanie z każdej części ciała; pole przenosi się na tułów, gdy ciało się ułoży
+		_ragdoll.ustaw_pojemnik(pj)
+		pj.collision_layer = 0
+		pj.set_meta("ragdoll", _ragdoll)
+		pj.global_position = _ragdoll.srodek()
+	else:
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(1.2, 0.5, 2.2)
+		cs.shape = bs
+		cs.position = Vector3(0, 0.25, 0)
+		pj.add_child(cs)
 	set_physics_process(false)

@@ -207,10 +207,13 @@ func _buduj() -> void:
 	kol.add_child(_odstep_d)
 	var dol := HBoxContainer.new()
 	_dol = dol
-	var podp := Motyw.etykieta("[LPM] przeciągnij (poza sloty = wyrzuć, lek na ciało = lecz, dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś (kolejka)  [Shift+LPM] podziel stos  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
+	var podp := Motyw.etykieta("[LPM] przeciągnij (też z ziemi i na ziemię pod kursorem; lek na ciało = lecz; dodatek na broń = montaż)  [R] obróć  [Ctrl+LPM] przenieś  [Shift+LPM] podziel  [PPM] menu  [Del] wyrzuć  [G] napełnij  [X] przerwij  [Tab] zamknij", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
 	podp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	podp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	podp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# obrys – pasek klawiszy czytelny także nad modelem plecaka/kamizelki w tle
+	podp.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.03, 0.9))
+	podp.add_theme_constant_override("outline_size", 4)
 	dol.add_child(podp)
 	kol.add_child(dol)
 	if not tryb_bazy:
@@ -359,11 +362,22 @@ func _domyslnie_otwarte() -> Array:
 
 func otworz(pojemnik: Pojemnik = null) -> void:
 	_pojemnik = pojemnik
+	_podswietl_pojemnik(true)
 	_prawa_siatka = pojemnik.siatka if pojemnik else null
 	_szukanie_t = 0.0
 	_pokaz()
 	if pojemnik != null and gracz and not tryb_bazy:
 		gracz.bron.animacja_akcji("schowaj")   # obie ręce w szafce / przy zwłokach
+
+
+## Lekka poświata przeszukiwanych zwłok (całe ciało) albo mebla – widać, co jest przeszukiwane.
+func _podswietl_pojemnik(wl: bool) -> void:
+	if _pojemnik == null or not is_instance_valid(_pojemnik) or tryb_bazy:
+		return
+	var cel: Node = _pojemnik.get_meta("ragdoll") if _pojemnik.has_meta("ragdoll") else _pojemnik
+	if cel == null or not is_instance_valid(cel):
+		return
+	Rozlozenie3D.nakladka(cel, Rozlozenie3D.mat_lekki() if wl else null)
 
 
 func otworz_skrytke() -> void:
@@ -464,6 +478,9 @@ func _po_schowaniu(cb: Callable) -> void:
 
 
 func zamknij() -> void:
+	if _lup_hover and is_instance_valid(_lup_hover):
+		Rozlozenie3D.nakladka(_lup_hover, null)
+	_lup_hover = null
 	if _kursor != Input.CURSOR_ARROW:
 		_kursor = Input.CURSOR_ARROW
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
@@ -477,6 +494,7 @@ func zamknij() -> void:
 	_tooltip.visible = false
 	Sterowanie.blokada = false
 	Sterowanie.przechwyc(true)
+	_podswietl_pojemnik(false)
 	if _pojemnik != null and is_instance_valid(_pojemnik):
 		_pojemnik.zamknij_mebel()
 		if gracz and not tryb_bazy:
@@ -925,6 +943,7 @@ func _process(delta: float) -> void:
 				r.visible = true
 				r.position = cel
 			r.position = r.position.lerp(cel, 0.5)
+		_hover_ziemi()
 		_uchwyty_kieszeni()
 		for c in _warstwa.get_children():
 			if c.has_meta("otwieranie") and c is Control:
@@ -948,6 +967,8 @@ func _process(delta: float) -> void:
 		_podp_ucieczka.offset_left = -330
 		_podp_ucieczka.offset_right = 330
 		_podp_ucieczka.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_podp_ucieczka.add_theme_color_override("font_outline_color", Color(0.04, 0.04, 0.03, 0.9))
+		_podp_ucieczka.add_theme_constant_override("outline_size", 4)
 		_root.add_child(_podp_ucieczka)
 	if _podp_ucieczka:
 		_podp_ucieczka.visible = plecak_rozl
@@ -983,7 +1004,7 @@ func _process(delta: float) -> void:
 			if g3 and is_instance_valid(g3):
 				off3 = g3.global_position - _ramka_poj.global_position + g3.size * 0.5
 			var cel3: Vector2 = (pk3 as Vector2) - off3
-			cel3.x = clampf(cel3.x, 380.0, maxf(380.0, _root.size.x - _ramka_poj.size.x - 4.0))
+			cel3.x = clampf(cel3.x, 392.0, maxf(392.0, _root.size.x - _ramka_poj.size.x - 4.0))
 			cel3.y = clampf(cel3.y, 4.0, maxf(4.0, _root.size.y - _ramka_poj.size.y - 30.0))
 			if not _ramka_poj.visible:
 				_ramka_poj.visible = true
@@ -1072,6 +1093,78 @@ func _w_swiecie() -> bool:
 	return not tryb_bazy and gracz != null and _warstwa != null
 
 
+## Rzeczy na ziemi w ekwipunku: chwytanie myszą (promień z kamery w punkt ekranu) i odkładanie tam,
+## gdzie wskazuje kursor – jak fizycznie, w zasięgu ręki.
+const ZASIEG_ZIEMI := 2.1
+
+
+func _promien(m: Vector2) -> Array:
+	var kam: Camera3D = gracz.kamera
+	var pv := m / _skala_ekranu()
+	return [kam.project_ray_origin(pv), kam.project_ray_normal(pv)]
+
+
+func _lup_pod(m: Vector2) -> LupNaZiemi:
+	if not _w_swiecie():
+		return null
+	var pr := _promien(m)
+	var q := PhysicsRayQueryParameters3D.create(pr[0], pr[0] + pr[1] * 4.0, Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_INTERAKCJE)
+	q.collide_with_areas = true
+	var wykl: Array[RID] = [gracz.get_rid()]
+	q.exclude = wykl
+	var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	# bryły ragdolla nie zasłaniają przedmiotów leżących na/pod ciałem
+	for _i in 6:
+		if r.is_empty() or not (r["collider"] is RigidBody3D and (r["collider"] as Node).get_parent() is Ragdoll):
+			break
+		wykl.append((r["collider"] as CollisionObject3D).get_rid())
+		q.exclude = wykl
+		r = gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	if r.is_empty() or not (r["collider"] is LupNaZiemi):
+		return null
+	var l := r["collider"] as LupNaZiemi
+	if l.przedmiot == null or l.is_queued_for_deletion() or _poziomo(l.global_position) > ZASIEG_ZIEMI:
+		return null
+	return l
+
+
+func _poziomo(p: Vector3) -> float:
+	return Vector2(p.x - gracz.global_position.x, p.z - gracz.global_position.z).length()
+
+
+## Punkt na podłodze / blacie pod kursorem (w zasięgu ręki) albo null.
+func _ziemia_pod(m: Vector2) -> Variant:
+	if not _w_swiecie():
+		return null
+	var pr := _promien(m)
+	var q := PhysicsRayQueryParameters3D.create(pr[0], pr[0] + pr[1] * 4.0, Balistyka.WARSTWA_SWIAT)
+	q.exclude = [gracz.get_rid()]
+	var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	if r.is_empty() or (r["normal"] as Vector3).y < 0.6:
+		return null
+	var p: Vector3 = r["position"]
+	if _poziomo(p) > ZASIEG_ZIEMI or absf(p.y - gracz.global_position.y) > 1.3:
+		return null
+	return p
+
+
+var _lup_hover: LupNaZiemi = null
+
+
+## Podświetlenie rzeczy na ziemi pod kursorem (lekka poświata, jak zapięcia).
+func _hover_ziemi() -> void:
+	var l: LupNaZiemi = null
+	if _drag.is_empty() and _przekl.is_empty() and _gest.is_empty() and not nad_celem(_root.get_global_mouse_position()):
+		l = _lup_pod(_root.get_global_mouse_position())
+	if l == _lup_hover:
+		return
+	if _lup_hover and is_instance_valid(_lup_hover):
+		Rozlozenie3D.nakladka(_lup_hover, null)
+	_lup_hover = l
+	if l:
+		Rozlozenie3D.nakladka(l, Rozlozenie3D.mat_podswietlenia())
+
+
 func _skala_ekranu() -> Vector2:
 	var vp := gracz.kamera.get_viewport()
 	var skala := Vector2(Widok3D.POMNIEJSZENIE, Widok3D.POMNIEJSZENIE)
@@ -1114,6 +1207,10 @@ func _ekran_przedmiotu(p: Przedmiot, z: Dictionary) -> Vector2:
 		for sl in _sloty:
 			if is_instance_valid(sl) and sl.slot == z["slot"]:
 				return sl.get_global_rect().get_center()
+	elif z.get("typ") == "ziemia" and is_instance_valid(z["wezel"]):
+		var pz = _rzut((z["wezel"] as Node3D).global_position)
+		if pz != null:
+			return pz
 	return _root.get_global_mouse_position()
 
 
@@ -1402,6 +1499,18 @@ func _input(event: InputEvent) -> void:
 		_upusc_drag(false)
 		get_viewport().set_input_as_handled()
 		return
+	# rzecz z ziemi: chwyt myszą i przeciągnięcie do plecaka, kieszeni, slotu albo w inne miejsce na ziemi
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _drag.is_empty() \
+			and _przekl.is_empty() and _gest.is_empty() and _w_swiecie() and not nad_celem(_root.get_global_mouse_position()) \
+			and _uchwyt_pod(_root.get_global_mouse_position()).is_empty():
+		var l := _lup_pod(_root.get_global_mouse_position())
+		if l != null and not _zajete():
+			var pz: Przedmiot = l.przedmiot
+			_drag = {"p": pz, "z": {"typ": "ziemia", "wezel": l}, "off": Vector2(pz.szer(), pz.wys()) * SiatkaUI.KOM * 0.5, "rot": pz.obrot}
+			l.visible = false          # w dłoni (wraca na miejsce, jeśli puszczony donikąd)
+			Dzwiek.graj("podnies", -16.0, 1.2)
+			get_viewport().set_input_as_handled()
+			return
 	# zapięcia kieszeni: chwyt za podświetlony suwak / klamrę / brzeg klapy i przeciągnięcie go
 	if not _proste() and _drag.is_empty() and _przekl.is_empty():
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -1416,15 +1525,17 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func _upusc_drag(anuluj: bool) -> void:
+func _upusc_drag(anuluj: bool, mysz_test := Vector2(-1, -1)) -> void:
 	if _drag.is_empty():
 		return
 	var d := _drag
 	_drag = {}
+	if d["z"]["typ"] == "ziemia" and is_instance_valid(d["z"]["wezel"]):
+		(d["z"]["wezel"] as Node3D).visible = true
 	if anuluj:
 		_odswiez()
 		return
-	var mysz := _root.get_global_mouse_position()
+	var mysz := _root.get_global_mouse_position() if mysz_test.x < 0.0 else mysz_test
 	var p: Przedmiot = d["p"]
 	# cel: część ciała (leczenie wybranej części)
 	if _panel_ciala and p.typ() == "med" and gracz and not tryb_bazy:
@@ -1435,10 +1546,23 @@ func _upusc_drag(anuluj: bool) -> void:
 				szybki = ekw.czy_szybka(d["z"]["siatka"])
 			_po_schowaniu(func(): gracz.uzyj_leku(p, szybki, cz))
 			return
-	# poza slotami i siatkami: wyrzucenie na ziemię
+	# poza slotami i siatkami: odłożenie na ziemię tam, gdzie wskazuje kursor (w zasięgu ręki),
+	# dalej – wyrzucenie przed siebie
 	if not nad_celem(mysz):
+		var gdzie = _ziemia_pod(mysz)
+		if d["z"]["typ"] == "ziemia":
+			var lw: LupNaZiemi = d["z"]["wezel"]
+			if gdzie != null and is_instance_valid(lw):
+				var tw := lw.create_tween()
+				tw.tween_property(lw, "global_position", (gdzie as Vector3) + Vector3.UP * 0.004, 0.25).set_trans(Tween.TRANS_QUAD)
+				Dzwiek.graj("odloz", -12.0)
+			_odswiez()
+			return
 		if not tryb_bazy and gracz and not (d["z"]["typ"] == "siatka" and _jest_prawa(d["z"]["siatka"])):
-			_wyrzuc_reka(p, d["z"])
+			if gdzie != null:
+				_odloz_na_ziemie(p, d["z"], gdzie)
+			else:
+				_wyrzuc_reka(p, d["z"])
 		else:
 			_odswiez()
 		return
@@ -1540,6 +1664,12 @@ func _po_zmianie() -> void:
 
 
 func _usun_ze_zrodla(p: Przedmiot, z: Dictionary) -> void:
+	if z["typ"] == "ziemia":
+		var lw: LupNaZiemi = z["wezel"]
+		if is_instance_valid(lw):
+			lw.przedmiot = null
+			lw.queue_free()
+		return
 	if z["typ"] == "siatka":
 		(z["siatka"] as Siatka).usun(p)
 	elif z["typ"] == "slot":
@@ -1744,7 +1874,7 @@ func _uchwyty_kieszeni() -> void:
 	var kursor := Input.CURSOR_ARROW
 	if not _gest.is_empty():
 		kursor = Input.CURSOR_DRAG
-	elif not pod.is_empty():
+	elif not pod.is_empty() or (_lup_hover != null and is_instance_valid(_lup_hover)):
 		kursor = Input.CURSOR_POINTING_HAND
 	if kursor != _kursor:
 		_kursor = kursor
@@ -2142,6 +2272,22 @@ func _cel_kolejki(do_pojemnika: bool) -> Vector2:
 		if is_instance_valid(ui) and ui.siatka == ekw.kieszenie:
 			return ui.get_global_rect().get_center()
 	return Vector2(200, 500)
+
+
+## Odłożenie przedmiotu w konkretne miejsce na ziemi (kursor): leci tam z ręki i ląduje bez rzutu.
+func _odloz_na_ziemie(p: Przedmiot, z: Dictionary, gdzie: Vector3) -> void:
+	if _zajete():
+		return
+	if p.dane.get("oznaczony", false):
+		_komunikat("★ Oznaczony – odznacz go (PPM), żeby odłożyć")
+		_odswiez()
+		return
+	var cel_scr = _rzut(gdzie)
+	_animuj(p, z, cel_scr if cel_scr != null else _root.get_global_mouse_position(), func():
+		if _w_zrodle(p, z):
+			_usun_ze_zrodla(p, z)
+			gracz.poloz_na_ziemi(p, gdzie)
+		_po_zmianie())
 
 
 ## Wyrzucenie: dłoń bierze przedmiot i upuszcza go przed sobą (spada z ręki na ziemię).
@@ -2753,6 +2899,9 @@ const NAZWY_SLOTOW_DOD := {"wylot": "wylot lufy", "celownik": "celownik", "chwyt
 
 
 func _w_zrodle(p: Przedmiot, z: Dictionary) -> bool:
+	if z.get("typ") == "ziemia":
+		var lw = z["wezel"]
+		return is_instance_valid(lw) and not (lw as Node).is_queued_for_deletion() and lw.przedmiot == p
 	if z.get("typ") == "siatka":
 		return (z["siatka"] as Siatka).zawiera(p)
 	if z.get("typ") == "slot":
@@ -2902,6 +3051,10 @@ class Duch:
 		SiatkaUI.rysuj_przedmiot(self, p, r, true)
 		p.obrot = stary
 		if not ekran.tryb_bazy and not ekran.nad_celem(get_global_mouse_position()):
-			draw_rect(r, Color(0.8, 0.15, 0.1, 0.35))
+			if ekran._ziemia_pod(get_global_mouse_position()) != null:
+				draw_rect(r, Color(0.55, 0.5, 0.3, 0.18))
+				draw_string(Motyw.cond(), r.position + Vector2(0, r.size.y + 13), "odłóż tutaj", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.8, 0.62, 0.8))
+			else:
+				draw_rect(r, Color(0.8, 0.15, 0.1, 0.35))
 			draw_rect(r, Color(0.95, 0.3, 0.2), false, 2.0)
 			draw_string(Motyw.mono_b(), r.position + Vector2(0, -6), "WYRZUĆ NA ZIEMIĘ", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.45, 0.3))

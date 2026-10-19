@@ -86,7 +86,12 @@ się z chwytu, a przy pustej komorze dłoń przeciąga rączkę zamka / zamek. P
 Budynek ma piętro – wchodzi się klatką schodową. Strop jest lity (0,6 m żelbetu), więc kule, odłamki ani wzrok
 nie przechodzą między kondygnacjami; jedyna droga w górę i w dół to schody (wrogowie też z nich korzystają).
 Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu
-**PPM** na broni. Kolimator, lunetę i chwyt montuje się tylko przy stole roboczym w schronie (podejdź i wciśnij **F**). Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
+**PPM** na broni. Kolimator, lunetę i chwyt montuje się tylko przy stole roboczym w schronie (podejdź i wciśnij **F**). Przedmiot upuszczony poza oknami ekwipunku ląduje na podłodze dokładnie pod kursorem (w zasięgu ręki; dalej – wyrzut), **Del** na wskazanym – pod nogi.
+Przy otwartym ekwipunku w terenie rzeczy leżące w zasięgu ręki podświetlają się pod kursorem – chwytasz je myszą i przeciągasz do plecaka, kieszeni albo slotu.
+Podniesiony pancerz, hełm, kamizelka czy plecak zakłada się od razu, jeśli slot jest pusty. 1x1 zajmuje tylko drobnica (garść naboi).
+Zabici padają jako ragdolle; zwłoki przeszukuje się, patrząc na dowolną część ciała, a przeszukiwane ciało lekko się podświetla.
+Ikony rysowane są jak karty z dokumentacji: kolor papieru i znaki wg kategorii (broń – pieczątka ОДОБРЕНО, amunicja – szablon kalibru,
+medykamenty – krzyż, żywność i picie – metka z ceną, narzędzia – blueprint, rupiecie – gazeta).
 
 ## Pętla gry
 

@@ -1,4 +1,5 @@
-"""Jednorazowa migracja danych do drobniejszej siatki ekwipunku (każda stara kratka = 2x2 nowe).
+"""JUŻ WYKONANA – nie uruchamiać ponownie (podwoiłaby siatki pojemników).
+Jednorazowa migracja danych do drobniejszej siatki ekwipunku (każda stara kratka = 2x2 nowe).
 Pojemniki: siatki, układy przegródek i kieszenie x2. Przedmioty: nowe, dokładniejsze rozmiary
 (małe rzeczy zajmują mniej niż dawne 2x2, długie – proporcjonalnie)."""
 import json, re

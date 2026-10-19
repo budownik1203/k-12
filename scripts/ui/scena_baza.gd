@@ -347,6 +347,8 @@ func _hud() -> void:
 func _process(_d: float) -> void:
 	_hud_prompt.text = ("[F] " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	var s: Dictionary = Gra.statystyki
+	# pod otwartym ekranem (handel, skrytka, ekwipunek) licznik bazy by się nakładał na jego nagłówek
+	_hud_info.visible = not (Sterowanie.blokada or handel.otwarty or (ekran_ekw and ekran_ekw.get("otwarty")))
 	_hud_info.text = "BONY: %d\nRajdy: %d · przeżyte: %d · zgony: %d" % [Gra.bony, s["rajdy"], s["przezyte"], s["zgony"]]
 
 

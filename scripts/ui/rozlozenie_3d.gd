@@ -510,6 +510,33 @@ void fragment() {
 	return m
 
 
+static var _mat_lekki: ShaderMaterial
+
+
+## Bardzo delikatna poświata (przeszukiwane zwłoki / mebel).
+static func mat_lekki() -> ShaderMaterial:
+	if _mat_lekki == null:
+		_mat_lekki = _mat_podswietlenia(0.45)
+	return _mat_lekki
+
+
+static func mat_podswietlenia() -> ShaderMaterial:
+	if _mat_podsw == null:
+		_mat_podsw = _mat_podswietlenia(0.8)
+		_mat_podsw_akt = _mat_podswietlenia(1.25)
+	return _mat_podsw_akt
+
+
+## Nakładka (podświetlenie) na wszystkie siatki węzła; null zdejmuje.
+static func nakladka(n: Node, m: Material) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	if n is MeshInstance3D:
+		(n as MeshInstance3D).material_overlay = m
+	for c in n.get_children():
+		nakladka(c, m)
+
+
 func _wezel_kroku(co: String, i: int, k: int) -> Node3D:
 	var e := _kieszen(co, i)
 	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():

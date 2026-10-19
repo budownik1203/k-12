@@ -200,10 +200,16 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 		ci.draw_string(Motyw.mono_b(), r.get_center() + Vector2(-5, 7), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.86, 0.8, 0.62, 0.8))
 	var et := p.etykieta()
 	if et != "":
+		# etykieta (liczba, stan magazynka) mieści się w ramce przedmiotu – przy wąskich mniejsza czcionka
 		var f := Motyw.mono_b()
-		var w := f.get_string_size(et, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
-		ci.draw_rect(Rect2(r.end - Vector2(w + 5, 14), Vector2(w + 4, 13)), Color(0, 0, 0, 0.65))
-		ci.draw_string(f, r.end - Vector2(w + 3, 4), et, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Motyw.TEKST)
+		var fs := 11
+		var w := f.get_string_size(et, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		while w > r.size.x - 4.0 and fs > 7:
+			fs -= 1
+			w = f.get_string_size(et, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var hh := fs + 3.0
+		ci.draw_rect(Rect2(r.end - Vector2(minf(w, r.size.x - 2.0) + 4, hh + 1), Vector2(minf(w, r.size.x - 2.0) + 3, hh)), Color(0, 0, 0, 0.65))
+		ci.draw_string(f, r.end - Vector2(minf(w, r.size.x - 2.0) + 2, 4), et, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 2.0, fs, Motyw.TEKST)
 	# skrócona nazwa w rogu (dla przedmiotów większych niż 1 kratka)
 	if r.size.x >= 60:
 		ci.draw_string(Motyw.cond(), r.position + Vector2(4, 12), p.nazwa().substr(0, int(r.size.x / 7)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.72, 0.62, 0.85))

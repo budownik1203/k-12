@@ -1698,6 +1698,9 @@ func _zrzut_animacji(katalog: String) -> void:
 	if OS.get_cmdline_user_args().has("--gesty"):
 		await _test_gestow(katalog)
 		return
+	if OS.get_cmdline_user_args().has("--ziemia"):
+		await _test_ziemi(katalog)
+		return
 	if OS.get_cmdline_user_args().has("--granat"):
 		var w = _wrog_testowy
 		var bl := 0
@@ -2007,13 +2010,45 @@ func _zrzut_animacji(katalog: String) -> void:
 		w0.helm = Przedmiot.nowy("helm_wz67")
 		await _klatki(3)
 		w0.cialo.martwy = true
+		w0._ost_kier = przod3
 		w0._smierc("test")
-		await get_tree().create_timer(1.2).timeout
+		gracz.kamera.rotation.x = -0.45
+		await get_tree().create_timer(0.25).timeout
+		await _zapisz(katalog, "zw_0a_upadek")
+		await get_tree().create_timer(1.0).timeout
 		await _zapisz(katalog, "zw_0_cialo")
 		var pj2: Pojemnik = null
 		for c in w0.get_children():
 			if c is Pojemnik:
 				pj2 = c
+		var rd: Ragdoll = w0._ragdoll
+		var t_rd := 0.0
+		while rd and not rd.zamrozony and t_rd < 8.0:
+			await get_tree().create_timer(0.25).timeout
+			t_rd += 0.25
+		await _zapisz(katalog, "zw_0b_lezy")
+		var bl_rd := 0
+		if rd == null:
+			print("  BŁĄD: brak ragdolla")
+			bl_rd += 1
+		else:
+			var gl: Node3D = rd.bryly["glowa"]
+			var nogi: Node3D = rd.bryly["kolano_l"]
+			print("  ragdoll: zamrożony %s po %.1f s, głowa y=%.2f, tułów %s, nogi %s" % [rd.zamrozony, t_rd, gl.global_position.y, rd.srodek(), nogi.global_position])
+			# przeszukiwanie z głowy (nie tylko tam, gdzie stał)
+			# środek kształtu głowy (początek bryły to staw szyi)
+			var sg: Vector3 = gl.global_transform * (gl.get_child(gl.get_child_count() - 1) as Node3D).position
+			for ch in gl.get_children():
+				if ch is CollisionShape3D:
+					sg = (ch as Node3D).global_position
+			var od: Vector3 = sg + Vector3.UP * 0.8
+			var q := PhysicsRayQueryParameters3D.create(od, sg - Vector3.UP * 0.3, Gracz.MASKA_INTERAKCJI)
+			var hit := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+			var cel_h = hit["collider"].get_meta("interakcja") if not hit.is_empty() and hit["collider"].has_meta("interakcja") else null
+			print("  interakcja przy głowie: %s (trafiony %s, meta %s, pj %s)" % [cel_h == pj2, hit.get("collider"), cel_h, pj2])
+			if cel_h != pj2 or gl.global_position.y > 0.6:
+				bl_rd += 1
+		print("TEST RAGDOLL: błędów %d" % bl_rd)
 		pj2.interakcja(gracz)
 		while not gracz.akcja.is_empty():
 			await get_tree().process_frame
@@ -2042,7 +2077,7 @@ func _zrzut_animacji(katalog: String) -> void:
 			while not gracz.akcja.is_empty():
 				await get_tree().process_frame
 			print("pancerz na modelu po zdjęciu: ", w0._czesci.get("pancerz_m").visible if w0._czesci.has("pancerz_m") else "brak")
-			print("po zdjeciu na ciele: ", (nc["siatka"] as Siatka).items.size(), " pancerz w ekw: ", Gra.ekw.siatki().any(func(s): return (s as Siatka).items.any(func(e): return (e["p"] as Przedmiot).typ() == "pancerz")))
+			print("po zdjeciu na ciele: ", (nc["siatka"] as Siatka).items.size(), " pancerz założony: ", Gra.ekw.sloty.get("pancerz") != null or Gra.ekw.sloty.get("kamizelka") != null)
 		return
 	if OS.get_cmdline_user_args().has("--meble"):
 		gracz.sterowanie = false
@@ -2668,3 +2703,55 @@ func _test_przeladowan(katalog: String) -> void:
 		if amun_po != amun_przed or int(p.dane["wewn"]) != 1:
 			bledy += 1
 	print("TEST PRZEŁADOWAŃ: błędów %d" % bledy)
+
+
+## Rzeczy z ziemi w ekwipunku: chwyt myszą z podłogi do kieszeni, odłożenie z kieszeni w miejsce kursora.
+func _test_ziemi(katalog: String) -> void:
+	var bl := 0
+	gracz.kamera.rotation.x = -0.75
+	var l := LupNaZiemi.new()
+	l.przedmiot = Przedmiot.nowy("konserwa")
+	swiat.add_child(l)
+	l.global_position = gracz.global_position - gracz.global_basis.z * 0.7 + gracz.global_basis.x * 0.25
+	for e in Gra.ekw.kieszenie.items.duplicate():
+		Gra.ekw.kieszenie.usun(e["p"])
+	await _klatki(10)
+	ekran_ekw.otworz(null)
+	await get_tree().create_timer(1.2).timeout
+	var scr = ekran_ekw._rzut(l.global_position + Vector3.UP * 0.03)
+	var pod: LupNaZiemi = ekran_ekw._lup_pod(scr) if scr != null else null
+	print("  rzecz na ziemi na ekranie %s, pod kursorem: %s" % [scr, pod != null])
+	await _zapisz(katalog, "ziemia_0")
+	if pod == null:
+		bl += 1
+	else:
+		ekran_ekw._drag = {"p": pod.przedmiot, "z": {"typ": "ziemia", "wezel": pod}, "off": Vector2(17, 17), "rot": false}
+		pod.visible = false
+		# do kieszeni (siatka kieszeni gracza)
+		var gk: SiatkaUI = null
+		for ui in ekran_ekw._siatki:
+			if ui.siatka == Gra.ekw.kieszenie:
+				gk = ui
+		var cel: Vector2 = gk.global_position + Vector2(17, 17)
+		ekran_ekw._upusc_drag(false, cel)
+		await get_tree().create_timer(2.0).timeout
+		var w_kieszeni := Gra.ekw.kieszenie.zawiera(l.przedmiot) if is_instance_valid(l) and l.przedmiot else Gra.ekw.kieszenie.items.size() > 0
+		print("  podniesiona do kieszeni: %s, na ziemi zostało: %s" % [Gra.ekw.kieszenie.items.size() > 0, is_instance_valid(l)])
+		if Gra.ekw.kieszenie.items.is_empty() or (is_instance_valid(l) and not l.is_queued_for_deletion()):
+			bl += 1
+		# z kieszeni na podłogę w miejsce kursora
+		var p: Przedmiot = Gra.ekw.kieszenie.items[0]["p"] if not Gra.ekw.kieszenie.items.is_empty() else null
+		if p:
+			var cel_3d: Vector3 = gracz.global_position - gracz.global_basis.z * 0.9 - gracz.global_basis.x * 0.3
+			var scr2 = ekran_ekw._rzut(cel_3d)
+			print("  punkt podłogi pod kursorem: %s" % [ekran_ekw._ziemia_pod(scr2)])
+			ekran_ekw._drag = {"p": p, "z": {"typ": "siatka", "siatka": Gra.ekw.kieszenie}, "off": Vector2(17, 17), "rot": false}
+			ekran_ekw._upusc_drag(false, scr2)
+			await get_tree().create_timer(2.0).timeout
+			var lezy := swiat.get_children().filter(func(x): return x is LupNaZiemi and x.przedmiot == p)
+			var odl := (lezy[0] as Node3D).global_position.distance_to(cel_3d) if not lezy.is_empty() else 99.0
+			print("  odłożona na ziemię: %s, %.2f m od wskazanego miejsca" % [not lezy.is_empty(), odl])
+			await _zapisz(katalog, "ziemia_1")
+			if lezy.is_empty() or odl > 0.25:
+				bl += 1
+	print("TEST ZIEMI: błędów %d" % bl)
