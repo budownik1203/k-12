@@ -39,6 +39,7 @@ var kucanie := 0.0
 var _kucanie_cel := 0.0
 
 var _agent: NavigationAgent3D
+var szansa_poddania := 0.6   # osaczony i bez szans: poddaje się zamiast uciekać
 var _model: Node3D
 var _czesci := {}
 var _percepcja_t := 0.0
@@ -1144,7 +1145,7 @@ func _walka(delta: float) -> void:
 		# osaczony, ranny albo bez amunicji – przy graczu blisko rzuca broń i się poddaje
 		var blisko: bool = gracz is Gracz and widzi and global_position.distance_to(gracz.global_position) < 9.0
 		var beznadzieja: bool = cialo.procent() < 0.6 or (_w_magazynku <= 0 and zapas_mag <= 0) or _przygwozdzenie > 1.2
-		if blisko and beznadzieja and frakcja != "wojskowy" and randf() < 0.6:
+		if blisko and beznadzieja and frakcja != "wojskowy" and randf() < szansa_poddania:
 			_poddaj_sie()
 			return
 		stan = "ucieczka"

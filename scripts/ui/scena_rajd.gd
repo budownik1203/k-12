@@ -3,7 +3,12 @@ extends Node
 
 var widok: Dictionary
 var swiat: Node3D
-var gen: GeneratorBiomu
+var gen: GeneratorBiomu         # parter
+var gen_p: GeneratorBiomu       # piętro (nad parterem, ta sama siatka komórek, połączone klatką schodową)
+var info_p: Dictionary
+const OFF_P := Vector3(0, GeneratorBiomu.PIETRO_H, 0)
+const WARSTWA_PARTER := 2       # warstwy renderu geometrii kondygnacji (światła nie przeciekają przez strop)
+const WARSTWA_PIETRO := 4
 var info: Dictionary
 var gracz: Gracz
 var hud: Node
@@ -26,8 +31,7 @@ func _ready() -> void:
 	Widok3D.zastosuj(widok)
 	Gra.ustawienia_zmiana.connect(func(): Widok3D.zastosuj(widok))
 	swiat = widok["swiat"]
-	gen = GeneratorBiomu.new()
-	info = gen.generuj(Gra.ziarno_rajdu, swiat)
+	_generuj_kondygnacje()
 	await _nawigacja_ze_sprawdzeniem()
 	_postaw_drzwi()
 	_zaplanuj_zdarzenia()
@@ -69,8 +73,8 @@ func _ready() -> void:
 	Dzwiek.graj("start_rajdu", -6.0)
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
 	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
-	Dzwiek.podloze_fn = gen.podloze
-	Dzwiek.akustyka_fn = gen.akustyka_w
+	Dzwiek.podloze_fn = _podloze_dzw
+	Dzwiek.akustyka_fn = _akustyka_dzw
 	Dzwiek.ambient("wiatr", self, -22.0)
 	_napiecie = Dzwiek.ambient("napiecie", self, -60.0)
 	for i in 3:
@@ -114,6 +118,68 @@ func _ready() -> void:
 		_test_broni.call_deferred()
 
 
+## Dwie kondygnacje: parter (start, wyjścia) i piętro nad nim (inny układ, ta sama klatka schodowa).
+## Strop lity (kule nie przechodzą), lampy każdej kondygnacji świecą tylko na jej geometrię i na postacie.
+func _generuj_kondygnacje() -> void:
+	var parter := Node3D.new()
+	parter.name = "Parter"
+	swiat.add_child(parter)
+	gen = GeneratorBiomu.new()
+	info = gen.generuj(Gra.ziarno_rajdu, parter)
+	var pn := Node3D.new()
+	pn.name = "Pietro"
+	swiat.add_child(pn)
+	pn.position = OFF_P
+	gen_p = GeneratorBiomu.new()
+	gen_p.pietro = 1
+	var kl := gen._komorka_klatki()
+	gen_p.wym_sy = kl.y
+	gen_p.wym_rect_klatki = gen.komorki[kl]["rect"]
+	info_p = gen_p.generuj(Gra.ziarno_rajdu * 13 + 5, pn)
+	# łączymy listy (pozycje piętra przesunięte w górę; komórki piętra z własnym kluczem)
+	for o in info_p["oslony"]:
+		info["oslony"].append({"pos": (o["pos"] as Vector3) + OFF_P, "niska": o["niska"], "mebel": (o["mebel"] as Vector3) + OFF_P})
+	for sp in info_p["spawny"]:
+		var k: Vector2i = sp["komorka"]
+		info["spawny"].append({"pos": (sp["pos"] as Vector3) + OFF_P, "komorka": Vector2i(k.x + 100, k.y), "glebokosc": sp["glebokosc"] + 2, "pietro": 1})
+	for ps in info_p["posterunki"]:
+		var nps: Dictionary = ps.duplicate()
+		nps["pos"] = (ps["pos"] as Vector3) + OFF_P
+		nps["miejsca"] = (ps["miejsca"] as Array).map(func(m): return (m as Vector3) + OFF_P)
+		info["posterunki"].append(nps)
+	for d in info_p["drzwi"]:
+		var nd: Dictionary = d.duplicate()
+		nd["p"] = (d["p"] as Vector3) + OFF_P
+		nd["pietro"] = 1
+		info["drzwi"].append(nd)
+	for l in info["lampy"]:
+		(l as Light3D).light_cull_mask = 1 | WARSTWA_PARTER
+	for l in info_p["lampy"]:
+		(l as Light3D).light_cull_mask = 1 | WARSTWA_PIETRO
+		info["lampy"].append(l)
+	for gi in parter.find_children("*", "GeometryInstance3D", true, false):
+		(gi as GeometryInstance3D).layers = WARSTWA_PARTER
+	for gi in pn.find_children("*", "GeometryInstance3D", true, false):
+		(gi as GeometryInstance3D).layers = WARSTWA_PIETRO
+
+
+## Generator kondygnacji, na której jest punkt.
+func gen_dla(p: Vector3) -> GeneratorBiomu:
+	return gen_p if p.y > GeneratorBiomu.PIETRO_H - 0.6 else gen
+
+
+func info_komorki(p: Vector3) -> Dictionary:
+	return info_p["komorki"] if p.y > GeneratorBiomu.PIETRO_H - 0.6 else info["komorki"]
+
+
+func _podloze_dzw(p: Vector3) -> String:
+	return gen_dla(p).podloze(p)
+
+
+func _akustyka_dzw(p: Vector3) -> Dictionary:
+	return gen_dla(p).akustyka_w(p)
+
+
 ## Wypieka siatkę nawigacji i sprawdza, czy meble nie dzielą pomieszczeń; jeśli tak – usuwa mebel i powtarza.
 func _nawigacja_ze_sprawdzeniem() -> void:
 	var mapa := swiat.get_world_3d().navigation_map
@@ -126,20 +192,25 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 			if NavigationServer3D.map_get_iteration_id(mapa) != it0 and NavigationServer3D.map_get_closest_point(mapa, info["start"]).distance_to(info["start"]) < 1.0:
 				break
 		var naprawione := false
-		for k in info["komorki"]:
-			var pts: Array = gen.punkty_drzwi(k)
-			for i in range(1, pts.size()):
-				var q1 := NavigationServer3D.map_get_closest_point(mapa, pts[0])
-				var q2 := NavigationServer3D.map_get_closest_point(mapa, pts[i])
-				var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
-				if sc.is_empty() or sc[sc.size() - 1].distance_to(q2) > 0.35:
-					if OS.get_cmdline_user_args().has("--test"):
-						print("  naprawa: %s %s typ=%s q1=%s q2=%s koniec=%s" % [proba, k, info["komorki"][k]["typ"], q1, q2, sc[sc.size() - 1] if sc.size() > 0 else "brak"])
-					if gen.usun_srodkowy_mebel(k):
-						naprawione = true
-					break
+		for g in [[gen, Vector3.ZERO], [gen_p, OFF_P]]:
+			var gg: GeneratorBiomu = g[0]
+			var off: Vector3 = g[1]
+			for k in gg.komorki:
+				var pts: Array = gg.punkty_drzwi(k)
+				for i in range(1, pts.size()):
+					var q1 := NavigationServer3D.map_get_closest_point(mapa, (pts[0] as Vector3) + off)
+					var q2 := NavigationServer3D.map_get_closest_point(mapa, (pts[i] as Vector3) + off)
+					var sc := NavigationServer3D.map_get_path(mapa, q1, q2, true)
+					if sc.is_empty() or sc[sc.size() - 1].distance_to(q2) > 0.35:
+						if OS.get_cmdline_user_args().has("--test"):
+							print("  naprawa: %s %s typ=%s q1=%s q2=%s koniec=%s" % [proba, k, gg.komorki[k]["typ"], q1, q2, sc[sc.size() - 1] if sc.size() > 0 else "brak"])
+						if gg.usun_srodkowy_mebel(k):
+							naprawione = true
+						break
 		if not naprawione:
-			info["oslony"] = gen.oslony
+			info["oslony"] = gen.oslony.duplicate()
+			for o in gen_p.oslony:
+				info["oslony"].append({"pos": (o["pos"] as Vector3) + OFF_P, "niska": o["niska"], "mebel": (o["mebel"] as Vector3) + OFF_P})
 			return
 		region.get_parent().remove_child(region)
 		region.queue_free()
@@ -302,7 +373,8 @@ func _postaw_drzwi() -> void:
 		if rng.randf() > 0.8:
 			continue
 		var pk: Vector2i = m["pokoj"]
-		var typ: String = info["komorki"][pk]["typ"] if info["komorki"].has(pk) else "pokoj"
+		var kom: Dictionary = info_p["komorki"] if int(m.get("pietro", 0)) == 1 else info["komorki"]
+		var typ: String = kom[pk]["typ"] if kom.has(pk) else "pokoj"
 		var rodz := "fornir"
 		match typ:
 			"pokoj":
@@ -314,15 +386,17 @@ func _postaw_drzwi() -> void:
 		var d := Drzwi.new()
 		d.ustaw(m, rodz)
 		swiat.add_child(d)
+		for gi in d.find_children("*", "GeometryInstance3D", true, false):
+			(gi as GeometryInstance3D).layers = WARSTWA_PIETRO if int(m.get("pietro", 0)) == 1 else WARSTWA_PARTER
 		var los := rng.randf()
 		if not bez_testu:
 			d.ustaw_kat(KAT_TESTU)
 		elif los < 0.45:
 			d.ustaw_kat(0.0)
 			var otwory := 0
-			for kier in info["komorki"][pk]["otwory"]:
-				otwory += (info["komorki"][pk]["otwory"][kier] as Array).size()
-			if otwory <= 1 and pk != start and rng.randf() < 0.4:
+			for kier in kom[pk]["otwory"]:
+				otwory += (kom[pk]["otwory"][kier] as Array).size()
+			if otwory <= 1 and not (pk == start and int(m.get("pietro", 0)) == 0) and rng.randf() < 0.4:
 				d.na_klucz = true
 		elif los < 0.7:
 			d.ustaw_kat(-rng.randf_range(0.25, 0.6))
@@ -349,7 +423,7 @@ func _tlo_strefy(delta: float) -> void:
 		return
 	_tlo_t = randf_range(9.0, 26.0)
 	var gp := gracz.global_position
-	var ak: Dictionary = gen.akustyka_w(gp)
+	var ak: Dictionary = _akustyka_dzw(gp)
 	var los := randf()
 	var kier := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 	if los < 0.35:
@@ -428,9 +502,10 @@ func _process(delta: float) -> void:
 	_odw_t -= delta
 	if _odw_t <= 0.0:
 		_odw_t = 1.0
-		var kk := gen.komorka_w(gracz.global_position)
+		var gg := gen_dla(gracz.global_position)
+		var kk := gg.komorka_w(gracz.global_position)
 		if kk.x >= 0:
-			var typ: String = info["komorki"][kk]["typ"]
+			var typ: String = gg.komorki[kk]["typ"]
 			if not odwiedzone.has(typ):
 				odwiedzone[typ] = true
 				for k in Gra.kontrakty.get("aktywne", []):
@@ -459,6 +534,13 @@ func _process(delta: float) -> void:
 				ok += 1
 			else:
 				print("  nieosiągalne: %s typ=%s cel=%s koniec=%s" % [k, info["komorki"][k]["typ"], cel, sciezka[sciezka.size() - 1] if sciezka.size() > 0 else "brak"])
+		var ok_p := 0
+		for k in gen_p.komorki:
+			var cel_p := NavigationServer3D.map_get_closest_point(mapa, gen_p._srodek(k) + OFF_P)
+			var sc_p := NavigationServer3D.map_get_path(mapa, NavigationServer3D.map_get_closest_point(mapa, info["start"]), cel_p, true)
+			if sc_p.size() > 0 and (sc_p[sc_p.size() - 1] as Vector3).distance_to(cel_p) < 0.5 and cel_p.y > 3.0:
+				ok_p += 1
+		print("NAWIGACJA PIĘTRO: osiągalne %d/%d" % [ok_p, gen_p.komorki.size()])
 		print("NAWIGACJA: osiągalne pomieszczenia %d/%d (wielokąty: %d)" % [ok, info["komorki"].size(), (swiat.get_node("Nawigacja") as NavigationRegion3D).navigation_mesh.get_polygon_count()])
 		var aa := OS.get_cmdline_user_args()
 		if aa.has("--sciezka"):
@@ -1489,6 +1571,10 @@ func _test_drzwi(katalog: String) -> void:
 		var t := 0.0
 		while t < 15.0 and d2.zamkniete():
 			w.stan = "szukanie"
+			w.oddzial = null
+			w.posterunek = {}
+			w.czas_bez_kontaktu = 0.0
+			w.ostatnia_pozycja = cel
 			w._idz(cel)
 			await get_tree().create_timer(0.3).timeout
 			t += 0.3
@@ -1561,6 +1647,34 @@ func _zrzut_animacji(katalog: String) -> void:
 	if OS.get_cmdline_user_args().has("--drzwi"):
 		await _test_drzwi(katalog)
 		return
+	if OS.get_cmdline_user_args().has("--schody"):
+		var sch: Dictionary = gen.schody
+		var z := (float(sch["z0"]) + float(sch["z1"])) * 0.5
+		gracz.global_position = Vector3(float(sch["x0"]) - 0.6, 0.1, z)
+		gracz.rotation.y = -PI * 0.5
+		gracz.kamera.rotation.x = 0.25
+		await get_tree().create_timer(0.6).timeout
+		await _zapisz(katalog, "schody_dol")
+		gracz.sterowanie = true
+		Sterowanie.blokada = false
+		Input.action_press("przod")
+		var t := 0.0
+		while t < 9.0 and gracz.global_position.y < GeneratorBiomu.PIETRO_H - 0.2:
+			await get_tree().create_timer(0.25).timeout
+			t += 0.25
+		await get_tree().create_timer(0.6).timeout
+		Input.action_release("przod")
+		print("  wejście po schodach: y=%.2f po %.1f s" % [gracz.global_position.y, t])
+		gracz.kamera.rotation.x = -0.2
+		gracz.rotation.y = PI * 0.5
+		await get_tree().create_timer(0.8).timeout
+		await _zapisz(katalog, "schody_gora")
+		# strzał w górę z parteru: kula zatrzymuje się na stropie
+		var space := swiat.get_world_3d().direct_space_state
+		var r := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(gen._srodek(Vector2i(2, 2)).x, 1.5, gen._srodek(Vector2i(2, 2)).z), Vector3(gen._srodek(Vector2i(2, 2)).x, 10.0, gen._srodek(Vector2i(2, 2)).z), Balistyka.WARSTWA_SWIAT))
+		print("  strzał w sufit zatrzymany na y=%s" % (str(r["position"].y) if not r.is_empty() else "brak (nic nad)"))
+		print("TEST SCHODÓW: %s" % ("OK" if gracz.global_position.y > GeneratorBiomu.PIETRO_H - 0.3 else "BŁĄD"))
+		return
 	if OS.get_cmdline_user_args().has("--gesty"):
 		await _test_gestow(katalog)
 		return
@@ -1597,7 +1711,7 @@ func _zrzut_animacji(katalog: String) -> void:
 		var kom := []
 		gracz.komunikat.connect(func(t): kom.append(t))
 		Gra.bony = 1000
-		var p: Vector3 = gracz.global_position - gracz.global_basis.z * 5.0
+		var p: Vector3 = gracz.global_position - gracz.global_basis.z * 3.5
 		w.global_position = w._najblizszy_na_siatce(p)
 		w.look_at(Vector3(gracz.global_position.x, w.global_position.y, gracz.global_position.z), Vector3.UP)
 		w.posterunek = {}
@@ -1605,7 +1719,9 @@ func _zrzut_animacji(katalog: String) -> void:
 		w.lup.append(Przedmiot.nowy("zegarek"))
 		w.gracz = gracz
 		w.stan = "walka"
+		w._percepcja_t = 0.0      # wzrok sprawdzony przed pierwszą decyzją
 		w.morale = 5.0
+		w.szansa_poddania = 1.0
 		w._w_magazynku = 0
 		w.zapas_mag = 0
 		w.cialo.obrazenia("brzuch", 30.0)

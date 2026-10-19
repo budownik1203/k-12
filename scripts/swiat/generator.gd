@@ -7,6 +7,8 @@ extends RefCounted
 
 const C := 9.0           # rozmiar komórki w metrach
 const H := 3.0           # wysokość pomieszczeń
+const STROP := 0.6       # grubość stropu między kondygnacjami (lity, kule nie przechodzą)
+const PIETRO_H := H + STROP   # wysokość kondygnacji (podłoga do podłogi)
 const T := 0.3           # grubość brył kolizji za licem ściany
 const GRUB := 0.45       # grubość muru, w którym są drzwi z korytarza
 const DRZWI_W := 1.2
@@ -35,7 +37,7 @@ const NAZWY_TYPOW := {
 }
 # rozmiary pomieszczeń [min, max] boku
 const ROZMIARY := {
-	"klatka": [5.8, 6.6], "pokoj": [6.0, 8.2], "kuchnia": [5.6, 7.0], "administracja": [6.2, 8.3],
+	"klatka": [7.0, 7.8], "pokoj": [6.0, 8.2], "kuchnia": [5.6, 7.0], "administracja": [6.2, 8.3],
 	"piwnica": [5.8, 8.0], "magazyn": [7.0, 8.3], "warsztat": [6.4, 8.3],
 }
 const MONTOWANE_NA_SCIANIE := ["hydrant", "tablica_ogloszen", "apteczka_scienna", "skrzynki_pocztowe", "kaloryfer", "znak_wyjscie"]
@@ -60,6 +62,10 @@ var okna: Array = []     # [komorka, strona, punkt na licu (Vector3)]
 var _plan_wyjsc: Array = []
 var posterunki: Array = []   # {"pos": Vector3, "kier": Vector3, "komorka": Vector2i, "miejsca": [Vector3, ...]}
 var _plan_posterunkow := {}  # komórka -> true
+var pietro := 0              # 0 – parter (wyjścia, start), 1 – piętro (bez wyjść)
+var wym_sy := -1             # piętro: klatka w tym samym rzędzie co na parterze
+var wym_rect_klatki := Rect2()
+var schody := {}             # {"x0","x1","z0","z1","otwor": Rect2} – bieg schodów w klatce i otwór w stropie
 
 
 func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
@@ -73,9 +79,11 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	_uklad()
 	_typy()
 	_prostokaty()
+	_plan_schodow()
 	_przejscia()
 	_plan_okien()
-	_zaplanuj_wyjscia()
+	if pietro == 0:
+		_zaplanuj_wyjscia()
 	_zaplanuj_posterunki()
 	# geometria osobno dla każdego pomieszczenia: renderer Compatibility oświetla obiekt
 	# co najwyżej kilkoma światłami, więc jeden obiekt na cały poziom gasiłby dalsze lampy
@@ -92,8 +100,10 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	for k in komorki:
 		_wyposaz(k)
 		_lampa(k)
-	_wyjscia()
-	_klucz_w_rajdzie()
+	if pietro == 0:
+		_wyjscia()
+	else:
+		_klucz_w_rajdzie()     # klucz do piwnicy leży na piętrze – powód, żeby iść na górę
 	return {"start": start_pos, "start_rot": start_rot, "oslony": oslony, "spawny": spawny,
 		"wyjscia": wyjscia, "komorki": komorki, "lampy": lampy, "posterunki": posterunki, "drzwi": drzwi_miejsca}
 
@@ -140,6 +150,8 @@ func _ramiona(k: Vector2i) -> Array:
 ## Część pomieszczeń prowadzi dalej do kolejnych, czasem dwa sąsiednie pokoje łączą drzwi.
 func _uklad() -> void:
 	var sy := rng.randi_range(1, GH - 2)
+	if wym_sy >= 0:
+		sy = wym_sy
 	var start := Vector2i(0, sy)
 	_nowa(start, "klatka")
 	var lacznie := rng.randi_range(52, 64)
@@ -269,6 +281,8 @@ func _typy() -> void:
 			else:
 				tab = [["pokoj", 14], ["piwnica", 30], ["magazyn", 22], ["warsztat", 16], ["administracja", 12]]
 			komorki[a]["typ"] = Dane.losuj(tab, rng)
+			if pietro > 0 and komorki[a]["typ"] == "piwnica":
+				komorki[a]["typ"] = "magazyn" if rng.randf() < 0.5 else "pokoj"
 		komorki[a]["mats"] = MATERIALY[komorki[a]["typ"]]
 
 
@@ -297,10 +311,167 @@ func _prostokaty() -> void:
 	for k in komorki:
 		if komorki[k]["typ"] == "klatka":
 			start = k
+	if wym_rect_klatki.size.x > 0.0:
+		komorki[start]["rect"] = wym_rect_klatki
 	var rs: Rect2 = komorki[start]["rect"]
 	start_pos = Vector3(rs.position.x + 1.3, 0.05, rs.get_center().y)
 	start_rot = -PI / 2.0
 	komorki[start]["strefy"].append(Rect2(start_pos.x - 1.0, start_pos.z - 1.0, 2.0, 2.0))
+
+
+# ------------------------------------------------------------------ schody (klatka)
+
+## Bieg schodów przy ścianie klatki dalszej od drzwi na korytarz; otwór w stropie nad górną częścią biegu.
+func _plan_schodow() -> void:
+	var k := _komorka_klatki()
+	if k.x < 0:
+		return
+	var rs: Rect2 = komorki[k]["rect"]
+	var c := k.y * C + C * 0.5            # oś komórki (drzwi na korytarz leżą na niej)
+	var dl := minf(5.2, rs.size.x - 1.8)     # na dole 0,8 m dojścia, u góry ≥ 1 m podestu do ściany
+	var x0 := rs.position.x + 0.8
+	var szer := 1.25
+	var z0: float
+	if c - rs.position.y > rs.end.y - c:
+		z0 = rs.position.y + 0.06
+	else:
+		z0 = rs.end.y - 0.06 - szer
+	var x1 := x0 + dl
+	var otw := Rect2(x0 + dl * 0.2, minf(z0, rs.position.y) if z0 - rs.position.y < 0.2 else z0 - 0.05, x1 - (x0 + dl * 0.2) + 0.04, 0.0)
+	# otwór sięga do ściany po stronie biegu
+	if z0 - rs.position.y < 0.2:
+		otw = Rect2(x0 + dl * 0.2, rs.position.y, x1 + 0.04 - (x0 + dl * 0.2), z0 + szer + 0.08 - rs.position.y)
+	else:
+		otw = Rect2(x0 + dl * 0.2, z0 - 0.08, x1 + 0.04 - (x0 + dl * 0.2), rs.end.y - (z0 - 0.08))
+	schody = {"x0": x0, "x1": x1, "z0": z0, "z1": z0 + szer, "otwor": otw, "k": k}
+	komorki[k]["strefy"].append(Rect2(x0 - 0.3, z0 - 0.1, dl + 0.9, szer + 0.9) if z0 - rs.position.y < 0.2 else Rect2(x0 - 0.3, z0 - 0.8, dl + 0.9, szer + 0.9))
+
+
+func _komorka_klatki() -> Vector2i:
+	for k in komorki:
+		if komorki[k]["typ"] == "klatka":
+			return k
+	return Vector2i(-1, -1)
+
+
+## Prostokąt r bez prostokąta h (do 4 kawałków).
+func _bez(r: Rect2, h: Rect2) -> Array:
+	var i := r.intersection(h)
+	if i.size.x <= 0.0 or i.size.y <= 0.0:
+		return [r]
+	var out := []
+	if i.position.y > r.position.y:
+		out.append(Rect2(r.position.x, r.position.y, r.size.x, i.position.y - r.position.y))
+	if i.end.y < r.end.y:
+		out.append(Rect2(r.position.x, i.end.y, r.size.x, r.end.y - i.end.y))
+	if i.position.x > r.position.x:
+		out.append(Rect2(r.position.x, i.position.y, i.position.x - r.position.x, i.size.y))
+	if i.end.x < r.end.x:
+		out.append(Rect2(i.end.x, i.position.y, r.end.x - i.end.x, i.size.y))
+	return out
+
+
+## Klatka: na parterze bieg schodów i otwór w suficie; na piętrze otwór w podłodze z balustradą
+## i obramowaniem grubości stropu.
+func _klatka_schody(k: Vector2i, mats: Array, r: Rect2) -> void:
+	var otw: Rect2 = schody["otwor"]
+	if pietro == 0:
+		bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.5, 1.0)
+		for kaw in _bez(r, otw):
+			bud.plaszczyzna(mats[2], kaw.position.x, kaw.position.y, kaw.end.x, kaw.end.y, H, false, 1.5, 1.0)
+		_podloga(r, false)
+		for kaw in _bez(r, otw):
+			_sufit_kolizja(kaw)
+		_bieg_schodow()
+	else:
+		for kaw in _bez(r, otw):
+			bud.plaszczyzna(mats[1], kaw.position.x, kaw.position.y, kaw.end.x, kaw.end.y, 0.0, true, 1.5, 1.0)
+		bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, H, false, 1.5, 1.0)
+		for kaw in _bez(r, otw):
+			_podloga(kaw, false)
+		_sufit_kolizja(r)
+		# obramowanie otworu (grubość stropu widać z dołu) i balustrada
+		var a := Vector2(otw.position.x, otw.position.y)
+		var b := Vector2(otw.end.x, otw.position.y)
+		var c2 := Vector2(otw.end.x, otw.end.y)
+		var d := Vector2(otw.position.x, otw.end.y)
+		for e in [[a, b, Vector2(0, 1)], [b, c2, Vector2(-1, 0)], [c2, d, Vector2(0, -1)], [d, a, Vector2(1, 0)]]:
+			_scianka("beton", e[0], e[1], e[2], false, -STROP, 0.0)
+		_balustrada(otw, r)
+
+
+## Bieg schodów: stopnie z lastryka na żelbetowej płycie, policzek od strony pokoju, poręcz;
+## kolizja – gładka rampa (dla nóg i nawigacji).
+func _bieg_schodow() -> void:
+	var B := preload("res://scripts/core/bryly.gd")
+	var x0: float = schody["x0"]
+	var x1: float = schody["x1"]
+	var z0: float = schody["z0"]
+	var z1: float = schody["z1"]
+	var dl := x1 - x0
+	var n := 18
+	var stop := PIETRO_H / n
+	var biez := dl / n
+	var cz := []
+	for i in n:
+		var y := (i + 1) * stop
+		cz.append({"t": "box", "c": Vector3(x0 + (i + 0.5) * biez, y - stop * 0.5 - 0.07, (z0 + z1) * 0.5), "s": Vector3(biez + 0.01, stop + 0.14, z1 - z0), "m": "lastryko_m", "k": Color(0.75, 0.72, 0.68), "f": 0.01})
+	# płyta pod stopniami (skośna) i policzek
+	var kat := atan2(PIETRO_H, dl)
+	var dlp := sqrt(dl * dl + PIETRO_H * PIETRO_H)
+	var srp := Vector3((x0 + x1) * 0.5, PIETRO_H * 0.5 - 0.22, (z0 + z1) * 0.5)
+	cz.append({"t": "box", "c": srp, "s": Vector3(dlp, 0.16, z1 - z0), "m": "lastryko_m", "k": Color(0.6, 0.58, 0.55), "f": 0.0, "r": Vector3(0, 0, rad_to_deg(kat))})
+	var zp := z1 if schody["z0"] - (komorki[schody["k"]]["rect"] as Rect2).position.y < 0.2 else z0
+	# poręcz: słupki i pochwyt od strony pokoju
+	for i in range(0, n + 1, 3):
+		var x := x0 + i * biez
+		var y := i * stop
+		cz.append(B.walec(Vector3(x, y, zp), Vector3(x, y + 0.95, zp), 0.015, 0.015, "metal_ciemny_m", 6))
+	cz.append(B.walec(Vector3(x0, 0.95, zp), Vector3(x1, PIETRO_H + 0.95, zp), 0.025, 0.025, "drewno_m", 8))
+	var mi := B.instancja(cz, false)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	swiat.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(dlp + 0.1, 0.2, z1 - z0)
+	cs.shape = bs
+	cs.position = Vector3((x0 + x1) * 0.5, PIETRO_H * 0.5 - 0.1, (z0 + z1) * 0.5)
+	cs.rotation.z = kat
+	cialo_scian.add_child(cs)
+	# podest u góry (krótki pas podłogi przy krawędzi stropu) dla płynnego wejścia
+	var cs2 := CollisionShape3D.new()
+	var bs2 := BoxShape3D.new()
+	bs2.size = Vector3(0.3, 0.2, z1 - z0)
+	cs2.shape = bs2
+	cs2.position = Vector3(x1 + 0.1, PIETRO_H - 0.1, (z0 + z1) * 0.5)
+	cialo_scian.add_child(cs2)
+
+
+## Balustrada wokół otworu na piętrze (od strony pokoju i od dołu biegu); wejście na schody zostaje wolne.
+func _balustrada(otw: Rect2, r: Rect2) -> void:
+	var B := preload("res://scripts/core/bryly.gd")
+	var cz := []
+	var przy_scianie_dol := otw.position.y - r.position.y < 0.1
+	var zb := otw.end.y if przy_scianie_dol else otw.position.y     # bok od strony pokoju
+	var odcinki := [[Vector2(otw.position.x, zb), Vector2(otw.end.x - 0.45, zb)],
+		[Vector2(otw.position.x, otw.position.y), Vector2(otw.position.x, otw.end.y)]]
+	for o in odcinki:
+		var a: Vector2 = o[0]
+		var b: Vector2 = o[1]
+		var dlo := a.distance_to(b)
+		var ile := int(dlo / 0.12)
+		for i in ile + 1:
+			var p := a.lerp(b, float(i) / maxf(1.0, ile))
+			cz.append(B.walec(Vector3(p.x, 0, p.y), Vector3(p.x, 0.95, p.y), 0.008, 0.008, "metal_ciemny_m", 5))
+		cz.append(B.walec(Vector3(a.x, 0.95, a.y), Vector3(b.x, 0.95, b.y), 0.025, 0.025, "drewno_m", 8))
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(maxf(0.06, absf(b.x - a.x)), 1.0, maxf(0.06, absf(b.y - a.y)))
+		cs.shape = bs
+		cs.position = Vector3((a.x + b.x) * 0.5, 0.5, (a.y + b.y) * 0.5)
+		cialo_scian.add_child(cs)
+	var mi := B.instancja(cz, false)
+	swiat.add_child(mi)
 
 
 func _srodek(k: Vector2i) -> Vector3:
@@ -409,12 +580,24 @@ func _pasaz(poziomo: bool, f0: float, f1: float, c: float, w: float, h: float, m
 		komorki[wlasciciel]["ramiona"].append([Vector2i(1, 0) if poziomo else Vector2i(0, 1), r])
 
 
-func _podloga(r: Rect2) -> void:
+func _podloga(r: Rect2, sufit := true) -> void:
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
 	bs.size = Vector3(r.size.x + 0.02, 0.4, r.size.y + 0.02)
 	cs.shape = bs
 	cs.position = Vector3(r.get_center().x, -0.2, r.get_center().y)
+	cialo_scian.add_child(cs)
+	if sufit:
+		_sufit_kolizja(r)
+
+
+## Lity sufit (strop): kule i odłamki z dołu nie przechodzą na piętro, pełzacz wisi pod nim.
+func _sufit_kolizja(r: Rect2) -> void:
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(r.size.x + 0.02, 0.3, r.size.y + 0.02)
+	cs.shape = bs
+	cs.position = Vector3(r.get_center().x, H + 0.15, r.get_center().y)
 	cialo_scian.add_child(cs)
 
 
@@ -491,9 +674,12 @@ func _punkt_sciany(k: Vector2i, d: Vector2i, u: float) -> Vector3:
 func _pomieszczenie(k: Vector2i) -> void:
 	var mats: Array = komorki[k]["mats"]
 	var r: Rect2 = komorki[k]["rect"]
-	bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.5, 1.0)
-	bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, H, false, 1.5, 1.0)
-	_podloga(r)
+	if not schody.is_empty() and schody["k"] == k:
+		_klatka_schody(k, mats, r)
+	else:
+		bud.plaszczyzna(mats[1], r.position.x, r.position.y, r.end.x, r.end.y, 0.0, true, 1.5, 1.0)
+		bud.plaszczyzna(mats[2], r.position.x, r.position.y, r.end.x, r.end.y, H, false, 1.5, 1.0)
+		_podloga(r)
 	for d in DIRS:
 		var b := _bok(r, d)
 		var otw: Array = komorki[k]["otwory"][d].duplicate()

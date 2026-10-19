@@ -95,7 +95,7 @@ func rozstaw(r: Node) -> void:
 	for k in komorki:
 		if stada >= 3:
 			break
-		if r.info["komorki"][k]["typ"] in ["piwnica", "magazyn"] and rng.randf() < 0.7:
+		if r.info["komorki"].has(k) and r.info["komorki"][k]["typ"] in ["piwnica", "magazyn"] and rng.randf() < 0.7:
 			_stado(po_komorce[k][0]["pos"], rng.randi_range(1, 2))
 			stada += 1
 

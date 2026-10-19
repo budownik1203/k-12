@@ -71,6 +71,8 @@ Drzwi: **F** otwiera i zamyka (klamka, skrzypienie, słychać to z daleka); **ku
 głośno, metalowe dłużej. Wrogowie otwierają drzwi po drodze, a zamknięte na klucz wyważają. Stań nieruchomo przy
 zamkniętych drzwiach, żeby podsłuchać, co jest za nimi (przez skrzydło słychać lepiej niż przez mur). Drewniane
 drzwi kula przebija, metalowe nie.
+Budynek ma piętro – wchodzi się klatką schodową. Strop jest lity (0,6 m żelbetu), więc kule, odłamki ani wzrok
+nie przechodzą między kondygnacjami; jedyna droga w górę i w dół to schody (wrogowie też z nich korzystają).
 Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu
 **PPM** na broni. Kolimator, lunetę i chwyt montuje się tylko przy stole roboczym w schronie (podejdź i wciśnij **F**). Przedmiot upuszczony poza slotami i siatkami albo **Del** na wskazanym – ląduje na ziemi.
 

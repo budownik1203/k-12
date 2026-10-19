@@ -66,7 +66,7 @@ static func wypiecz_nawigacje(swiat: Node3D) -> NavigationRegion3D:
 	nm.agent_radius = 0.35
 	nm.agent_height = 1.7
 	nm.agent_max_climb = 0.3
-	nm.agent_max_slope = 40.0
+	nm.agent_max_slope = 44.0
 	nm.cell_size = 0.1
 	nm.cell_height = 0.1
 	var mapa := swiat.get_world_3d().navigation_map
