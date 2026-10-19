@@ -244,6 +244,13 @@ def draw(pid, d, W, H):
         d.ellipse([16, 16, 28, 28], fill=SZKLO)
         d.ellipse([36, 16, 48, 28], fill=SZKLO)
         shaded_rect(d, [24, 36, 40, 60], METAL)
+    elif pid == "granat_f1":
+        d.ellipse([7, 8, 25, 30], fill=(80, 92, 62), outline=(40, 46, 30))
+        for y in [12, 17, 22]:
+            d.line([(9, y), (23, y)], fill=(50, 58, 38), width=1)
+        d.rectangle([13, 3, 19, 8], fill=METAL_J)
+        d.rectangle([20, 4, 23, 16], fill=METAL_J)
+        d.ellipse([8, 1, 14, 7], outline=METAL_J)
     elif pid == "woda":
         shaded_rect(d, [9, 18, 23, 60], (150, 190, 185))
         d.rectangle([13, 6, 19, 18], fill=(150, 190, 185))

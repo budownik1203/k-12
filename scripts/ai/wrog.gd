@@ -71,6 +71,9 @@ var _sluch_ms := -10000
 var _sluch_pos := Vector3.ZERO
 var _sluch_d := 0.0
 var _przygwozdzenie := 0.0   # ostrzał gracza psuje celność
+var granaty := 0
+var _unik_t := 0.0
+var _granat_cd := 0.0
 var poddany := false          # rzucił broń, ręce w górze – nie strzela do gracza
 var rozejm := false           # oddział przekupiony: nie atakuje gracza, dopóki ten nie strzeli
 var _poddany_t := 0.0
@@ -111,6 +114,7 @@ func przygotuj(frak: String, zestaw: Dictionary, rng: RandomNumberGenerator) -> 
 		if pid != "":
 			lup.append(Przedmiot.nowy(pid))
 	cecha = ["ostrozny", "agresywny", "tchorzliwy", "zwykly", "zwykly"][rng.randi() % 5]
+	granaty = rng.randi_range(0, 2) if frak != "szabrownik" else (1 if rng.randf() < 0.12 else 0)
 	morale = float(dane_frakcji["morale"]) * 100.0 + {"agresywny": 15.0, "tchorzliwy": -15.0}.get(cecha, 0.0)
 
 
@@ -670,6 +674,15 @@ func _physics_process(delta: float) -> void:
 		_ruch(delta)
 		_animuj(delta)
 		return
+	_granat_cd = maxf(0.0, _granat_cd - delta)
+	if _unik_t > 0.0 and stan != "poddany":
+		# ucieczka przed granatem: biegiem, bez strzelania
+		_unik_t -= delta
+		biegnie = true
+		_kucanie_cel = 0.0
+		_ruch(delta)
+		_animuj(delta)
+		return
 	match stan:
 		"poddany":
 			_poddany(delta)
@@ -897,6 +910,37 @@ func _szukanie(delta: float) -> void:
 		_napis(["Straciłem go.", "Uciekł.", "Wracamy."].pick_random())
 
 
+# ------------------------------------------------------------------ granaty
+
+## Rzut granatem łukiem w ostatnią znaną pozycję (z krzykiem – gracz ma chwilę na reakcję).
+func _rzuc_granat(cel: Vector3) -> void:
+	granaty -= 1
+	_granat_cd = 12.0
+	_napis_t = 0.0
+	_napis(["Granat!", "Granat, kryć się!", "Łap prezent!"].pick_random())
+	Dzwiek.graj_3d("zawleczka", global_position + Vector3.UP * 1.3, get_parent(), -4.0, 1.0, 12.0)
+	var skad := global_position + Vector3.UP * 1.7 - global_basis.z * 0.3
+	var cel2 := cel + Vector3(randf_range(-1.5, 1.5), 0.05, randf_range(-1.5, 1.5))
+	var d := Vector2(cel2.x - skad.x, cel2.z - skad.z)
+	var t := clampf(d.length() / 11.0, 0.5, 1.6)
+	var v := Vector3(d.x / t, (cel2.y - skad.y + 4.9 * t * t) / t, d.y / t)
+	Granat.rzuc(get_parent(), skad, v, self, Dane.def("granat_f1"))
+
+
+## Granat obok: uciec poza zasięg odłamków.
+func unik_granatu(p: Vector3) -> void:
+	if cialo.martwy or poddany or _unik_t > 0.0:
+		return
+	_unik_t = 2.8
+	var od := global_position - p
+	od.y = 0.0
+	if od.length() < 0.1:
+		od = global_basis.z
+	_idz(_najblizszy_na_siatce(global_position + od.normalized() * 8.0))
+	_napis_t = 0.0
+	_napis(["Granat!", "Uwaga, granat!", "Padnij!"].pick_random())
+
+
 # ------------------------------------------------------------------ poddanie się, okup
 
 func _poddaj_sie() -> void:
@@ -1085,6 +1129,11 @@ func _walka(delta: float) -> void:
 		ostatnia_pozycja = gracz.global_position
 	else:
 		czas_bez_kontaktu += delta
+		# schowany za osłoną, pozycja znana – granat
+		if granaty > 0 and _granat_cd <= 0.0 and czas_bez_kontaktu > 1.2 and ostatnia_pozycja != Vector3.ZERO:
+			var dg := global_position.distance_to(ostatnia_pozycja)
+			if dg > 6.0 and dg < 22.0 and randf() < delta * 0.9:
+				_rzuc_granat(ostatnia_pozycja)
 		if czas_bez_kontaktu > 3.0:
 			# nie gna od razu za graczem: trzyma kąt, potem ostrożnie szuka
 			stan = "szukanie"
@@ -1687,6 +1736,9 @@ func _zwloki() -> void:
 				plecak.dodaj(m)
 	else:
 		spodnie.dodaj(Przedmiot.nowy(amunicja_id, randi_range(3, 10)))
+	for i in granaty:
+		if not ladownice.dodaj(Przedmiot.nowy("granat_f1")):
+			plecak.dodaj(Przedmiot.nowy("granat_f1"))
 	if pancerz:
 		na_ciele.dodaj(pancerz)
 	if helm:

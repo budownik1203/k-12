@@ -28,6 +28,7 @@ func _ready() -> void:
 	info = gen.generuj(Gra.ziarno_rajdu, swiat)
 	await _nawigacja_ze_sprawdzeniem()
 	_postaw_drzwi()
+	_zaplanuj_zdarzenia()
 	# duża mapa: geometria dalej niż ~45 m nie jest rysowana (i tak ginie w mgle)
 	for mi in swiat.find_children("*", "GeometryInstance3D", true, false):
 		var gi := mi as GeometryInstance3D
@@ -142,6 +143,146 @@ func _nawigacja_ze_sprawdzeniem() -> void:
 
 var _cull_t := 0.0
 var _start_ms := 0
+
+
+# ------------------------------------------------------------------ zdarzenia w strefie
+
+var _plan_zdarzen: Array = []
+var odwiedzone := {}           # typy pomieszczeń, w których był gracz (zlecenia zwiadu)
+var _odw_t := 0.0
+var awaria_pradu := false
+
+
+## Losowe zdarzenia rajdu: awaria prądu, obława wojska, zrzut zaopatrzenia (godziny losowe, nie w testach).
+func _zaplanuj_zdarzenia() -> void:
+	var a := OS.get_cmdline_user_args()
+	if a.has("--test") or a.has("--walka") or a.has("--frakcje") or a.has("--mutant") or a.has("--ewakuacja") or a.has("--vm") or a.has("--zrzuty"):
+		if a.has("--zdarzenia"):
+			_plan_zdarzen = [{"t": 2.0, "typ": "awaria"}, {"t": 4.0, "typ": "zrzut"}, {"t": 6.0, "typ": "oblawa"}]
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = Gra.ziarno_rajdu * 7 + 3
+	if rng.randf() < 0.4:
+		_plan_zdarzen.append({"t": rng.randf_range(300.0, 900.0), "typ": "awaria"})
+	if rng.randf() < 0.3:
+		_plan_zdarzen.append({"t": rng.randf_range(420.0, 1200.0), "typ": "oblawa"})
+	if rng.randf() < 0.3:
+		_plan_zdarzen.append({"t": rng.randf_range(480.0, 1100.0), "typ": "zrzut"})
+
+
+func _zdarzenia_strefy() -> void:
+	for z in _plan_zdarzen.duplicate():
+		if czas >= float(z["t"]):
+			_plan_zdarzen.erase(z)
+			if OS.get_cmdline_user_args().has("--zdarzenia"):
+				print("ZDARZENIE: %s (%.1f s)" % [z["typ"], czas])
+			match String(z["typ"]):
+				"awaria":
+					_awaria_pradu()
+				"oblawa":
+					_oblawa()
+				"zrzut":
+					_zrzut()
+
+
+## Gasną wszystkie lampy na 60–100 s (trzask przekaźnika), potem wracają z migotaniem.
+func _awaria_pradu() -> void:
+	awaria_pradu = true
+	Dzwiek.graj("prad", -4.0, 0.9)
+	gracz.komunikat.emit("Trzasnęło w rozdzielni – zgasło światło w całym budynku.")
+	dodaj_zdarzenie("Awaria prądu.")
+	for l in info["lampy"]:
+		if not is_instance_valid(l):
+			continue
+		if l.get("awaria") != null:
+			l.set_meta("awaria0", l.awaria)
+			l.awaria = 1.0
+		else:
+			l.set_meta("e0", (l as Light3D).light_energy)
+			(l as Light3D).light_energy = 0.0
+	for bz in _brzeczenie:
+		(bz as AudioStreamPlayer3D).volume_db = -80.0
+	get_tree().create_timer(randf_range(60.0, 100.0)).timeout.connect(func():
+		if koniec:
+			return
+		awaria_pradu = false
+		Dzwiek.graj("prad", -8.0, 1.1)
+		gracz.komunikat.emit("Prąd wrócił.")
+		for l in info["lampy"]:
+			if not is_instance_valid(l):
+				continue
+			if l.has_meta("awaria0"):
+				l.awaria = l.get_meta("awaria0")
+			elif l.has_meta("e0"):
+				(l as Light3D).light_energy = l.get_meta("e0")
+		for bz in _brzeczenie:
+			(bz as AudioStreamPlayer3D).volume_db = -16.0 + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8)))
+
+
+## Obława: oddział wojska wchodzi do strefy z daleka i przeczesuje okolicę gracza.
+func _oblawa() -> void:
+	var mw := get_node_or_null("Wrogowie")
+	if mw == null:
+		return
+	var kand: Array = info["spawny"].filter(func(s): return (s["pos"] as Vector3).distance_to(gracz.global_position) > 35.0)
+	if kand.is_empty():
+		return
+	var s0: Dictionary = kand[randi() % kand.size()]
+	var przed: int = mw.oddzialy.size()
+	mw._oddzial("wojskowy", [s0], 3, przed)
+	if mw.oddzialy.size() > przed:
+		for w in mw.oddzialy[mw.oddzialy.size() - 1].czlonkowie:
+			w.stan = "szukanie"
+			w.ostatnia_pozycja = gracz.global_position + Vector3(randf_range(-10, 10), 0, randf_range(-10, 10))
+	Dzwiek.graj("strzaly_daleko_1", -14.0, 0.8)
+	gracz.komunikat.emit("Gdzieś przy wejściu słychać komendy i tupot butów – wojsko przeczesuje strefę.")
+	dodaj_zdarzenie("Obława wojska.")
+
+
+## Zrzut: przelot samolotu, skrzynia spada przez dziurę w stropie w odległym pomieszczeniu, świeci raca.
+func _zrzut() -> void:
+	var kand := []
+	for k in info["komorki"]:
+		if info["komorki"][k]["typ"] in ["pokoj", "magazyn", "administracja", "warsztat"] and gen._srodek(k).distance_to(gracz.global_position) > 28.0:
+			kand.append(k)
+	if kand.is_empty():
+		return
+	var k: Vector2i = kand[randi() % kand.size()]
+	var mapa := swiat.get_world_3d().navigation_map
+	var pos := NavigationServer3D.map_get_closest_point(mapa, gen._srodek(k) + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+	Dzwiek.graj("samolot", -6.0)
+	gracz.komunikat.emit("Nad budynkiem przeleciał samolot. Coś spadło – w oddali świeci raca.")
+	dodaj_zdarzenie("Zrzut zaopatrzenia.")
+	get_tree().create_timer(6.5).timeout.connect(func():
+		if koniec:
+			return
+		var pj: Node3D = gen._mebel("skrzynia_wojskowa", pos + Vector3.UP * 2.4, randf() * TAU, true, k)
+		if pj is Pojemnik:
+			(pj as Pojemnik).nazwa = "Skrzynia zrzutowa"
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			(pj as Pojemnik).wypelnij("skrzynia_wojskowa", 4, rng)
+		var tw := pj.create_tween()
+		tw.tween_property(pj, "position:y", pos.y, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(func():
+			Dzwiek.graj_3d("drzwi_kopniak", pos, swiat, 4.0, 0.6, 60.0)
+			Efekty.kurz(swiat, pos + Vector3.UP * 0.3, 2.5)
+			Gra.emituj_halas(pos, 45.0, null))
+		# czerwona raca obok skrzyni
+		var raca := OmniLight3D.new()
+		raca.light_color = Color(1.0, 0.15, 0.08)
+		raca.light_energy = 2.5
+		raca.omni_range = 7.0
+		swiat.add_child(raca)
+		raca.global_position = pos + Vector3(0.6, 0.3, 0.0)
+		info["lampy"].append(raca)
+		var tr := raca.create_tween().set_loops(240)
+		tr.tween_property(raca, "light_energy", 1.6, 0.25)
+		tr.tween_property(raca, "light_energy", 2.6, 0.25)
+		get_tree().create_timer(120.0).timeout.connect(func():
+			if is_instance_valid(raca):
+				info["lampy"].erase(raca)
+				raca.queue_free()))
 
 
 ## Skrzydła drzwi w otworach (po wypieczeniu nawigacji – ścieżki prowadzą przez otwory, a wrogowie
@@ -278,6 +419,18 @@ func _process(delta: float) -> void:
 				bz.stream_paused = true
 		_napiecie_tick(0.3)
 	_tlo_strefy(delta)
+	_zdarzenia_strefy()
+	_odw_t -= delta
+	if _odw_t <= 0.0:
+		_odw_t = 1.0
+		var kk := gen.komorka_w(gracz.global_position)
+		if kk.x >= 0:
+			var typ: String = info["komorki"][kk]["typ"]
+			if not odwiedzone.has(typ):
+				odwiedzone[typ] = true
+				for k in Gra.kontrakty.get("aktywne", []):
+					if k["typ"] == "zwiad" and k["cel"] == typ:
+						gracz.komunikat.emit("Zlecenie: dotarłeś na miejsce – teraz wróć żywy.")
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).rajd_czas = czas
 	if _tryb_testu == "test" and czas > 1.0 and czas - delta <= 1.0:
@@ -399,6 +552,7 @@ func _zakoncz(w: Dictionary) -> void:
 	w["czas"] = czas
 	w["zabici"] = zabici
 	w["zdarzenia"] = zdarzenia
+	w["odwiedzone"] = odwiedzone.keys()
 	w["wartosc_poczatkowa"] = wartosc_poczatkowa
 	w["zdrowie"] = gracz.cialo.stan_do_zapisu()
 	w["zabojca"] = gracz.get_meta("zabojca", "")
@@ -864,6 +1018,10 @@ func _zrzut_vm(katalog: String) -> void:
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--szaber") and w.frakcja == "szabrownik" and w.posterunek.is_empty():
 			_wrog_testowy = w
 			continue
+		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--granat"):
+			_wrog_testowy = w
+			w.set_physics_process(false)
+			continue
 		if _wrog_testowy == null and w is Wrog and w.frakcja == "szabrownik" and OS.get_cmdline_user_args().has("--poddanie"):
 			_wrog_testowy = w
 			continue
@@ -1227,6 +1385,30 @@ func _zrzut_animacji(katalog: String) -> void:
 		return
 	if OS.get_cmdline_user_args().has("--drzwi"):
 		await _test_drzwi(katalog)
+		return
+	if OS.get_cmdline_user_args().has("--granat"):
+		var w = _wrog_testowy
+		var bl := 0
+		Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("granat_f1"))
+		var cel: Vector3 = gracz.global_position - gracz.global_basis.z * 6.0
+		w.global_position = w._najblizszy_na_siatce(cel)
+		gracz.kamera.rotation.x = 0.15
+		gracz.rzuc_granat()
+		await get_tree().create_timer(0.6).timeout
+		await _zapisz(katalog, "granat_1_zamach")
+		await get_tree().create_timer(0.9).timeout
+		await _zapisz(katalog, "granat_2_lot")
+		var gr := get_tree().get_nodes_in_group("granaty")
+		var t := 0.0
+		var hp0: float = w.cialo.procent()
+		while t < 6.0 and w.cialo.procent() >= hp0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+		await _zapisz(katalog, "granat_3_wybuch")
+		print("  wróg: hp %.0f%% -> %.0f%%, martwy %s, odl. %.1f m" % [hp0 * 100.0, w.cialo.procent() * 100.0, w.cialo.martwy, w.global_position.distance_to(gracz.global_position)])
+		if w.cialo.procent() >= hp0:
+			bl += 1
+		print("TEST GRANATU: błędów %d" % bl)
 		return
 	if OS.get_cmdline_user_args().has("--poddanie"):
 		var w = _wrog_testowy

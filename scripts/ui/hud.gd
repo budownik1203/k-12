@@ -190,7 +190,9 @@ func _ready() -> void:
 	_pomoc.add_child(lp)
 	_pomoc.visible = false
 	_root.add_child(_pomoc)
-	komunikat("Kontrakt aktywny. Wyjścia: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
+	komunikat("Wyjścia: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
+	for k in Gra.kontrakty.get("aktywne", []):
+		komunikat("Zlecenie: %s" % k["opis"])
 
 
 func _lbl(pos: Vector2, rozm: int, kol: Color, preset: int) -> Label:

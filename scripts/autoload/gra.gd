@@ -12,6 +12,7 @@ var skrytka: Siatka
 var ekw: Ekwipunek
 var zdrowie := {}            # część ciała -> hp po rajdzie (puste = pełne)
 var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
+var kontrakty := {"oferty": [], "aktywne": []}       # zlecenia Pośrednika
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8}
 var ostatni_raport := {}
@@ -35,6 +36,8 @@ func nowa_gra() -> void:
 	ekw = Ekwipunek.new()
 	zdrowie = {}
 	potrzeby = {"glod": 80.0, "pragnienie": 80.0}
+	kontrakty = {"oferty": [], "aktywne": []}
+	odnow_oferty()
 	statystyki = {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 	poczta = []
 	# ekwipunek startowy
@@ -140,6 +143,103 @@ func rozpocznij_rajd() -> void:
 
 ## wynik: {"przezyl": bool, "przyczyna": String, "czas": float, "zabici": Array, "wyjscie": String,
 ##         "wartosc_poczatkowa": int, "utracone": Array, "zdrowie": Dictionary, "zdarzenia": Array}
+# ------------------------------------------------------------------ kontrakty (zlecenia Pośrednika)
+
+const KONTRAKTY_DOSTAWA := [["teczka_akt", 1, 6500], ["lampa_elektronowa", 2, 5000], ["maszyna_do_pisania", 1, 7000], ["radio", 1, 5200],
+	["akumulator", 2, 5800], ["telefon", 1, 4200], ["przewody", 3, 3800], ["zegarek", 2, 5000]]
+const KONTRAKTY_ELIMINACJA := [["szabrownik", 3, 5000], ["najemnik", 2, 8500], ["wojskowy", 2, 9000]]
+const KONTRAKTY_WYJSCIE := [["Brama na podwórze", 2800], ["Piwnica nr 7", 4500], ["Okno na rusztowanie", 3800]]
+const KONTRAKTY_ZWIAD := [["warsztat", "warsztatu", 3000], ["piwnica", "piwnicy", 3200], ["administracja", "biur administracji", 2600], ["magazyn", "magazynu", 2800]]
+
+
+## Nowe oferty zleceń (trzy, różnych rodzajów) – po każdym rajdzie.
+func odnow_oferty() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(statystyki.get("rajdy", 0)) * 977 + bony
+	var rodzaje := ["dostawa", "eliminacja", "wyjscie", "zwiad"]
+	rodzaje.shuffle()
+	var out := []
+	for r in rodzaje.slice(0, 3):
+		match r:
+			"dostawa":
+				var e: Array = KONTRAKTY_DOSTAWA[rng.randi() % KONTRAKTY_DOSTAWA.size()]
+				out.append({"typ": "dostawa", "cel": e[0], "ile": e[1], "postep": 0, "nagroda": e[2],
+					"opis": "Dostarcz: %s ×%d" % [Dane.nazwa(e[0]), e[1]]})
+			"eliminacja":
+				var e2: Array = KONTRAKTY_ELIMINACJA[rng.randi() % KONTRAKTY_ELIMINACJA.size()]
+				var nazwy := {"szabrownik": "szabrowników", "najemnik": "najemników", "wojskowy": "żołnierzy"}
+				out.append({"typ": "eliminacja", "cel": e2[0], "ile": e2[1], "postep": 0, "nagroda": e2[2],
+					"opis": "Zlikwiduj %d %s (liczy się po powrocie)" % [e2[1], nazwy[e2[0]]]})
+			"wyjscie":
+				var e3: Array = KONTRAKTY_WYJSCIE[rng.randi() % KONTRAKTY_WYJSCIE.size()]
+				out.append({"typ": "wyjscie", "cel": e3[0], "ile": 1, "postep": 0, "nagroda": e3[1],
+					"opis": "Sprawdź drogę: wyjdź ze strefy przez „%s”" % e3[0]})
+			"zwiad":
+				var e4: Array = KONTRAKTY_ZWIAD[rng.randi() % KONTRAKTY_ZWIAD.size()]
+				out.append({"typ": "zwiad", "cel": e4[0], "ile": 1, "postep": 0, "nagroda": e4[2],
+					"opis": "Zwiad: wejdź do %s i wróć żywy" % e4[1]})
+	kontrakty["oferty"] = out
+
+
+func przyjmij_kontrakt(i: int) -> bool:
+	var of: Array = kontrakty["oferty"]
+	if i < 0 or i >= of.size() or (kontrakty["aktywne"] as Array).size() >= 2:
+		return false
+	(kontrakty["aktywne"] as Array).append(of[i])
+	of.remove_at(i)
+	zapisz()
+	return true
+
+
+## Dostawa: przedmioty ze skrytki (rozpoznane) – zwraca, czy oddano.
+func oddaj_dostawe(k: Dictionary) -> bool:
+	var potrzeba := int(k["ile"])
+	var znalezione := []
+	for e in skrytka.items:
+		var p: Przedmiot = e["p"]
+		if p.id == k["cel"]:
+			znalezione.append(p)
+			if znalezione.size() >= potrzeba:
+				break
+	if znalezione.size() < potrzeba:
+		return false
+	for p in znalezione:
+		skrytka.usun(p)
+	dodaj_bony(int(k["nagroda"]))
+	(kontrakty["aktywne"] as Array).erase(k)
+	zapisz()
+	return true
+
+
+## Zaliczanie zleceń po rajdzie (tylko gdy gracz wrócił): eliminacje, wyjście, zwiad.
+func _rozlicz_kontrakty(wynik: Dictionary) -> void:
+	var notki := []
+	var aktywne: Array = kontrakty["aktywne"]
+	for k in aktywne.duplicate():
+		if not wynik.get("przezyl", false):
+			continue
+		match String(k["typ"]):
+			"eliminacja":
+				for z in wynik.get("zabici", []):
+					if String(z.get("frakcja", "")) == k["cel"]:
+						k["postep"] = int(k["postep"]) + 1
+			"wyjscie":
+				if String(wynik.get("wyjscie", "")) == k["cel"]:
+					k["postep"] = 1
+			"zwiad":
+				if (wynik.get("odwiedzone", []) as Array).has(k["cel"]):
+					k["postep"] = 1
+		if String(k["typ"]) != "dostawa" and int(k["postep"]) >= int(k["ile"]):
+			dodaj_bony(int(k["nagroda"]))
+			aktywne.erase(k)
+			notki.append({"czas": 0.0, "tekst": "Zlecenie wykonane: %s (+%d bonów)." % [k["opis"], int(k["nagroda"])]})
+	if not notki.is_empty():
+		var zd: Array = wynik.get("zdarzenia", [])
+		zd.append_array(notki)
+		wynik["zdarzenia"] = zd
+	odnow_oferty()
+
+
 ## Zjedzenie / wypicie (w bazie od razu, w rajdzie po czynności gracza): zmienia głód i pragnienie.
 func spozyj(p: Przedmiot) -> String:
 	var j: Dictionary = p.defn().get("jedzenie", {})
@@ -166,6 +266,7 @@ func _odblokuj_ekw() -> void:
 func koniec_rajdu(wynik: Dictionary) -> void:
 	_odblokuj_ekw()
 	rajd_w_toku = false
+	_rozlicz_kontrakty(wynik)
 	statystyki["zabici"] += wynik.get("zabici", []).size()
 	if wynik["przezyl"]:
 		statystyki["przezyte"] += 1
@@ -207,7 +308,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
-		"zdrowie": zdrowie, "potrzeby": potrzeby, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
+		"zdrowie": zdrowie, "potrzeby": potrzeby, "kontrakty": kontrakty, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
 		"latarka_wydana": true,
 	}
 	var txt := JSON.stringify(d)
@@ -233,6 +334,9 @@ func wczytaj() -> bool:
 		ekw = Ekwipunek.from_dict(d["ekw"])
 		zdrowie = d.get("zdrowie", {})
 		potrzeby = {"glod": float(d.get("potrzeby", {}).get("glod", 80.0)), "pragnienie": float(d.get("potrzeby", {}).get("pragnienie", 80.0))}
+		kontrakty = d.get("kontrakty", {"oferty": [], "aktywne": []})
+		if (kontrakty.get("oferty", []) as Array).is_empty():
+			odnow_oferty()
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])

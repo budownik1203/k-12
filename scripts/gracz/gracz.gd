@@ -312,6 +312,8 @@ func _physics_process(delta: float) -> void:
 	_dzwieki_ciala(delta)
 	_potrzeby(delta)
 	przygniecenie = maxf(0.0, przygniecenie - delta * 0.3)
+	if we_aktywne and Input.is_action_just_pressed("granat"):
+		rzuc_granat()
 	if we_aktywne and Input.is_action_just_pressed("latarka"):
 		if latarka_w_rece:
 			latarka_wlaczona = not latarka_wlaczona
@@ -599,6 +601,36 @@ var _potrzeby_prog := {"glod": 100.0, "pragnienie": 100.0}
 
 
 ## Jedzenie i picie w rajdzie: czynność z animacją (przerywalna), potem zmiana głodu i pragnienia.
+## Granat: wyjęcie (z kamizelki szybko, z kieszeni wolniej), zawleczka, zamach i rzut.
+## Kucając – toczy go po podłodze (cicho, krótko).
+func rzuc_granat() -> void:
+	if tryb_bazy or not akcja.is_empty():
+		return
+	var z := ekw.znajdz_id("granat_f1")
+	if z.is_empty():
+		komunikat.emit("Brak granatu pod ręką (kamizelka, kieszenie)")
+		return
+	var p: Przedmiot = z["p"]
+	var czas := 1.1 * ekw.mnoznik_dostepu(z["siatka"])
+	var nisko := kucanie > 0.5
+	zacznij_akcje("Granat", czas, func():
+		if not ekw.usun_przedmiot(p):
+			return
+		var przod := -kamera.global_basis.z
+		var skad := kamera.global_position + kamera.global_basis.x * 0.15 + przod * 0.35 - kamera.global_basis.y * 0.1
+		var v: Vector3
+		if nisko:
+			var plaski := Vector3(przod.x, 0.0, przod.z).normalized()
+			v = plaski * 6.0 + Vector3.UP * 0.8
+		else:
+			v = (przod + Vector3.UP * 0.22).normalized() * 13.0
+		v += velocity * 0.6
+		Granat.rzuc(get_parent(), skad, v, self, p.defn())
+		Gra.emituj_halas(global_position, 5.0, self)
+		ekw.zmieniony.emit()
+		, "granat", 0, Callable(), {"id": "granat_f1"})
+
+
 func spozyj(p: Przedmiot) -> void:
 	if not akcja.is_empty():
 		zaplanuj(p.nazwa(), func(): spozyj(p))

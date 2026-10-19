@@ -93,7 +93,7 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			piv.set_meta("roz", minf(najw, 0.25))
 			lewa.ustaw_chwyt("magazynek")
 			prawa.ustaw_chwyt("szczypta")
-		"jedzenie", "picie":
+		"jedzenie", "picie", "granat":
 			var pm := ModelePrzedmiotow.wezel(Przedmiot.nowy(id if id != "" else "konserwa"), true)
 			var piv := Node3D.new()
 			add_child(piv)
@@ -194,6 +194,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_ogladaj(t, f, dol)
 		"zdejmowanie":
 			_zdejmowanie(t, f, dol)
+		"granat":
+			_granat(t, f, dol)
 		"jedzenie":
 			_jedzenie(t, f, dol)
 		"picie":
@@ -447,6 +449,40 @@ func _siegnij(f: float, dol: Vector3) -> void:
 			p5 = p5.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
 			_uloz(prawa, p5, Vector3(-0.15 - ciag * 0.4, -0.1, -1.0 + ciag * 0.3), Vector3(0.3, 1.0, 0.2))
 			prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")
+
+
+func _granat(t: float, f: float, dol: Vector3) -> void:
+	# prawa wyjmuje granat z dołu, lewa wyrywa zawleczkę, prawa bierze zamach i rzuca
+	var m: Node3D = _rek["model"]
+	if f > 0.32 and not _rek.has("zawl"):
+		_rek["zawl"] = true
+		Dzwiek.graj("zawleczka", -8.0)
+	var dol_p := Vector3(0.14, -0.38, -0.25) + dol
+	var przed := Vector3(0.07, -0.16, -0.32) + dol
+	var zamach := Vector3(0.24, -0.02, -0.08) + dol
+	var rzut := Vector3(0.05, -0.05, -0.6) + dol
+	var p: Vector3
+	if f < 0.25:
+		p = dol_p.lerp(przed, smoothstep(0.0, 0.25, f))
+	elif f < 0.6:
+		p = przed
+	elif f < 0.85:
+		p = przed.lerp(zamach, smoothstep(0.6, 0.85, f))
+	else:
+		p = zamach.lerp(rzut, smoothstep(0.85, 1.0, f))
+	m.position = p + Vector3(0, 0.02, 0)
+	m.rotation = Vector3(0.3, 0.4, 0.0)
+	m.visible = f < 0.97
+	_uloz(prawa, p, Vector3(-0.4, 0.4, -0.7), Vector3(0.3, 1.0, 0.2))
+	prawa.ustaw_chwyt("piesc")
+	# lewa: chwyta kółko zawleczki i odciąga w lewo
+	var kolko := p + Vector3(-0.03, 0.04, 0.0)
+	var odciag := smoothstep(0.3, 0.5, f) * (1.0 - smoothstep(0.6, 0.75, f))
+	var l := kolko.lerp(kolko + Vector3(-0.14, -0.02, 0.04), odciag) if f > 0.2 and f < 0.75 else Vector3(-0.22, -0.4, -0.2) + dol
+	_uloz(lewa, l, Vector3(0.6, 0.3, -0.6), Vector3(-0.2, -1.0, 0.1))
+	lewa.ustaw_chwyt("szczypta")
+	lewa.celuj_lokiec(Vector3(-0.28, -0.5, 0.0), self)
+	prawa.celuj_lokiec(Vector3(0.3, -0.45, 0.1), self)
 
 
 func _jedzenie(t: float, f: float, dol: Vector3) -> void:

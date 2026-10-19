@@ -79,3 +79,56 @@ if __name__ == "__main__":
     zapisz("drzwi_metal_kopniak", drzwi_metal_kopniak(), 0.85)
     zapisz("drzwi_wywaz", drzwi_wywaz(), 0.95)
     zapisz("trafienie_drewno", trafienie_drewno(), 0.7)
+
+
+# ------------------------------------------------------------------ granat (dopisane)
+def wybuch():
+    dl = 3.5
+    tt = t(dl)
+    uderz = lp(szum(dl), 900) * env(n(dl), 0.001, 0.25) * 2.0
+    bas = np.sin(2 * np.pi * (45 + 60 * np.exp(-tt / 0.08)) * tt) * env(n(dl), 0.001, 0.5) * 1.6
+    trzask = hp(szum(dl), 2500) * env(n(dl), 0.0005, 0.04) * 0.9
+    gruz = sum_drzazgi(1.5) * 0.5
+    x = uderz + bas + trzask
+    x = sekwencja(dl, [(0.0, x), (0.25, gruz)])
+    return poglos(x, 2.5, 0.5, 1500)
+
+
+def zawleczka():
+    return sekwencja(0.4, [(0.0, klik(3500, 0.03, 0.7)), (0.05, bp(szum(0.08), 2000, 7000) * env(n(0.08), 0.002, 0.03) * 0.5), (0.18, klik(2600, 0.04, 0.6))])
+
+
+def granat_odbicie():
+    tt = t(0.25)
+    return (np.sin(2 * np.pi * 1900 * tt) + 0.5 * np.sin(2 * np.pi * 3100 * tt)) * env(n(0.25), 0.0005, 0.03) + lp(szum(0.25), 1200) * env(n(0.25), 0.001, 0.02)
+
+
+if __name__ == "__main__":
+    zapisz("wybuch", wybuch(), 0.98)
+    zapisz("zawleczka", zawleczka(), 0.6)
+    zapisz("granat_odbicie", granat_odbicie(), 0.5)
+
+
+# ------------------------------------------------------------------ zdarzenia strefy (dopisane)
+def samolot():
+    dl = 14.0
+    tt = t(dl)
+    # przelot: narasta, dopplerowe obniżenie tonu, oddala się
+    obw = np.exp(-((tt - 6.5) / 3.2) ** 2)
+    f = 92 * (1 + 0.08 * np.tanh((6.5 - tt) / 1.2))
+    faza = np.cumsum(f) / SR
+    silnik = (np.sin(2 * np.pi * faza) + 0.5 * np.sin(2 * np.pi * faza * 2) + 0.3 * np.sin(2 * np.pi * faza * 3.02)) * 0.4
+    silnik += lp(szum(dl), 500) * 0.7
+    x = silnik * obw
+    return poglos(lp(x, 1800), 2.0, 0.4, 1200)
+
+
+def prad():
+    tt = t(1.2)
+    bzz = np.sin(2 * np.pi * 100 * tt) * np.exp(-tt / 0.35) * 0.6
+    return sekwencja(1.2, [(0.0, klik(900, 0.08, 1.0)), (0.0, bzz), (0.05, lp(szum(0.3), 600) * env(n(0.3), 0.001, 0.08) * 0.5)])
+
+
+if __name__ == "__main__":
+    zapisz("samolot", samolot(), 0.7)
+    zapisz("prad", prad(), 0.7)

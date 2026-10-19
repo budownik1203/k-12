@@ -21,9 +21,9 @@ const HANDLARZE := {
 		"powitania": ["Broń jest. Amunicji też trochę. Sumienia brak na stanie.", "Zwrotów nie przyjmuję. Zwłaszcza od nieboszczyków.", "Podpisz tu, tu i tu. Nie, nie czytaj."],
 		"oferta": [["pw9", 1], ["obrzyn", 1], ["pm63", 1], ["kb47", 1], ["mag_pw9", 1], ["mag_pm63", 1], ["mag_kb47", 1],
 			["a_9x18", 50], ["a_12", 20], ["a_762", 60], ["a_762bp", 30], ["kamizelka_kl2", 1], ["helm_wz67", 1],
-			["tlumik_9", 1], ["tlumik_762", 1], ["hamulec", 1], ["kolimator", 1], ["luneta", 1], ["chwyt", 1], ["latarka_taktyczna", 1],
+			["granat_f1", 1], ["tlumik_9", 1], ["tlumik_762", 1], ["hamulec", 1], ["kolimator", 1], ["luneta", 1], ["chwyt", 1], ["latarka_taktyczna", 1],
 			["kamizelka_kl4", 1], ["kamizelka_lbv", 1], ["napiersnik", 1], ["plecak_szturmowy", 1], ["plecak_turystyczny", 1], ["plecak_wojskowy", 1]],
-		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik", "dodatek"], "skup": 0.5,
+		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik", "dodatek", "granat"], "skup": 0.5,
 	},
 	"medyk": {
 		"nazwa": "Medyk", "opis": "zmęczony lekarz-uciekinier z kompleksu",
@@ -164,6 +164,52 @@ func _process(_d: float) -> void:
 		_tooltip.position.x -= _tooltip.size.x + 36
 
 
+## Zlecenia Pośrednika: oferty do przyjęcia (najwyżej dwa naraz) i przyjęte z postępem; dostawę oddaje się
+## ze skrytki.
+func _panel_zlecen() -> Control:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	v.add_child(Motyw.naglowek("Zlecenia"))
+	var akt: Array = Gra.kontrakty.get("aktywne", [])
+	for k in akt:
+		var r := HBoxContainer.new()
+		var post := "" if k["typ"] in ["dostawa", "wyjscie", "zwiad"] else "  [%d/%d]" % [int(k["postep"]), int(k["ile"])]
+		r.add_child(Motyw.etykieta("✔ " + String(k["opis"]) + post + "  ·  %d bonów" % int(k["nagroda"]), 14, Motyw.ZOLC))
+		if k["typ"] == "dostawa":
+			var b := Button.new()
+			b.text = "Oddaj"
+			var ma := Gra.skrytka.items.filter(func(e): return (e["p"] as Przedmiot).id == k["cel"]).size()
+			b.disabled = ma < int(k["ile"])
+			b.tooltip_text = "Przedmioty muszą być w skrytce (%d/%d)." % [ma, int(k["ile"])]
+			b.pressed.connect(func():
+				if Gra.oddaj_dostawe(k):
+					Dzwiek.graj("kasa", -4.0)
+					_powitanie.text = "„Interes z tobą to przyjemność. Prawie.”"
+					_skrytka_ui.queue_redraw()
+					_przebuduj())
+			r.add_child(b)
+		v.add_child(r)
+	var of: Array = Gra.kontrakty.get("oferty", [])
+	for i in of.size():
+		var k2: Dictionary = of[i]
+		var r2 := HBoxContainer.new()
+		r2.add_child(Motyw.etykieta("• " + String(k2["opis"]) + "  ·  %d bonów" % int(k2["nagroda"]), 14))
+		var b2 := Button.new()
+		b2.text = "Przyjmij"
+		b2.disabled = akt.size() >= 2
+		var idx := i
+		b2.pressed.connect(func():
+			if Gra.przyjmij_kontrakt(idx):
+				Dzwiek.graj("pieczatka", -4.0)
+				_powitanie.text = "„Umowa ustna, ale wiążąca. Bardziej niż myślisz.”"
+				_przebuduj())
+		r2.add_child(b2)
+		v.add_child(r2)
+	if akt.is_empty() and of.is_empty():
+		v.add_child(Motyw.etykieta("Na razie nic. Wróć po następnym wyjściu.", 14, Motyw.TEKST_CIEMNY))
+	return v
+
+
 func _przebuduj() -> void:
 	for c in _oferta.get_children():
 		c.queue_free()
@@ -213,6 +259,11 @@ func _przebuduj() -> void:
 				_przebuduj())
 			_dodatki.add_child(b)
 		"posrednik":
+			_dodatki.add_child(_panel_zlecen())
+			var ub := VBoxContainer.new()
+			ub.add_theme_constant_override("separation", 4)
+			ub.add_child(Motyw.naglowek("Ubezpieczenie"))
+			_dodatki.add_child(ub)
 			for sl in ["glowna", "pistolet", "pancerz", "helm", "plecak"]:
 				var p: Przedmiot = Gra.ekw.sloty[sl]
 				if p == null or p.dane.get("ubezp", false):
@@ -228,7 +279,7 @@ func _przebuduj() -> void:
 					_powitanie.text = "„Ubezpieczone. Gdyby co, przyjdzie pocztą. Bez naboi, bez sentymentów.”"
 					Dzwiek.graj("pieczatka", -4.0)
 					_przebuduj())
-				_dodatki.add_child(bu)
+				ub.add_child(bu)
 		"zbrojmistrz":
 			var b2 := Button.new()
 			b2.text = "Darmowy zestaw startowy"

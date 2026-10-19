@@ -31,7 +31,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
 | Tab | panel operatora; „Otwórz” przy plecaku/kontenerze: postać zdejmuje go i rozkłada przed sobą (sloty we wnętrzu); w sklepie Tab zamyka |
 | Tab, Tab | szybkie zerknięcie na kamizelkę (ładownice pod ręką) |
-| G | napełnij magazynki z amunicji luzem |
+| G | w ekwipunku: napełnij magazynki z amunicji luzem; w rajdzie: rzut granatem (kucając – po podłodze) |
 | L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz; z latarką taktyczną na broni włącza ją |
 | O | lista wyjść z kierunkiem i odległością |
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
@@ -59,6 +59,9 @@ skrzynie i szafki wyłamuje się (z kombinerkami lub kluczem nastawnym szybciej)
 plecaku – zrywasz się i plecak zostaje na ziemi (podejdź i **F**, żeby go założyć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
 w panelu zdrowia leczy właśnie ją.
+Głód i pragnienie (paski w panelu ciała) spadają w rajdzie – jedzenie i picie z menu **PPM** (Zjedz / Wypij).
+Osaczony wróg potrafi się poddać: podejdź (**F**) – odda łup, za 300 bonów powie, gdzie wyjście, a jego ludzie zawrą
+rozejm. Zlecenia bierze się u Pośrednika (najwyżej dwa naraz).
 Broń ma bezwładność, przy ścianie lufa się cofa i opada (wtedy nie strzelisz). Celując w miejscu przy parapecie,
 meblu albo krawędzi ściany opierasz broń („podparta” pod celownikiem) – mniejszy odrzut i drżenie.
 Drzwi: **F** otwiera i zamyka (klamka, skrzypienie, słychać to z daleka); **kucając F** uchyla je cicho na szparę

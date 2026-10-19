@@ -468,7 +468,7 @@ func _zrzuty(katalog: String) -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(katalog.path_join("baza_%d.png" % n))
 		n += 1
-	handel.otworz("zbrojmistrz")
+	handel.otworz("posrednik" if OS.get_cmdline_user_args().has("--posrednik") else "zbrojmistrz")
 	for f in 10:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw

@@ -327,6 +327,14 @@ static func _lup(id: String) -> Array:
 		"papierosy":
 			return [_b(Vector3(0, 0.011, 0), Vector3(0.056, 0.022, 0.088), "opakowanie", 0.002, Color(0.95, 0.85, 0.6)),
 				_b(Vector3(0, 0.0225, 0.02), Vector3(0.05, 0.001, 0.03), "czerwony", 0.0)]
+		"granat_f1":
+			var cz := [_w(Vector3(0, 0.0, 0), Vector3(0, 0.085, 0), 0.026, 0.026, "metal_zielony_m", 10, Color(0.4, 0.45, 0.32))]
+			for i in 4:
+				cz.append(_w(Vector3(0, 0.012 + i * 0.02, 0), Vector3(0, 0.02 + i * 0.02, 0), 0.03, 0.03, "metal_zielony_m", 10, Color(0.36, 0.4, 0.28)))
+			cz.append(_w(Vector3(0, 0.085, 0), Vector3(0, 0.1, 0), 0.012, 0.012, "metal_jasny", 8))
+			cz.append(_b(Vector3(0.016, 0.075, 0.0), Vector3(0.008, 0.06, 0.016), "metal_jasny", 0.002))
+			cz.append(_w(Vector3(-0.014, 0.098, 0.0), Vector3(-0.024, 0.098, 0.0), 0.009, 0.009, "metal_jasny", 8))
+			return cz
 		"woda":
 			return [_w(Vector3(0, 0, 0), Vector3(0, 0.16, 0), 0.034, 0.034, "metal_jasny", 12, Color(0.55, 0.7, 0.68)),
 				_w(Vector3(0, 0.16, 0), Vector3(0, 0.22, 0), 0.034, 0.014, "metal_jasny", 12, Color(0.55, 0.7, 0.68)),
