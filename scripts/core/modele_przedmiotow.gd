@@ -327,6 +327,14 @@ static func _lup(id: String) -> Array:
 		"papierosy":
 			return [_b(Vector3(0, 0.011, 0), Vector3(0.056, 0.022, 0.088), "opakowanie", 0.002, Color(0.95, 0.85, 0.6)),
 				_b(Vector3(0, 0.0225, 0.02), Vector3(0.05, 0.001, 0.03), "czerwony", 0.0)]
+		"woda":
+			return [_w(Vector3(0, 0, 0), Vector3(0, 0.16, 0), 0.034, 0.034, "metal_jasny", 12, Color(0.55, 0.7, 0.68)),
+				_w(Vector3(0, 0.16, 0), Vector3(0, 0.22, 0), 0.034, 0.014, "metal_jasny", 12, Color(0.55, 0.7, 0.68)),
+				_w(Vector3(0, 0.22, 0), Vector3(0, 0.245, 0), 0.016, 0.016, "opakowanie", 8, Color(0.85, 0.82, 0.7)),
+				_w(Vector3(0, 0.06, 0), Vector3(0, 0.11, 0), 0.035, 0.035, "opakowanie", 12, Color(0.9, 0.85, 0.4))]
+		"suchary":
+			return [_b(Vector3(0, 0.02, 0), Vector3(0.11, 0.04, 0.07), "opakowanie", 0.004, Color(0.6, 0.55, 0.4)),
+				_b(Vector3(0, 0.041, 0), Vector3(0.07, 0.002, 0.04), "opakowanie", 0.0, Color(0.3, 0.35, 0.25))]
 		"konserwa":
 			return [_w(Vector3(0, 0, 0), Vector3(0, 0.042, 0), 0.042, 0.042, "metal_jasny", 14),
 				_w(Vector3(0, 0.01, 0), Vector3(0, 0.032, 0), 0.0425, 0.0425, "bandaz", 14, Color(0.75, 0.6, 0.35)),

@@ -93,6 +93,16 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			piv.set_meta("roz", minf(najw, 0.25))
 			lewa.ustaw_chwyt("magazynek")
 			prawa.ustaw_chwyt("szczypta")
+		"jedzenie", "picie":
+			var pm := ModelePrzedmiotow.wezel(Przedmiot.nowy(id if id != "" else "konserwa"), true)
+			var piv := Node3D.new()
+			add_child(piv)
+			piv.add_child(pm)
+			var ab: AABB = pm.get_meta("aabb", AABB())
+			pm.position = -Vector3(0, ab.size.y * 0.5, 0)
+			_rek["model"] = piv
+			lewa.ustaw_chwyt("magazynek")
+			prawa.ustaw_chwyt("szczypta" if typ == "jedzenie" else "piesc")
 		"bolostop":
 			_rek["strzykawka"] = _wezel([
 				Bryly.walec(Vector3(0, 0, 0.05), Vector3(0, 0, -0.06), 0.011, 0.011, "opakowanie", 10),
@@ -184,6 +194,10 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_ogladaj(t, f, dol)
 		"zdejmowanie":
 			_zdejmowanie(t, f, dol)
+		"jedzenie":
+			_jedzenie(t, f, dol)
+		"picie":
+			_picie(t, f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
 		_:
@@ -433,6 +447,35 @@ func _siegnij(f: float, dol: Vector3) -> void:
 			p5 = p5.lerp(gora + Vector3(0, -0.12, 0.05), smoothstep(0.85, 1.0, f))
 			_uloz(prawa, p5, Vector3(-0.15 - ciag * 0.4, -0.1, -1.0 + ciag * 0.3), Vector3(0.3, 1.0, 0.2))
 			prawa.ustaw_chwyt("piesc" if f > 0.32 and f < 0.85 else "otwarta")
+
+
+func _jedzenie(t: float, f: float, dol: Vector3) -> void:
+	# lewa trzyma puszkę / suchary nisko przed sobą, prawa nabiera i niesie do ust (rytm kęsów)
+	var m: Node3D = _rek["model"]
+	var sr := Vector3(-0.07, -0.25, -0.4) + dol
+	m.position = sr
+	m.rotation = Vector3(0.5, 0.3, 0.0)
+	var kes := fmod(t / 1.3, 1.0)
+	var do_ust := sin(clampf(kes / 0.7, 0.0, 1.0) * PI)
+	var usta := Vector3(0.02, -0.16, -0.27) + dol
+	var nad := sr + Vector3(0.03, 0.05, 0.0)
+	_uloz(lewa, sr + Vector3(-0.05, -0.04, 0.02), Vector3(0.6, 0.4, -0.6), Vector3(-0.2, -1.0, 0.1))
+	_uloz(prawa, nad.lerp(usta, do_ust), Vector3(-0.5, 0.5 * do_ust, -0.7), Vector3(0.2, 1.0, 0.3))
+	lewa.celuj_lokiec(Vector3(-0.28, -0.5, 0.0), self)
+	prawa.celuj_lokiec(Vector3(0.26, -0.5, 0.0), self)
+
+
+func _picie(t: float, f: float, dol: Vector3) -> void:
+	# butelka uniesiona do ust i przechylona, łyki; na końcu opuszczona
+	var m: Node3D = _rek["model"]
+	var uniesienie := smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.85, 1.0, f))
+	var sr := (Vector3(0.04, -0.3, -0.4) + dol).lerp(Vector3(0.03, -0.17, -0.3) + dol, uniesienie)
+	m.position = sr
+	m.rotation = Vector3(-0.9 * uniesienie - 0.1 + sin(t * 4.0) * 0.04 * uniesienie, 0.0, 0.0)
+	_uloz(prawa, sr + Vector3(0.04, -0.02, 0.02), Vector3(-0.6, 0.2, -0.6), Vector3(0.3, 1.0, 0.2))
+	_uloz(lewa, sr + Vector3(-0.03, -0.08, 0.02), Vector3(0.5, 0.4, -0.6), Vector3(-0.2, -1.0, 0.1))
+	lewa.celuj_lokiec(Vector3(-0.26, -0.5, 0.0), self)
+	prawa.celuj_lokiec(Vector3(0.26, -0.5, 0.0), self)
 
 
 func _ogladaj(t: float, f: float, dol: Vector3) -> void:

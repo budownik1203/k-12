@@ -442,6 +442,16 @@ class Kropka:
 		if g == null or g.cialo.martwy or Sterowanie.blokada:
 			return
 		var c := get_viewport_rect().size * 0.5
+		if g.przygniecenie > 0.02:
+			# przygniecenie ogniem: ciemne obrzeża kadru (tunel widzenia)
+			var vs := get_viewport_rect().size
+			for i in 8:
+				var a := g.przygniecenie * 0.11 * (1.0 - i / 8.0)
+				var m := vs * (0.02 + i * 0.03)
+				draw_rect(Rect2(0, 0, vs.x, m.y), Color(0, 0, 0, a))
+				draw_rect(Rect2(0, vs.y - m.y, vs.x, m.y), Color(0, 0, 0, a))
+				draw_rect(Rect2(0, m.y, m.x, vs.y - 2 * m.y), Color(0, 0, 0, a))
+				draw_rect(Rect2(vs.x - m.x, m.y, m.x, vs.y - 2 * m.y), Color(0, 0, 0, a))
 		if g.bron.ma_lunete() and g.bron.ads > 0.85:
 			_luneta(c, clampf((g.bron.ads - 0.85) / 0.15, 0.0, 1.0))
 		if g.bron.ads > 0.6 and g.bron.podparcie > 0.6 and not g.bron.ma_lunete():

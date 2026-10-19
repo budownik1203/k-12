@@ -864,6 +864,9 @@ func _zrzut_vm(katalog: String) -> void:
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--szaber") and w.frakcja == "szabrownik" and w.posterunek.is_empty():
 			_wrog_testowy = w
 			continue
+		if _wrog_testowy == null and w is Wrog and w.frakcja == "szabrownik" and OS.get_cmdline_user_args().has("--poddanie"):
+			_wrog_testowy = w
+			continue
 		if _wrog_testowy == null and w is Wrog and OS.get_cmdline_user_args().has("--drzwi"):
 			_wrog_testowy = w
 			continue
@@ -1224,6 +1227,79 @@ func _zrzut_animacji(katalog: String) -> void:
 		return
 	if OS.get_cmdline_user_args().has("--drzwi"):
 		await _test_drzwi(katalog)
+		return
+	if OS.get_cmdline_user_args().has("--poddanie"):
+		var w = _wrog_testowy
+		var bl := 0
+		if w == null:
+			print("TEST PODDANIA: brak szabrownika")
+			return
+		var kom := []
+		gracz.komunikat.connect(func(t): kom.append(t))
+		Gra.bony = 1000
+		var p: Vector3 = gracz.global_position - gracz.global_basis.z * 5.0
+		w.global_position = w._najblizszy_na_siatce(p)
+		w.look_at(Vector3(gracz.global_position.x, w.global_position.y, gracz.global_position.z), Vector3.UP)
+		w.posterunek = {}
+		w.cecha = "zwykly"
+		w.lup.append(Przedmiot.nowy("zegarek"))
+		w.gracz = gracz
+		w.stan = "walka"
+		w.morale = 5.0
+		w._w_magazynku = 0
+		w.zapas_mag = 0
+		w.cialo.obrazenia("brzuch", 30.0)
+		var t := 0.0
+		while t < 8.0 and not w.poddany:
+			await get_tree().create_timer(0.25).timeout
+			t += 0.25
+		await get_tree().create_timer(1.0).timeout
+		gracz.look_at(Vector3(w.global_position.x, gracz.global_position.y, w.global_position.z), Vector3.UP)
+		await get_tree().create_timer(0.4).timeout
+		await _zapisz(katalog, "poddanie")
+		print("  poddany po %.1f s: %s, stan %s, wrogi graczowi: %s" % [t, w.poddany, w.stan, w.wrogi(gracz)])
+		if not w.poddany or w.wrogi(gracz):
+			bl += 1
+		var przed := get_tree().get_nodes_in_group("lup_swiat").size()
+		w.interakcja(gracz)
+		await get_tree().create_timer(1.0).timeout
+		var po := get_tree().get_nodes_in_group("lup_swiat").size()
+		print("  łup na ziemi: %d -> %d" % [przed, po])
+		if po <= przed:
+			bl += 1
+		w.interakcja(gracz)
+		print("  informacja: %s, bony %d" % [kom.back() if not kom.is_empty() else "-", Gra.bony])
+		if Gra.bony != 700:
+			bl += 1
+		w.interakcja(gracz)
+		await get_tree().create_timer(1.0).timeout
+		print("  po puszczeniu: stan %s" % w.stan)
+		print("TEST PODDANIA: błędów %d" % bl)
+		return
+	if OS.get_cmdline_user_args().has("--potrzeby"):
+		var bl := 0
+		Gra.potrzeby = {"glod": 20.0, "pragnienie": 12.0}
+		var w := Przedmiot.nowy("woda")
+		var k := Przedmiot.nowy("konserwa")
+		Gra.ekw.kieszenie.dodaj(w)
+		Gra.ekw.kieszenie.dodaj(k)
+		gracz.spozyj(w)
+		await get_tree().create_timer(1.5).timeout
+		await _zapisz(katalog, "pot_picie")
+		await get_tree().create_timer(2.6).timeout
+		gracz.spozyj(k)
+		await get_tree().create_timer(2.0).timeout
+		await _zapisz(katalog, "pot_jedzenie")
+		await get_tree().create_timer(4.6).timeout
+		print("  po: %s, w kieszeni woda %s konserwa %s" % [Gra.potrzeby, Gra.ekw.kieszenie.zawiera(w), Gra.ekw.kieszenie.zawiera(k)])
+		if float(Gra.potrzeby["pragnienie"]) < 40.0 or float(Gra.potrzeby["glod"]) < 50.0 or Gra.ekw.kieszenie.zawiera(w):
+			bl += 1
+		var p0: float = Gra.potrzeby["pragnienie"]
+		await get_tree().create_timer(5.0).timeout
+		print("  spadek pragnienia w 5 s: %.3f" % (p0 - float(Gra.potrzeby["pragnienie"])))
+		if p0 <= float(Gra.potrzeby["pragnienie"]):
+			bl += 1
+		print("TEST POTRZEB: błędów %d" % bl)
 		return
 	if OS.get_cmdline_user_args().has("--ruch_broni"):
 		await _test_ruchu_broni(katalog)

@@ -1816,7 +1816,7 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 
 # ------------------------------------------------------------------ menu kontekstowe
 
-enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ, M_CZYSC, M_TASMA }
+enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ, M_CZYSC, M_TASMA, M_JEDZ }
 const M_DOD := 100
 
 
@@ -1829,6 +1829,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 		_menu.add_item("Obejrzyj", M_OBEJRZYJ)
 	if t == "med" and not tryb_bazy and gracz:
 		_menu.add_item("Użyj", M_UZYJ)
+	if p.defn().has("jedzenie") and not p.nieznany() and (gracz or tryb_bazy):
+		_menu.add_item("Wypij" if p.defn()["jedzenie"].get("picie", false) else "Zjedz", M_JEDZ)
 	if t == "latarka" and not tryb_bazy and gracz:
 		_menu.add_item("Weź do ręki [L]", M_LATARKA)
 	if t == "magazynek":
@@ -1877,6 +1879,19 @@ func _menu_akcja(id: int) -> void:
 	if p == null:
 		return
 	match id:
+		M_JEDZ:
+			if tryb_bazy or gracz == null:
+				var opis := Gra.spozyj(p)
+				if z["typ"] == "siatka":
+					(z["siatka"] as Siatka).usun(p)
+				else:
+					ekw.usun_przedmiot(p)
+				Dzwiek.graj("odloz", -10.0, 1.3)
+				if gracz:
+					gracz.komunikat.emit(opis)
+				_odswiez()
+			else:
+				_po_schowaniu(func(): gracz.spozyj(p))
 		M_UZYJ:
 			var szybki: bool = not (z["typ"] == "siatka" and z["siatka"] == ekw.siatka_plecaka())
 			_po_schowaniu(func(): gracz.uzyj_leku(p, szybki))

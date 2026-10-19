@@ -75,3 +75,10 @@ static func odleglosc_dzwieku(swiat: World3D, zrodlo: Vector3, sluchacz: Vector3
 			if u.dot(v) < 0.75:
 				zakrety += 1
 	return maxf(dl, prosta) + zakrety * 2.5
+
+
+## Odległość punktu p od odcinka a–b (do świstu kul i przygniatania ogniem).
+static func odl_od_odcinka(p: Vector3, a: Vector3, b: Vector3) -> float:
+	var ab := b - a
+	var t := clampf((p - a).dot(ab) / maxf(0.0001, ab.length_squared()), 0.0, 1.0)
+	return p.distance_to(a + ab * t)

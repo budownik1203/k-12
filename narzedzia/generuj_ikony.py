@@ -244,6 +244,14 @@ def draw(pid, d, W, H):
         d.ellipse([16, 16, 28, 28], fill=SZKLO)
         d.ellipse([36, 16, 48, 28], fill=SZKLO)
         shaded_rect(d, [24, 36, 40, 60], METAL)
+    elif pid == "woda":
+        shaded_rect(d, [9, 18, 23, 60], (150, 190, 185))
+        d.rectangle([13, 6, 19, 18], fill=(150, 190, 185))
+        d.rectangle([13, 2, 19, 7], fill=(210, 200, 170))
+        d.rectangle([9, 30, 23, 42], fill=(230, 210, 100))
+    elif pid == "suchary":
+        shaded_rect(d, [4, 8, 28, 24], (160, 145, 100))
+        d.rectangle([9, 13, 23, 18], fill=(80, 90, 60))
     elif pid == "wytrych":
         shaded_rect(d, [6, 6, 26, 26], (70, 40, 30))
         d.line([(10, 22), (24, 8)], fill=METAL_J, width=2)

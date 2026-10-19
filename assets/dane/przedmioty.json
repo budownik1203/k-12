@@ -83,9 +83,11 @@
      "opis": "Stalowy garnek z paskiem. Dzwoni po trafieniu, żebyś wiedział, że żyjesz.", "pancerz": {"slot": "helm", "klasa": 2, "wytrzymalosc": 25, "strefy": ["glowa"]}},
 
     {"id": "zegarek", "nazwa": "Zegarek Rakieta", "typ": "lup", "w": 1, "h": 1, "waga": 0.05, "cena": 6000, "opis": "Spieszy się o 12 lat."},
-    {"id": "wodka", "nazwa": "Wódka Czysta Kordonowa", "typ": "lup", "w": 1, "h": 2, "waga": 0.8, "cena": 4000, "opis": "Waluta twardsza niż bony. Nie pić w rajdzie (patrz: regulamin, pkt 4)."},
+    {"id": "wodka", "nazwa": "Wódka Czysta Kordonowa", "typ": "lup", "w": 1, "h": 2, "waga": 0.8, "cena": 4000, "opis": "Waluta twardsza niż bony. Nie pić w rajdzie (patrz: regulamin, pkt 4). Gasi ból, ale ręce potem drżą.", "jedzenie": {"glod": 0, "pragnienie": -10, "czas": 3.0, "picie": true, "alkohol": true}},
     {"id": "papierosy", "nazwa": "Papierosy Start", "typ": "lup", "w": 1, "h": 1, "waga": 0.03, "cena": 1200, "opis": "Bez filtra. Bez przyszłości."},
-    {"id": "konserwa", "nazwa": "Konserwa turystyczna", "typ": "lup", "w": 1, "h": 1, "waga": 0.35, "cena": 900, "opis": "Data ważności: tak."},
+    {"id": "konserwa", "nazwa": "Konserwa turystyczna", "typ": "lup", "w": 1, "h": 1, "waga": 0.35, "cena": 900, "opis": "Data ważności: tak. Syci, ale suszy.", "jedzenie": {"glod": 38, "pragnienie": -8, "czas": 6.0}},
+    {"id": "woda", "nazwa": "Woda w butelce", "typ": "lup", "w": 1, "h": 2, "waga": 0.55, "cena": 600, "opis": "Butelka po oranżadzie, korek z gazety. Woda raczej z kranu.", "jedzenie": {"glod": 0, "pragnienie": 45, "czas": 3.5, "picie": true}},
+    {"id": "suchary", "nazwa": "Suchary wojskowe", "typ": "lup", "w": 1, "h": 1, "waga": 0.2, "cena": 500, "opis": "Twarde jak regulamin. Bez popicia stają w gardle.", "jedzenie": {"glod": 22, "pragnienie": -10, "czas": 4.0}},
     {"id": "lampa_elektronowa", "nazwa": "Lampa elektronowa", "typ": "lup", "w": 1, "h": 1, "waga": 0.1, "cena": 3500, "opis": "Serce telewizora. Pośrednik płaci za serca."},
     {"id": "akumulator", "nazwa": "Akumulator 6V", "typ": "lup", "w": 2, "h": 2, "waga": 6.0, "cena": 9500, "opis": "Ciężki, pełny kwasu i możliwości."},
     {"id": "kaseta", "nazwa": "Kaseta magnetofonowa", "typ": "lup", "w": 1, "h": 1, "waga": 0.05, "cena": 1500, "opis": "Na etykiecie: „NIE SŁUCHAĆ”. Ktoś posłuchał."},
@@ -120,11 +122,11 @@
   ],
 
   "tabele_lootu": {
-    "szafka_kuchenna": [["tasma", 5], ["konserwa", 30], ["wodka", 12], ["spirytus", 10], ["papierosy", 14], ["kartka_mieso", 14], ["bandaz", 8], ["a_9x18", 6], ["nic", 30]],
-    "szafa": [["maska_gazowa", 5], ["ikona", 2], ["kamizelka_mysliwska", 2], ["chlebak", 3], ["papierosy", 12], ["zegarek", 6], ["lancuszek", 3], ["kaseta", 14], ["radio", 6], ["kamizelka_wedkarska", 3], ["worek", 4], ["bandaz", 8], ["nic", 34]],
+    "szafka_kuchenna": [["tasma", 5], ["woda", 22], ["suchary", 12], ["konserwa", 30], ["wodka", 12], ["spirytus", 10], ["papierosy", 14], ["kartka_mieso", 14], ["bandaz", 8], ["a_9x18", 6], ["nic", 30]],
+    "szafa": [["woda", 6], ["maska_gazowa", 5], ["ikona", 2], ["kamizelka_mysliwska", 2], ["chlebak", 3], ["papierosy", 12], ["zegarek", 6], ["lancuszek", 3], ["kaseta", 14], ["radio", 6], ["kamizelka_wedkarska", 3], ["worek", 4], ["bandaz", 8], ["nic", 34]],
     "biurko": [["wytrych", 3], ["mapa", 6], ["kompas", 4], ["telefon", 4], ["maszyna_do_pisania", 2], ["teczka_akt", 5], ["kaseta", 14], ["papierosy", 10], ["lampa_elektronowa", 10], ["klucz_piwnica", 4], ["a_9x18", 10], ["mag_pw9", 6], ["nic", 30]],
     "skrzynia": [["tlumik_9", 2], ["a_762", 14], ["a_9x18", 16], ["a_12", 14], ["mag_kb47", 6], ["mag_pm63", 6], ["mag_pw9", 8], ["przewody", 10], ["klucz_nastawny", 8], ["akumulator", 4], ["nic", 20]],
-    "skrzynia_wojskowa": [["zestaw_czyszczacy", 6], ["tasma", 4], ["tlumik_762", 2], ["hamulec", 3], ["chwyt", 2], ["latarka_taktyczna", 3], ["kolimator", 1], ["napiersnik", 3], ["plecak_wojskowy", 1], ["lornetka", 3], ["kompas", 4], ["a_762", 20], ["a_762bp", 6], ["mag_kb47", 12], ["kb47", 3], ["pm63", 4], ["opatrunek", 10], ["apteczka", 10], ["helm_wz67", 5], ["kamizelka_kl2", 4], ["szyna", 8], ["nic", 12]],
+    "skrzynia_wojskowa": [["suchary", 10], ["woda", 6], ["zestaw_czyszczacy", 6], ["tasma", 4], ["tlumik_762", 2], ["hamulec", 3], ["chwyt", 2], ["latarka_taktyczna", 3], ["kolimator", 1], ["napiersnik", 3], ["plecak_wojskowy", 1], ["lornetka", 3], ["kompas", 4], ["a_762", 20], ["a_762bp", 6], ["mag_kb47", 12], ["kb47", 3], ["pm63", 4], ["opatrunek", 10], ["apteczka", 10], ["helm_wz67", 5], ["kamizelka_kl2", 4], ["szyna", 8], ["nic", 12]],
     "apteczka_scienna": [["bandaz", 30], ["opatrunek", 12], ["bolostop", 18], ["apteczka", 10], ["szyna", 10], ["spirytus", 10], ["nic", 20]],
     "regal": [["tasma", 9], ["zestaw_czyszczacy", 3], ["kanister", 3], ["gasnica", 4], ["kombinerki", 8], ["wytrych", 3], ["latarka", 5], ["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["nic", 30]]
   },

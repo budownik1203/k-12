@@ -71,6 +71,12 @@ var _sluch_ms := -10000
 var _sluch_pos := Vector3.ZERO
 var _sluch_d := 0.0
 var _przygwozdzenie := 0.0   # ostrzał gracza psuje celność
+var poddany := false          # rzucił broń, ręce w górze – nie strzela do gracza
+var rozejm := false           # oddział przekupiony: nie atakuje gracza, dopóki ten nie strzeli
+var _poddany_t := 0.0
+var _oddal_lup := false
+var _sprzedal_info := false
+var _bron_upuszczona := false
 var _zachwianie := 0.0        # chwila po trafieniu: nie strzela
 var _zachwianie_cd := 0.0
 var _trzymaj_t := 0.0         # po utracie kontaktu: trzyma kąt zamiast od razu szukać
@@ -400,7 +406,7 @@ func wrogi(n: Node) -> bool:
 	if n == null or n == self or not is_instance_valid(n):
 		return false
 	if n is Gracz:
-		return true
+		return not (poddany or rozejm)
 	var f = n.get("frakcja")
 	if f == null:
 		return false
@@ -509,6 +515,14 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 	if cialo.martwy:
 		return
 	morale -= 8.0 + wynik["obr"] * 0.3
+	if od_kogo is Gracz:
+		# strzał gracza zrywa rozejm (cały oddział) i poddanie
+		poddany = false
+		if rozejm and oddzial:
+			for w in oddzial.czlonkowie:
+				if is_instance_valid(w):
+					w.rozejm = false
+		rozejm = false
 	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.8)
 	# zachwianie po trafieniu, ale nie w kółko: po nim chwila odporności (inaczej seria = paraliż)
 	if _zachwianie_cd <= 0.0:
@@ -535,6 +549,8 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 # ------------------------------------------------------------------ percepcja
 
 func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
+	if poddany:
+		return
 	if cialo == null or cialo.martwy or zrodlo == self:
 		return
 	if zrodlo is Wrog and not wrogi(zrodlo):
@@ -587,12 +603,16 @@ func _uslyszal(pos: Vector3, zasieg: float, zrodlo: Node) -> void:
 
 func _sprawdz_wzrok() -> void:
 	widzi = false
+	if poddany:
+		return
 	_wybor_t -= 0.15
 	if _wybor_t <= 0.0 or gracz == null or not _zywy(gracz):
 		_wybor_t = 0.45
 		_wybierz_cel()
-	if gracz == null or not _zywy(gracz):
+	if gracz == null or not _zywy(gracz) or not wrogi(gracz):
 		gracz = null
+		if stan == "walka":
+			stan = "patrol"
 		return
 	widzi = _widze(gracz, _oko(), get_world_3d().direct_space_state)
 
@@ -651,6 +671,8 @@ func _physics_process(delta: float) -> void:
 		_animuj(delta)
 		return
 	match stan:
+		"poddany":
+			_poddany(delta)
 		"opatrywanie":
 			_opatrywanie(delta)
 		"posterunek":
@@ -698,6 +720,8 @@ func _aktualizuj_wykrycie(dt: float) -> void:
 
 
 func _wejdz_w_walke() -> void:
+	if poddany:
+		return
 	_nasluch = false
 	if stan != "walka":
 		_czas_walki = 0.0
@@ -709,7 +733,7 @@ func _wejdz_w_walke() -> void:
 
 ## Wołane przez oddział, gdy ktoś inny wykrył gracza (łączność radiowa).
 func alarm_od_oddzialu(pos: Vector3) -> void:
-	if stan == "ucieczka" or cialo.martwy:
+	if stan == "ucieczka" or stan == "poddany" or cialo.martwy:
 		return
 	ostatnia_pozycja = pos
 	_nasluch = false
@@ -873,6 +897,159 @@ func _szukanie(delta: float) -> void:
 		_napis(["Straciłem go.", "Uciekł.", "Wracamy."].pick_random())
 
 
+# ------------------------------------------------------------------ poddanie się, okup
+
+func _poddaj_sie() -> void:
+	stan = "poddany"
+	poddany = true
+	_poddany_t = 0.0
+	velocity = Vector3.ZERO
+	_idz(global_position)
+	_kucanie_cel = 0.0
+	_napis_t = 0.0
+	_napis(["Nie strzelaj! Poddaję się!", "Dobra, dobra! Nie strzelaj!", "Już, już – rzucam broń!"].pick_random())
+	_upusc_bron()
+	# można do niego podejść i porozmawiać (F)
+	var a := Area3D.new()
+	a.collision_layer = Balistyka.WARSTWA_INTERAKCJE
+	a.collision_mask = 0
+	a.monitoring = false
+	a.set_meta("interakcja", self)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.7, 1.8, 0.7)
+	cs.shape = bs
+	cs.position.y = 0.9
+	a.add_child(cs)
+	add_child(a)
+	_obszar_rozmowy = a
+
+
+var _obszar_rozmowy: Area3D
+
+
+func _upusc_bron() -> void:
+	if _bron_upuszczona:
+		return
+	_bron_upuszczona = true
+	var bd: Dictionary = bron.defn()["bron"]
+	if bd.has("wewnetrzny"):
+		bron.dane["wewn"] = clampi(_w_magazynku, 0, int(bd["wewnetrzny"]))
+	elif bron.dane["mag"] != null:
+		bron.dane["mag"].dane["naboje"] = maxi(0, _w_magazynku - 1)
+		bron.dane["komora"] = amunicja_id if _w_magazynku > 0 else ""
+	bron.dane["stan"] = randf_range(35.0, 80.0)
+	var l := LupNaZiemi.new()
+	l.przedmiot = bron
+	var bw: Node3D = _czesci.get("bron")
+	if bw and is_instance_valid(bw):
+		l.rzut_z = bw.global_position
+		bw.visible = false
+	get_parent().add_child(l)
+	l.global_position = global_position - global_basis.z * 0.7 + Vector3.UP * 0.4
+
+
+func _poddany(delta: float) -> void:
+	_poddany_t += delta
+	biegnie = false
+	_kucanie_cel = 0.0
+	var g := get_tree().get_first_node_in_group("gracz") as Node3D
+	if g:
+		_obroc_do(g.global_position, delta, 3.0)
+		# gracz odszedł albo minęła dłuższa chwila – ucieka (już niegroźny)
+		if g.global_position.distance_to(global_position) > 16.0 or _poddany_t > 90.0:
+			_odejdz()
+
+
+func _odejdz() -> void:
+	stan = "ucieczka"
+	morale = 0.0
+	czas_bez_kontaktu = 0.0
+	if _obszar_rozmowy and is_instance_valid(_obszar_rozmowy):
+		_obszar_rozmowy.queue_free()
+
+
+func tekst_interakcji(g) -> String:
+	if not poddany or cialo.martwy:
+		return ""
+	if not _oddal_lup:
+		return "Każ oddać łup i amunicję"
+	if not _sprzedal_info:
+		return "Zapłać za informacje i rozejm z jego ludźmi (300 bonów)"
+	return "Puść wolno"
+
+
+func interakcja(g) -> void:
+	if not poddany or cialo.martwy:
+		return
+	if not _oddal_lup:
+		_oddal_lup = true
+		var rzeczy: Array = lup.duplicate()
+		lup.clear()
+		var bd: Dictionary = bron.defn()["bron"]
+		if not bd.has("wewnetrzny"):
+			for i in zapas_mag:
+				rzeczy.append(Gra.magazynek(bd["magazynki"][0], amunicja_id, randi_range(5, _pojemnosc())))
+		else:
+			rzeczy.append(Przedmiot.nowy(amunicja_id, randi_range(3, 10)))
+		zapas_mag = 0
+		for p in rzeczy:
+			var l := LupNaZiemi.new()
+			l.przedmiot = p
+			get_parent().add_child(l)
+			l.global_position = global_position - global_basis.z * randf_range(0.5, 0.9) + global_basis.x * randf_range(-0.4, 0.4) + Vector3.UP * 0.3
+		Dzwiek.graj_3d("upadek_miekki", global_position, get_parent(), -6.0)
+		_napis_t = 0.0
+		_napis(["Masz, bierz wszystko!", "To wszystko, przysięgam!", "Tylko nie strzelaj..."].pick_random())
+		g.komunikat.emit("Oddał %d %s." % [rzeczy.size(), "rzecz" if rzeczy.size() == 1 else "rzeczy"])
+		return
+	if not _sprzedal_info:
+		if Gra.bony < 300:
+			g.komunikat.emit("Za mało bonów (300).")
+			return
+		Gra.bony -= 300
+		Gra.zmiana_bonow.emit()
+		_sprzedal_info = true
+		g.komunikat.emit(_informacja(g))
+		# rozejm: jego oddział nie atakuje gracza (dopóki gracz nie zacznie strzelać do nich)
+		if oddzial:
+			for w in oddzial.czlonkowie:
+				if is_instance_valid(w) and w != self:
+					w.rozejm = true
+					if w.stan == "walka":
+						w.stan = "patrol"
+		return
+	_odejdz()
+	g.komunikat.emit("Odchodzi z rękami w górze, potem biegnie.")
+
+
+## Co mówi poddany po zapłacie: najbliższe wyjście ze strefy i ilu uzbrojonych jest w okolicy.
+func _informacja(g) -> String:
+	var rajd := get_tree().get_first_node_in_group("ui_rajdu")
+	var t := "„"
+	if rajd and rajd.get("info"):
+		var best = null
+		var bd := 1e9
+		for w in rajd.info["wyjscia"]:
+			var e := w as Node3D
+			var d := e.global_position.distance_to(g.global_position)
+			var dost: bool = bool(w.get("otwarte")) and String(w.get("wymagany_klucz")) == "" and String(w.get("typ")) != "czasowe"
+			if d < bd and dost:
+				bd = d
+				best = w
+		if best:
+			var kier: Vector3 = (best as Node3D).global_position - g.global_position
+			var strony := ["na północ", "na północny wschód", "na wschód", "na południowy wschód", "na południe", "na południowy zachód", "na zachód", "na północny zachód"]
+			var kat := fposmod(atan2(kier.x, -kier.z), TAU)
+			t += "%s – %s, jakieś %d metrów. " % [String(best.get("nazwa")) if best.get("nazwa") != null else "Wyjście", strony[int(round(kat / (TAU / 8.0))) % 8], int(bd)]
+	var ilu := 0
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w != self and is_instance_valid(w) and w is Wrog and not w.cialo.martwy and not w.rozejm and w.global_position.distance_to(global_position) < 30.0:
+			ilu += 1
+	t += ("Moi chłopcy cię nie ruszą. " if oddzial else "") + ("W okolicy jeszcze %d uzbrojonych.”" % ilu if ilu > 0 else "W okolicy czysto, na razie.”")
+	return t
+
+
 func _ucieczka(delta: float) -> void:
 	biegnie = true
 	_kucanie_cel = 0.0
@@ -887,6 +1064,12 @@ func _ucieczka(delta: float) -> void:
 	if czas_bez_kontaktu > 18.0:
 		morale = 30.0
 		stan = "szukanie"
+	# uciekający na muszce gracza (blisko, celuje w niego) – staje i podnosi ręce
+	if not rozejm and gracz is Gracz and widzi and frakcja != "wojskowy" and global_position.distance_to(gracz.global_position) < 8.0 and gracz.bron.ads > 0.6:
+		var do_mnie: Vector3 = (_punkt_celu(self, false) - gracz.kamera.global_position).normalized()
+		if do_mnie.dot(-gracz.kamera.global_basis.z) > 0.985 and randf() < delta * 2.0:
+			_poddaj_sie()
+			return
 	# osaczony strzela
 	if widzi and gracz and global_position.distance_to(gracz.global_position) < 5.0:
 		_strzelaj(delta)
@@ -909,6 +1092,12 @@ func _walka(delta: float) -> void:
 			_napis(["Gdzie on jest?", "Straciłem kontakt!", "Trzymać kąty!"].pick_random())
 			return
 	if morale < 12.0 and cecha != "agresywny" and posterunek.is_empty():
+		# osaczony, ranny albo bez amunicji – przy graczu blisko rzuca broń i się poddaje
+		var blisko: bool = gracz is Gracz and widzi and global_position.distance_to(gracz.global_position) < 9.0
+		var beznadzieja: bool = cialo.procent() < 0.6 or (_w_magazynku <= 0 and zapas_mag <= 0) or _przygwozdzenie > 1.2
+		if blisko and beznadzieja and frakcja != "wojskowy" and randf() < 0.6:
+			_poddaj_sie()
+			return
 		stan = "ucieczka"
 		czas_bez_kontaktu = 0.0
 		_napis(["Spadam stąd!", "Odwrót!", "Nie płacą mi za to!"].pick_random())
@@ -1082,6 +1271,20 @@ func _wybierz_pozycje() -> void:
 		_napis(["Zmieniam pozycję!", "Osłaniaj!", "Przechodzę!"].pick_random())
 
 
+## Kula przeleciała blisko (przygniatanie ogniem): gorsza celność, częstsze krycie się, spadek morale.
+func przygniec(sila: float, od_kogo: Node = null) -> void:
+	if cialo == null or cialo.martwy:
+		return
+	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.35 * sila)
+	morale -= 1.2 * sila
+	if od_kogo is Node3D and wrogi(od_kogo) and stan in ["patrol", "czujny", "szukanie"]:
+		gracz = od_kogo
+		ostatnia_pozycja = (od_kogo as Node3D).global_position
+		stan = "szukanie"
+	if _przygwozdzenie > 1.2 and randf() < 0.3:
+		_napis(["Przygniata nas!", "Głowy w dół!", "Nie da się wychylić!"].pick_random())
+
+
 func _strzelaj(delta: float) -> void:
 	_strzal_t -= delta
 	if _strzal_t > 0.0:
@@ -1154,10 +1357,14 @@ func _strzelaj(delta: float) -> void:
 		else:
 			Efekty.slad(get_parent(), r["position"], r["normal"])
 			Efekty.czastki(get_parent(), r["position"], r["normal"], Color(0.5, 0.48, 0.44), 5)
-			# świst kuli blisko gracza
+		# kula obok gracza (nie w niego): świst i przygniecenie ogniem
+		if not col.has_meta("gracz"):
 			var gr := get_tree().get_first_node_in_group("gracz") as Node3D
-			if gr and r["position"].distance_to(gr.global_position) < 2.5:
-				Dzwiek.graj("swist", -6.0)
+			if gr and gr.has_method("przygniec"):
+				var dd := Balistyka.odl_od_odcinka(gr.global_position + Vector3.UP * 1.5, oko, r["position"])
+				if dd < 1.8:
+					Dzwiek.graj("swist", lerpf(-2.0, -12.0, dd / 1.8), randf_range(0.9, 1.15))
+					gr.przygniec(1.0 - dd / 1.8)
 	var wylot: Vector3 = (_czesci["bron"] as Node3D).global_transform * Vector3(_czesci["wylot"])
 	Efekty.blysk(get_parent(), wylot, 2.5)
 	var bxf: Transform3D = (_czesci["bron"] as Node3D).global_transform
@@ -1317,8 +1524,14 @@ func _animuj(delta: float) -> void:
 			_mag_node.position = (b.transform.affine_inverse() * reka_l_cel) - Vector3(0, -0.08, -0.05)
 		else:
 			reka_l_cel = mag_poz.lerp(b.transform * Vector3(_md["przod"]), (przel - 0.85) / 0.15)
-	_ik(_czesci["ramie_p"], _czesci["lokiec_p"], b.transform * Vector3(0, -0.04, 0.03), Vector3(1.0, -1.0, 0.4))
-	_ik(_czesci["ramie_l"], _czesci["lokiec_l"], reka_l_cel, Vector3(-1.0, -1.0, 0.2))
+	if poddany:
+		# ręce w górze, dłonie przy głowie
+		var drz := sin(_oddech * 9.0) * 0.006
+		_ik(_czesci["ramie_p"], _czesci["lokiec_p"], Vector3(0.24, 0.93 + drz, -0.04), Vector3(1.0, -0.2, 0.3))
+		_ik(_czesci["ramie_l"], _czesci["lokiec_l"], Vector3(-0.24, 0.93 - drz, -0.04), Vector3(-1.0, -0.2, 0.3))
+	else:
+		_ik(_czesci["ramie_p"], _czesci["lokiec_p"], b.transform * Vector3(0, -0.04, 0.03), Vector3(1.0, -1.0, 0.4))
+		_ik(_czesci["ramie_l"], _czesci["lokiec_l"], reka_l_cel, Vector3(-1.0, -1.0, 0.2))
 	# latarka na broni
 	if _latarka:
 		_latarka.visible = stan in ["walka", "szukanie", "czujny"]
@@ -1446,23 +1659,26 @@ func _zwloki() -> void:
 	var plecak := Siatka.new(5, 4)
 	var na_ciele := Siatka.new(5, 3)
 	pj.siatka = kurtka
-	# broń z resztą amunicji w magazynku – wypada z rąk i leży obok
+	# broń z resztą amunicji w magazynku – wypada z rąk i leży obok (chyba że już ją rzucił, poddając się)
 	var bd: Dictionary = bron.defn()["bron"]
-	if bd.has("wewnetrzny"):
+	if _bron_upuszczona:
+		pass
+	elif bd.has("wewnetrzny"):
 		bron.dane["wewn"] = clampi(_w_magazynku, 0, int(bd["wewnetrzny"]))
 		bron.dane["komora"] = ""
 	elif bron.dane["mag"] != null:
 		bron.dane["mag"].dane["naboje"] = maxi(0, _w_magazynku - 1)
 		bron.dane["komora"] = amunicja_id if _w_magazynku > 0 else ""
-	bron.dane["stan"] = randf_range(35.0, 80.0)    # broń z ciała: zaniedbana
-	var l := LupNaZiemi.new()
-	l.przedmiot = bron
-	var bw: Node3D = _czesci.get("bron")
-	if bw and is_instance_valid(bw):
-		l.rzut_z = bw.global_position
-		bw.visible = false
-	get_parent().add_child(l)
-	l.global_position = global_position + global_basis.x * 0.6 + global_basis.z * 0.2 + Vector3.UP * 0.4
+	if not _bron_upuszczona:
+		bron.dane["stan"] = randf_range(35.0, 80.0)    # broń z ciała: zaniedbana
+		var l := LupNaZiemi.new()
+		l.przedmiot = bron
+		var bw: Node3D = _czesci.get("bron")
+		if bw and is_instance_valid(bw):
+			l.rzut_z = bw.global_position
+			bw.visible = false
+		get_parent().add_child(l)
+		l.global_position = global_position + global_basis.x * 0.6 + global_basis.z * 0.2 + Vector3.UP * 0.4
 	if not bd.has("wewnetrzny"):
 		for i in zapas_mag:
 			var m := Gra.magazynek(bd["magazynki"][0], amunicja_id, randi_range(5, _pojemnosc()))

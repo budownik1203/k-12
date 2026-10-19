@@ -11,6 +11,7 @@ var bony := 0
 var skrytka: Siatka
 var ekw: Ekwipunek
 var zdrowie := {}            # część ciała -> hp po rajdzie (puste = pełne)
+var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8}
 var ostatni_raport := {}
@@ -33,6 +34,7 @@ func nowa_gra() -> void:
 	skrytka = Siatka.new(10, 14, 0.0)
 	ekw = Ekwipunek.new()
 	zdrowie = {}
+	potrzeby = {"glod": 80.0, "pragnienie": 80.0}
 	statystyki = {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 	poczta = []
 	# ekwipunek startowy
@@ -47,7 +49,7 @@ func nowa_gra() -> void:
 	ekw.dodaj(Przedmiot.nowy("apteczka"))
 	ekw.dodaj(Przedmiot.nowy("latarka"))
 	# skrytka
-	for pid in ["obrzyn", "bandaz", "bandaz", "opatrunek", "bolostop", "konserwa", "papierosy", "wodka"]:
+	for pid in ["obrzyn", "bandaz", "bandaz", "opatrunek", "bolostop", "konserwa", "woda", "suchary", "papierosy", "wodka"]:
 		skrytka.dodaj(Przedmiot.nowy(pid))
 	skrytka.dodaj(Przedmiot.nowy("a_12", 16))
 	skrytka.dodaj(Przedmiot.nowy("a_9x18", 40))
@@ -138,6 +140,18 @@ func rozpocznij_rajd() -> void:
 
 ## wynik: {"przezyl": bool, "przyczyna": String, "czas": float, "zabici": Array, "wyjscie": String,
 ##         "wartosc_poczatkowa": int, "utracone": Array, "zdrowie": Dictionary, "zdarzenia": Array}
+## Zjedzenie / wypicie (w bazie od razu, w rajdzie po czynności gracza): zmienia głód i pragnienie.
+func spozyj(p: Przedmiot) -> String:
+	var j: Dictionary = p.defn().get("jedzenie", {})
+	potrzeby["glod"] = clampf(float(potrzeby["glod"]) + float(j.get("glod", 0)), 0.0, 100.0)
+	potrzeby["pragnienie"] = clampf(float(potrzeby["pragnienie"]) + float(j.get("pragnienie", 0)), 0.0, 100.0)
+	if j.get("alkohol", false):
+		return "Pali w gardle. Ból zelżał, ręce drżą."
+	if j.get("picie", false):
+		return "Napojony (%d%%)" % int(potrzeby["pragnienie"])
+	return "Najedzony (%d%%)%s" % [int(potrzeby["glod"]), " – chce się pić" if float(j.get("pragnienie", 0)) < 0.0 else ""]
+
+
 func _odblokuj_ekw() -> void:
 	if ekw:
 		# w schronie wszystko rozpoznane (spokojnie obejrzane przy stole)
@@ -182,6 +196,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 		wynik["ubezpieczone"] = zwrot
 		ekw.wyczysc()
 		zdrowie = {}
+		potrzeby = {"glod": 60.0, "pragnienie": 60.0}
 	ostatni_raport = wynik
 	zapisz()
 	get_tree().change_scene_to_file("res://scenes/raport.tscn")
@@ -192,7 +207,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
-		"zdrowie": zdrowie, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
+		"zdrowie": zdrowie, "potrzeby": potrzeby, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
 		"latarka_wydana": true,
 	}
 	var txt := JSON.stringify(d)
@@ -217,6 +232,7 @@ func wczytaj() -> bool:
 		skrytka = Siatka.from_dict(d["skrytka"])
 		ekw = Ekwipunek.from_dict(d["ekw"])
 		zdrowie = d.get("zdrowie", {})
+		potrzeby = {"glod": float(d.get("potrzeby", {}).get("glod", 80.0)), "pragnienie": float(d.get("potrzeby", {}).get("pragnienie", 80.0))}
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])

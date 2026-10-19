@@ -310,6 +310,8 @@ func _physics_process(delta: float) -> void:
 	_interakcje(we_aktywne)
 	_bron(delta, we_aktywne)
 	_dzwieki_ciala(delta)
+	_potrzeby(delta)
+	przygniecenie = maxf(0.0, przygniecenie - delta * 0.3)
 	if we_aktywne and Input.is_action_just_pressed("latarka"):
 		if latarka_w_rece:
 			latarka_wlaczona = not latarka_wlaczona
@@ -435,7 +437,7 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	if moze_biec and kier.length() > 0.1:
 		wytrzymalosc = maxf(0.0, wytrzymalosc - delta * (11.0 + prog * 5.0))
 	else:
-		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0))
+		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0) * mnoznik_sil())
 	var cel := (global_basis * kier.normalized()) * v
 	# ciężki ruch: rozpędzanie i hamowanie w m/s², zależne od obciążenia; w powietrzu prawie bez kontroli
 	var teraz := Vector2(velocity.x, velocity.z)
@@ -583,6 +585,68 @@ func uzyj_leku_efekt(efekty: Array) -> void:
 		komunikat.emit("Brak: " + {"krwawienie_lekkie": "bandaża", "krwawienie_ciezkie": "opatrunku", "leczenie": "apteczki", "zlamanie": "szyny", "bol": "środka przeciwbólowego"}.get(efekty[0], "leku"))
 		return
 	uzyj_leku(z["p"], z["szybki"])
+
+
+var alkohol := 0.0             # sekundy drżenia rąk po wódce
+var przygniecenie := 0.0       # 0..1 – ostrzał tuż obok: ciemnieje obraz, drżą ręce, gorsza celność
+
+
+## Kula przeleciała blisko: przygniecenie ogniem (rośnie z serią, opada po kilku sekundach spokoju).
+func przygniec(sila: float) -> void:
+	przygniecenie = minf(1.0, przygniecenie + 0.22 * sila)
+	_kop += 0.004 * sila
+var _potrzeby_prog := {"glod": 100.0, "pragnienie": 100.0}
+
+
+## Jedzenie i picie w rajdzie: czynność z animacją (przerywalna), potem zmiana głodu i pragnienia.
+func spozyj(p: Przedmiot) -> void:
+	if not akcja.is_empty():
+		zaplanuj(p.nazwa(), func(): spozyj(p))
+		return
+	var j: Dictionary = p.defn().get("jedzenie", {})
+	var picie: bool = j.get("picie", false)
+	Gra.emituj_halas(global_position, 3.0, self)
+	Dzwiek.graj("szelest_1" if not picie else "odloz", -12.0, 0.9)
+	zacznij_akcje(("Picie: " if picie else "Jedzenie: ") + p.nazwa(), float(j.get("czas", 4.0)), func():
+		if not ekw.usun_przedmiot(p):
+			return
+		var opis := Gra.spozyj(p)
+		if j.get("alkohol", false):
+			cialo.przeciwbol = maxf(cialo.przeciwbol, 75.0)
+			alkohol = maxf(alkohol, 120.0)
+		ekw.zmieniony.emit()
+		komunikat.emit(opis)
+		, "picie" if picie else "jedzenie", 0, Callable(), {"id": p.id})
+
+
+## Głód i pragnienie w rajdzie: maleją z czasem (szybciej w biegu); niskie spowalniają odzyskiwanie sił,
+## zerowe powoli odbierają zdrowie. Komunikaty przy przekraczaniu progów.
+func _potrzeby(delta: float) -> void:
+	if tryb_bazy:
+		return
+	var bieg := 1.0 if _biegnie else 0.0
+	Gra.potrzeby["glod"] = maxf(0.0, float(Gra.potrzeby["glod"]) - delta * 0.012 * (1.0 + bieg * 0.8))
+	Gra.potrzeby["pragnienie"] = maxf(0.0, float(Gra.potrzeby["pragnienie"]) - delta * 0.02 * (1.0 + bieg * 1.5))
+	alkohol = maxf(0.0, alkohol - delta)
+	for k in ["glod", "pragnienie"]:
+		var v: float = Gra.potrzeby[k]
+		for prog in [30.0, 15.0, 0.0]:
+			if v <= prog and float(_potrzeby_prog[k]) > prog:
+				komunikat.emit({"glod": {30.0: "Burczy w brzuchu.", 15.0: "Słabniesz z głodu – zjedz coś.", 0.0: "Głód zaczyna wyniszczać organizm."},
+					"pragnienie": {30.0: "Zaschło w gardle.", 15.0: "Kręci się w głowie z pragnienia – napij się.", 0.0: "Odwodnienie – tracisz siły i zdrowie."}}[k][prog])
+		_potrzeby_prog[k] = v
+		if v <= 0.0:
+			cialo.obrazenia("brzuch", delta * (0.15 if k == "glod" else 0.25), k)
+
+
+## Mnożnik odzyskiwania sił (głód, pragnienie).
+func mnoznik_sil() -> float:
+	var m := 1.0
+	if float(Gra.potrzeby["glod"]) < 25.0:
+		m *= 0.75
+	if float(Gra.potrzeby["pragnienie"]) < 25.0:
+		m *= 0.7
+	return m
 
 
 ## czesc: część ciała wybrana w panelu zdrowia ("" = najpilniejsza).

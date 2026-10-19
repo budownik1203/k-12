@@ -61,6 +61,15 @@ func _draw() -> void:
 		return
 	var t := Time.get_ticks_msec() / 1000.0
 	var f := Motyw.mono_b()
+	# głód i pragnienie: dwa pionowe paski w dolnych rogach (jedzenie po lewej, woda po prawej)
+	for e in [["jedz.", "glod", 6.0, Color(0.75, 0.6, 0.3)], ["woda", "pragnienie", 120.0, Color(0.35, 0.6, 0.8)]]:
+		var v: float = clampf(float(Gra.potrzeby.get(e[1], 100.0)) / 100.0, 0.0, 1.0)
+		var r := Rect2(float(e[2]), 168, 22, 70)
+		draw_rect(r, Color(0.08, 0.08, 0.07, 0.92))
+		var kol: Color = e[3] if v > 0.25 else (Color(0.85, 0.3, 0.15) if fmod(t, 1.0) < 0.6 or v > 0.15 else Color(0.4, 0.1, 0.05))
+		draw_rect(Rect2(r.position.x, r.end.y - r.size.y * v, r.size.x, r.size.y * v), Color(kol, 0.85))
+		draw_rect(r, Color(0, 0, 0, 0.8), false, 1.0)
+		draw_string(f, Vector2(r.position.x - 2, 162), e[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.85, 0.82, 0.7))
 	for cz in CZESCI:
 		var frac: float = cialo.hp[cz] / Cialo.MAX[cz]
 		for r in CZESCI[cz]:

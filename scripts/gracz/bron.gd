@@ -770,7 +770,7 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	var ad: Dictionary = Dane.def(amun)["amunicja"]
 	var srut := int(ad.get("srut", 1))
 	var baza: float = lerpf(float(bd["rozrzut_biodro"]) * przedmiot.mod("rozrzut_biodro"), float(bd["rozrzut_ads"]) * przedmiot.mod("rozrzut_ads"), ads)
-	var kat: float = baza * (1.0 + _ruch * 1.4) * lerpf(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) + bloom
+	var kat: float = baza * (1.0 + _ruch * 1.4) * lerpf(1.0, 0.8, we.get("kucanie", 0.0)) * we.get("celnosc", 1.0) * (1.0 + float(gracz.get("przygniecenie")) * 0.8) + bloom
 	# zabrudzona lufa i luzy: brudna broń trochę rozrzuca
 	kat *= 1.0 + (100.0 - float(przedmiot.dane.get("stan", 100.0))) / 260.0
 	var space := kamera.get_world_3d().direct_space_state
@@ -839,6 +839,15 @@ func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr:
 	var q := PhysicsRayQueryParameters3D.create(od, od + kier * 150.0, MASKA_STRZALU)
 	q.collide_with_areas = true
 	var r := space.intersect_ray(q)
+	# kula przelatująca obok wroga przygniata go (kryje się, gorzej celuje, traci morale)
+	var koniec: Vector3 = r["position"] if not r.is_empty() else od + kier * 150.0
+	var trafiony_w = r["collider"].get_meta("wlasciciel") if not r.is_empty() and r["collider"].has_meta("wlasciciel") else null
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w == trafiony_w or not is_instance_valid(w) or not w.has_method("przygniec"):
+			continue
+		var dd := Balistyka.odl_od_odcinka((w as Node3D).global_position + Vector3.UP * 1.4, od, koniec)
+		if dd < 2.0:
+			w.przygniec(1.0 - dd / 2.0, gracz)
 	if r.is_empty():
 		return
 	var col: Object = r["collider"]
@@ -1166,7 +1175,9 @@ func _process(delta: float) -> void:
 		var zm := 1.0 - wytrz / 100.0
 		_oddech_t += delta * (1.0 + zm * 1.6)
 		var celn: float = gracz.cialo.mnoznik_celnosci() if gracz.get("cialo") else 1.0
-		var amp := 0.0022 * (1.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0) * (1.0 - t * 0.6) * (1.0 - podparcie * 0.75)
+		var alk: float = float(gracz.get("alkohol")) if gracz.get("alkohol") != null else 0.0
+		var prz: float = float(gracz.get("przygniecenie")) if gracz.get("przygniecenie") != null else 0.0
+		var amp := 0.0022 * (1.0 + prz * 3.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0 + minf(2.5, alk / 40.0)) * (1.0 - t * 0.6) * (1.0 - podparcie * 0.75)
 		poz += Vector3(sin(_oddech_t * 1.1) * amp, sin(_oddech_t * 2.2) * amp * 0.7, 0.0)
 		rot += Vector3(sin(_oddech_t * 2.2 + 0.4) * amp * 1.4, sin(_oddech_t * 1.1 + 0.8) * amp * 1.2, 0.0)
 	# lufa przy przeszkodzie: broń cofnięta i opuszczona (nie przenika przez ścianę), strzał niemożliwy
