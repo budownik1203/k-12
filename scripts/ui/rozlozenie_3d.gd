@@ -115,7 +115,8 @@ func otworz_kieszen(co: String, i: int) -> float:
 		for zm in krok:
 			dl = maxf(dl, float(zm[3]))
 		czas += dl + 0.03
-		tw.tween_callback(func(): _dzwiek(dz))
+		var jj := j
+		tw.tween_callback(func(): _dzwiek(dz); _aktywuj(co, i, jj, dl + 0.1))
 		for zm in krok:
 			tw.parallel().tween_property(zm[0], NodePath(String(zm[1])), zm[2], float(zm[3])).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw.tween_interval(0.03)
@@ -126,6 +127,7 @@ func otworz_kieszen(co: String, i: int) -> float:
 func ustaw_stan(co: String, stany: Array) -> void:
 	if not _modele.has(co):
 		return
+	_cicho = true
 	var kz: Array = _modele[co].get("kieszenie", [])
 	for i in mini(kz.size(), stany.size()):
 		if bool(stany[i]):
@@ -133,6 +135,7 @@ func ustaw_stan(co: String, stany: Array) -> void:
 			for k in (e["kroki"] as Array).size():
 				ustaw_krok(co, i, k, 1.0)
 			e["otwarta"] = true
+	_cicho = false
 
 
 func liczba_krokow(co: String, i: int) -> int:
@@ -174,8 +177,10 @@ func ustaw_krok(co: String, i: int, k: int, f: float) -> void:
 	var e := _kieszen(co, i)
 	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
 		return
-	if e.get("tw") and (e["tw"] as Tween).is_valid():
+	if e.get("tw") and (e["tw"] as Tween).is_valid() and not _w_tweenie:
 		(e["tw"] as Tween).kill()
+	if not _cicho:
+		_aktywuj(co, i, k, 0.35)
 	var krok: Array = e["kroki"][k]
 	for q in krok.size():
 		var zm: Array = krok[q]
@@ -194,6 +199,7 @@ func krok_anim(co: String, i: int, k: int, otworz_: bool, czas := 0.15) -> void:
 	var e := _kieszen(co, i)
 	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
 		return
+	_aktywuj(co, i, k, czas + 0.25, true)
 	var tw := create_tween()
 	tw.tween_method(func(f): ustaw_krok(co, i, k, f), 0.0 if otworz_ else 1.0, 1.0 if otworz_ else 0.0, czas)
 
@@ -221,10 +227,102 @@ func zamknij_kieszen(co: String, i: int) -> float:
 		czas += dl + 0.03
 		var dz: String = e["dzwieki"][j] if j < (e["dzwieki"] as Array).size() else "plecak"
 		var jj := j
-		tw.tween_callback(func(): _dzwiek(dz))
+		tw.tween_callback(func(): _dzwiek(dz); _aktywuj(co, i, jj, dl + 0.1))
 		tw.tween_method(func(f): ustaw_krok(co, i, jj, f), 1.0, 0.0, dl)
 		tw.tween_interval(0.03)
 	return czas
+
+
+# ------------------------------------------------------------------ dłoń przy zapięciach
+
+var _reka: Reka
+var _reka_cel := {}           # {"co", "i", "k"} – krok, przy którym pracuje dłoń
+var _reka_t := 9.0            # ile jeszcze dłoń zostaje przy zapięciu
+var _reka_klik := 0.0         # wciśnięcie klamry (krótki ruch palców)
+var _reka_poz := Vector3(0.22, -0.5, -0.2)
+var _cicho := false
+var _w_tweenie := false
+const _BARK := Vector3(0.26, -0.34, 0.1)
+const _SPOCZYNEK := Vector3(0.24, -0.55, -0.15)
+
+
+## Dłoń idzie do zapięcia, które teraz się rusza (gest gracza albo animacja), i trzyma się go.
+func _aktywuj(co: String, i: int, k: int, czas: float, klik := false) -> void:
+	_reka_cel = {"co": co, "i": i, "k": k}
+	_reka_t = czas
+	if klik:
+		_reka_klik = 1.0
+
+
+## Punkt chwytu kroku: wolny brzeg klapy / suwak / blokada sznurka (w świecie).
+func _punkt_chwytu(co: String, i: int, k: int) -> Variant:
+	var e := _kieszen(co, i)
+	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
+		return null
+	var zm: Array = e["kroki"][k][0]
+	var n := zm[0] as Node3D
+	if n == null or not is_instance_valid(n):
+		return null
+	var key := "chwyt_%d" % k
+	if not e.has(key):
+		# brzeg najdalej od zawiasu (góra, przód) z obrysu siatek węzła – liczony raz, w układzie węzła
+		var ab := AABB()
+		var pierwszy := true
+		for mi in ([n] if n is MeshInstance3D else []) + n.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			var t := n.global_transform.affine_inverse() * m.global_transform
+			var a := t * m.get_aabb()
+			ab = a if pierwszy else ab.merge(a)
+			pierwszy = false
+		var lok := Vector3.ZERO
+		if not pierwszy:
+			if String(zm[1]).begins_with("blend"):
+				lok = Vector3(ab.get_center().x, ab.end.y, ab.end.z * 0.85)
+			elif String(zm[1]).begins_with("position"):
+				lok = ab.get_center()
+			else:
+				# klapa: chwyt w ok. 60% długości od zawiasu (dłoń zostaje w kadrze, gdy klapa idzie w górę)
+				var brzeg := ab.end.z if absf(ab.end.z) > absf(ab.position.z) else ab.position.z
+				lok = Vector3(ab.get_center().x, ab.get_center().y, brzeg * 0.6)
+		e[key] = lok
+	return n.global_transform * Vector3(e[key])
+
+
+func _exit_tree() -> void:
+	if _reka and is_instance_valid(_reka):
+		_reka.queue_free()
+
+
+func _process(delta: float) -> void:
+	if _kam == null or not is_instance_valid(_kam):
+		return
+	_reka_t -= delta
+	_reka_klik = maxf(0.0, _reka_klik - delta * 5.0)
+	var cel_lok := _SPOCZYNEK
+	var aktywna := false
+	if _reka_t > 0.0 and not _reka_cel.is_empty():
+		var p = _punkt_chwytu(_reka_cel["co"], _reka_cel["i"], _reka_cel["k"])
+		if p != null:
+			cel_lok = _kam.global_transform.affine_inverse() * (p as Vector3)
+			aktywna = true
+	if _reka == null:
+		if not aktywna:
+			return
+		_reka = Reka.new(true, false, "otwarta", 0.5)
+		_kam.add_child(_reka)
+		_reka.position = _SPOCZYNEK
+		_reka_poz = _SPOCZYNEK
+	_reka.visible = aktywna or _reka_poz.distance_to(_SPOCZYNEK) > 0.05
+	if gracz:
+		_reka.ustaw_zdrowie(gracz.cialo.procent(), gracz.cialo.krwawi() > 0)
+	# dłoń dochodzi do zapięcia z lekkim opóźnieniem (naturalnie, nie skokami)
+	_reka_poz = _reka_poz.lerp(cel_lok, minf(1.0, delta * (14.0 if aktywna else 6.0)))
+	var kier := (_reka_poz - _BARK).normalized()
+	kier = (kier + Vector3(0, -0.6, 0)).normalized()
+	var nadg := _reka_poz - kier * 0.07 + Vector3(0, 0.025, 0.02) - Vector3(0, 0.015, 0) * sin(_reka_klik * PI)
+	_reka.celuj_lokiec(_BARK.lerp(nadg, 0.5) + Vector3(0.06, -0.12, 0.04), _kam)
+	AnimacjeAkcji._uloz(_reka, nadg, kier, Vector3(0.15, 1.0, 0.25).normalized())
+	_reka.ustaw_chwyt("piesc" if _reka_klik > 0.1 else ("szczypta" if aktywna else "otwarta"))
 
 
 func ile_otwartych(co: String) -> int:
@@ -348,6 +446,7 @@ func zamknij(co: String, czas: float) -> void:
 
 
 func zamknij_wszystko(czas: float) -> void:
+	_reka_t = 0.0
 	for co in _modele.keys():
 		zamknij(co, czas)
 	create_tween().tween_property(_swiatlo, "light_energy", 0.0, czas)

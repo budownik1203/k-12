@@ -1272,7 +1272,7 @@ func _test_gestow(katalog: String) -> void:
 	ekran_ekw._gest_start(gui0, ik, false, "kamizelka")
 	for k in 3:
 		ekran_ekw._gest_ruch(gui0, ik, Vector2(0, -20), "kamizelka")
-	await get_tree().create_timer(0.3).timeout
+		await get_tree().create_timer(0.08).timeout
 	await _zapisz(katalog, "gest_kamizelka_pol")
 	ekran_ekw._gest_koniec(gui0, ik, "kamizelka")
 	var ok: bool = await przez.call("kamizelka", ik, false)
@@ -1288,6 +1288,21 @@ func _test_gestow(katalog: String) -> void:
 	# plecak: wszystkie kieszenie gestami
 	ekran_ekw.przelacz_pojemnik("plecak")
 	await get_tree().create_timer(3.5).timeout
+	var gp: SiatkaUI = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
+	ekran_ekw._gest_start(gp, 0, false, "plecak")
+	await get_tree().create_timer(0.1).timeout
+	await _zapisz(katalog, "gest_plecak_klamra")
+	await get_tree().create_timer(0.3).timeout
+	await _zapisz(katalog, "gest_plecak_klamra2")
+	var rk = ekran_ekw._r3d._reka if ekran_ekw._r3d else null
+	if rk:
+		print("  dłoń: poz %s widoczna %s" % [rk.position, rk.visible])
+	ekran_ekw._gest_start(gp, 0, false, "plecak")
+	ekran_ekw._gest_start(gp, 0, false, "plecak")
+	for k in 4:
+		ekran_ekw._gest_ruch(gp, 0, Vector2(0, -18), "plecak")
+		await get_tree().create_timer(0.08).timeout
+	await _zapisz(katalog, "gest_plecak_klapa")
 	for i in (ekran_ekw._kieszenie["plecak"] as Array).size():
 		ok = await przez.call("plecak", i, false)
 		if not ok:
@@ -1317,7 +1332,7 @@ func _test_gestow(katalog: String) -> void:
 	print("  magazynek w ładownicy: %s" % kam.zawiera(mag2))
 	ek.ustaw_kieszen("kamizelka", ik, true)
 	var przed := get_tree().get_nodes_in_group("lup_swiat").size()
-	for k in 40:
+	for k in 120:
 		gracz._gubienie(2.0)
 		if not kam.zawiera(mag2):
 			break
