@@ -191,6 +191,7 @@ func _ready() -> void:
 	_pomoc.visible = false
 	_root.add_child(_pomoc)
 	komunikat("Wyjścia: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
+	Gra.wskazowka("start", "WSAD – ruch, Shift – bieg, Ctrl – kucanie, F – interakcja, Tab – ekwipunek, O – wyjścia, F1 – pełne sterowanie. Wyjdź żywy przez jedno z wyjść – łup przepada razem z tobą.")
 	for k in Gra.kontrakty.get("aktywne", []):
 		komunikat("Zlecenie: %s" % k["opis"])
 
@@ -225,6 +226,7 @@ func _lbl_srodek(y: float, rozm: int, kol: Color) -> Label:
 
 
 func _process(delta: float) -> void:
+	_wskazowki(delta)
 	if gracz == null:
 		return
 	if Input.is_action_just_pressed("pomoc"):
@@ -366,6 +368,113 @@ func _kierunek(d: Vector3) -> String:
 	return "w lewo" if kat > -110.0 else "w lewo, za tobą"
 
 
+var _wsk: PanelContainer
+var _wsk_lbl: Label
+var _wsk_kolejka: Array = []
+var _wsk_t := 0.0
+var _fps: Label
+
+
+## Wskazówka samouczka: ramka nad paskiem szybkiego dostępu, kilka sekund, po kolei.
+func pokaz_wskazowke(t: String) -> void:
+	_wsk_kolejka.append(t)
+
+
+func _wskazowki(delta: float) -> void:
+	if _wsk == null:
+		_wsk = PanelContainer.new()
+		_wsk.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_wsk.offset_top = -190
+		_wsk.offset_bottom = -92
+		_wsk.offset_left = -330
+		_wsk.offset_right = 330
+		_wsk.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		_wsk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(0.06, 0.06, 0.05, 0.86)
+		st.border_color = Motyw.ZOLC
+		st.border_width_left = 3
+		st.content_margin_left = 12
+		st.content_margin_right = 12
+		st.content_margin_top = 8
+		st.content_margin_bottom = 8
+		_wsk.add_theme_stylebox_override("panel", st)
+		_wsk_lbl = Label.new()
+		_wsk_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_wsk_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_wsk_lbl.add_theme_font_override("font", Motyw.cond())
+		_wsk_lbl.add_theme_font_size_override("font_size", 15)
+		_wsk_lbl.add_theme_color_override("font_color", Motyw.TEKST)
+		_wsk.add_child(_wsk_lbl)
+		_wsk.visible = false
+		_root.add_child(_wsk)
+	if _wsk_t > 0.0:
+		_wsk_t -= delta
+		_wsk.modulate.a = clampf(_wsk_t / 0.6, 0.0, 1.0)
+		if _wsk_t <= 0.0:
+			_wsk.visible = false
+	elif not _wsk_kolejka.is_empty():
+		_wsk_lbl.text = "WSKAZÓWKA · " + String(_wsk_kolejka.pop_front())
+		_wsk.visible = true
+		_wsk.modulate.a = 1.0
+		_wsk_t = 9.0
+	# licznik klatek
+	if bool(Gra.ustawienia.get("pokaz_fps", false)):
+		if _fps == null:
+			_fps = _lbl(Vector2(8, 4), 12, Motyw.TEKST_CIEMNY, Control.PRESET_TOP_LEFT)
+			_fps.position = Vector2(8, 100)
+		_fps.visible = true
+		_fps.text = "%d FPS" % Engine.get_frames_per_second()
+	elif _fps:
+		_fps.visible = false
+
+
+var _ramka_cel: Object = null
+var _ramka_aabb := AABB()
+
+
+## Prostokąt na ekranie obejmujący obiekt, na który patrzy gracz (do podświetlenia interakcji).
+func ramka_celu() -> Rect2:
+	var cel = gracz.cel_interakcji if gracz else null
+	if cel == null or not is_instance_valid(cel) or not (cel is Node3D) or gracz.tekst_interakcji == "":
+		return Rect2()
+	var n := cel as Node3D
+	if cel != _ramka_cel:
+		_ramka_cel = cel
+		_ramka_aabb = AABB()
+		var pierwszy := true
+		for mi in n.find_children("*", "MeshInstance3D", true, false):
+			var a: AABB = (mi as MeshInstance3D).global_transform * (mi as MeshInstance3D).get_aabb()
+			_ramka_aabb = a if pierwszy else _ramka_aabb.merge(a)
+			pierwszy = false
+		if pierwszy:
+			_ramka_aabb = AABB(n.global_position - Vector3(0.25, 0, 0.25), Vector3(0.5, 1.6, 0.5))
+		_ramka_aabb = AABB(n.global_transform.affine_inverse() * _ramka_aabb.position, _ramka_aabb.size)
+	var kam := gracz.kamera
+	var vp := kam.get_viewport()
+	var skala := Vector2.ONE
+	if vp is SubViewport:
+		var kont := vp.get_parent() as Control
+		if kont:
+			skala = kont.size / Vector2((vp as SubViewport).size)
+	# AABB zapamiętany w układzie obiektu (drzwi się obracają, ale ramka i tak przybliżona)
+	var ab := _ramka_aabb
+	var mn := Vector2(INF, INF)
+	var mx := Vector2(-INF, -INF)
+	for i in 8:
+		var p := n.global_transform * (ab.position + Vector3(ab.size.x * (i & 1), ab.size.y * ((i >> 1) & 1), ab.size.z * ((i >> 2) & 1)))
+		if kam.is_position_behind(p):
+			return Rect2()
+		var sp := kam.unproject_position(p) * skala
+		mn = mn.min(sp)
+		mx = mx.max(sp)
+	var r := Rect2(mn, mx - mn).grow(4.0)
+	var ekran := Rect2(Vector2.ZERO, _root.size)
+	if r.size.x > ekran.size.x * 0.8 or r.size.y > ekran.size.y * 0.9:
+		return Rect2()
+	return r
+
+
 func komunikat(t: String) -> void:
 	var l := Label.new()
 	l.text = t
@@ -456,6 +565,16 @@ class Kropka:
 				draw_rect(Rect2(vs.x - m.x, m.y, m.x, vs.y - 2 * m.y), Color(0, 0, 0, a))
 		if g.bron.ma_lunete() and g.bron.ads > 0.85:
 			_luneta(c, clampf((g.bron.ads - 0.85) / 0.15, 0.0, 1.0))
+		var ramka: Rect2 = hud.ramka_celu()
+		if ramka.size.x > 2.0:
+			# podświetlenie tego, z czym można coś zrobić: narożniki wokół
+			var kz := Color(0.95, 0.88, 0.6, 0.55)
+			var dl := clampf(minf(ramka.size.x, ramka.size.y) * 0.25, 5.0, 16.0)
+			for nar in [[ramka.position, Vector2(1, 1)], [Vector2(ramka.end.x, ramka.position.y), Vector2(-1, 1)], [Vector2(ramka.position.x, ramka.end.y), Vector2(1, -1)], [ramka.end, Vector2(-1, -1)]]:
+				var pp: Vector2 = nar[0]
+				var kk: Vector2 = nar[1]
+				draw_line(pp, pp + Vector2(kk.x * dl, 0), kz, 1.5)
+				draw_line(pp, pp + Vector2(0, kk.y * dl), kz, 1.5)
 		if g.bron.ads > 0.6 and g.bron.podparcie > 0.6 and not g.bron.ma_lunete():
 			draw_string(ThemeDB.fallback_font, c + Vector2(-34, 90), "podparta", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.82, 0.7, 0.55))
 		if g.bron.ads < 0.5 and g.bron.przedmiot != null:

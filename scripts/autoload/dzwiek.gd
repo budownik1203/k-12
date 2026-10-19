@@ -24,6 +24,10 @@ const POGLOS := {"piwnica": [0.75, 0.32, 0.35], "magazyn": [0.85, 0.34, 0.3], "w
 
 
 func _ready() -> void:
+	Gra.ustawienia_zmiana.connect(func():
+		for a in get_tree().get_nodes_in_group("ambient_tla"):
+			if a.has_meta("baza_db") and float(a.get_meta("baza_db")) > -55.0:
+				a.volume_db = float(a.get_meta("baza_db")) + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8)) + linear_to_db(maxf(0.001, float(Gra.ustawienia.get("glosnosc_tla", 0.8)) / 0.8)))
 	# szyna "Swiat": dźwięki 3D z pogłosem zależnym od miejsca, w którym stoi słuchacz
 	if AudioServer.get_bus_index("Swiat") < 0:
 		AudioServer.add_bus()
@@ -168,7 +172,9 @@ func ambient(nazwa: String, rodzic: Node, glosnosc_db := -8.0) -> AudioStreamPla
 		s = w
 	var p := AudioStreamPlayer.new()
 	p.stream = s
-	p.volume_db = glosnosc_db + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8))
+	p.set_meta("baza_db", glosnosc_db)
+	p.volume_db = glosnosc_db + linear_to_db(Gra.ustawienia.get("glosnosc", 0.8)) + linear_to_db(maxf(0.001, float(Gra.ustawienia.get("glosnosc_tla", 0.8)) / 0.8))
+	p.add_to_group("ambient_tla")
 	rodzic.add_child(p)
 	p.play()
 	return p

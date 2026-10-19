@@ -312,6 +312,10 @@ func _physics_process(delta: float) -> void:
 	_dzwieki_ciala(delta)
 	_potrzeby(delta)
 	przygniecenie = maxf(0.0, przygniecenie - delta * 0.3)
+	_samouczek_t -= delta
+	if _samouczek_t <= 0.0:
+		_samouczek_t = 0.5
+		_samouczek()
 	if we_aktywne and Input.is_action_just_pressed("granat"):
 		rzuc_granat()
 	if we_aktywne and Input.is_action_just_pressed("latarka"):
@@ -347,6 +351,8 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	var m := Sterowanie.pobierz_mysz() if aktywne else Vector2.ZERO
 	var czul := 0.0022 * float(Gra.ustawienia.get("czulosc", 1.0)) * lerpf(1.0, 0.65, bron.ads)
 	rotate_y(-m.x * czul)
+	if bool(Gra.ustawienia.get("odwroc_y", false)):
+		m.y = -m.y
 	_pitch = clampf(_pitch - m.y * czul, deg_to_rad(-86), deg_to_rad(86))
 	bron.dodaj_sway(m)
 	# odrzut: szybki wzrost, powolny powrót
@@ -383,8 +389,9 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	_bob_amp = move_toward(_bob_amp, clampf(pozioma / PREDKOSC_BIEG, 0.0, 1.0) if naziemi else 0.0, delta * 3.0)
 	_bob_t += delta * (5.2 + pozioma * 1.25)
 	var waga_mn := 1.0 + prog_obciazenia() * 0.25
-	var bob_y := -absf(sin(_bob_t)) * 0.055 * _bob_amp * waga_mn * (1.0 - bron.ads * 0.7)
-	var bob_x := sin(_bob_t) * 0.03 * _bob_amp * (1.0 - bron.ads * 0.7)
+	var kol := float(Gra.ustawienia.get("kolysanie", 1.0))
+	var bob_y := -absf(sin(_bob_t)) * 0.055 * _bob_amp * waga_mn * (1.0 - bron.ads * 0.7) * kol
+	var bob_x := sin(_bob_t) * 0.03 * _bob_amp * (1.0 - bron.ads * 0.7) * kol
 	var bok := (global_basis.inverse() * velocity).x
 	_przechyl = lerpf(_przechyl, -bok * 0.012, minf(1.0, delta * 5.0))
 	_ladowanie = move_toward(_ladowanie, 0.0, delta * 0.6)
@@ -669,6 +676,37 @@ func _potrzeby(delta: float) -> void:
 		_potrzeby_prog[k] = v
 		if v <= 0.0:
 			cialo.obrazenia("brzuch", delta * (0.15 if k == "glod" else 0.25), k)
+
+
+var _samouczek_t := 1.0
+
+
+## Wskazówki samouczka w sytuacjach, gdy przydają się pierwszy raz.
+func _samouczek() -> void:
+	if tryb_bazy:
+		return
+	var c = cel_interakcji
+	if c != null and is_instance_valid(c):
+		if c is Pojemnik:
+			Gra.wskazowka("pojemnik", "Przeszukiwanie idzie po kolei – zawartość odkrywa się z czasem, po ciemku wolniej (latarka [L] pomaga). Przekładanie robi ręka: trwa, a trafienie wytrąca przedmiot.")
+		elif c is Drzwi:
+			Gra.wskazowka("drzwi", "Drzwi: F otwiera i zamyka – słychać to daleko. Kucając F uchylasz je cicho na szparę. Stojąc przy zamkniętych drzwiach, podsłuchasz, co za nimi.")
+		elif c is LupNaZiemi:
+			Gra.wskazowka("lup", "Podniesienie zajmuje chwilę. Do zapiętego plecaka na plecach nic nie wejdzie – w ekwipunku [Tab] zdejmij go i otwórz kieszeń.")
+		elif c is Wrog:
+			Gra.wskazowka("poddany", "Poddał się. F – każesz oddać łup; potem możesz kupić informację i rozejm z jego ludźmi albo puścić go wolno. Strzał zrywa rozejm.")
+	if cialo.krwawi() > 0:
+		Gra.wskazowka("krwawienie", "Krwawisz! Bandaż z paska [4] albo w ekwipunku upuść lek na krwawiącą część ciała. Ciężkie krwawienie zatrzyma tylko opatrunek.")
+	if bron.przedmiot and bron.stan == "gotowa" and String(bron.przedmiot.dane.get("komora", "x")) == "" and int(bron.przedmiot.dane.get("wewn", 1)) == 0:
+		Gra.wskazowka("pusty", "Pusty magazynek – R przeładowuje (przytrzymaj: szybko, stary leci na ziemię). Magazynki napełniasz w ekwipunku klawiszem G.")
+	if wytrzymalosc < 15.0:
+		Gra.wskazowka("zmeczenie", "Zadyszka – marsz albo postój odnawia siły. Głód, pragnienie i ciężki plecak spowalniają odpoczynek.")
+	if float(Gra.potrzeby["glod"]) < 30.0 or float(Gra.potrzeby["pragnienie"]) < 30.0:
+		Gra.wskazowka("glod", "Głód i pragnienie (paski w panelu ciała, Tab): PPM na jedzeniu lub wodzie – Zjedz / Wypij.")
+	if przygniecenie > 0.5:
+		Gra.wskazowka("ostrzal", "Jesteś pod ostrzałem – kule tuż obok psują celność. Zejdź z linii ognia, kucnij za osłoną. Twoje kule tak samo przygniatają wrogów.")
+	if not ekw.znajdz_id("granat_f1").is_empty():
+		Gra.wskazowka("granat", "Masz granat pod ręką: G – rzut (kucając toczysz go po podłodze). Wybuch po ok. 3,5 s.")
 
 
 ## Mnożnik odzyskiwania sił (głód, pragnienie).

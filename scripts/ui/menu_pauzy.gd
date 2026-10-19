@@ -40,6 +40,20 @@ func _ready() -> void:
 	_suwak(_ustawienia, "Czułość myszy", "czulosc", 0.2, 3.0, 0.05)
 	_suwak(_ustawienia, "Pole widzenia (FOV)", "fov", 60.0, 100.0, 1.0)
 	_suwak(_ustawienia, "Głośność", "glosnosc", 0.0, 1.0, 0.05)
+	_suwak(_ustawienia, "Głośność tła", "glosnosc_tla", 0.0, 1.0, 0.05)
+	_suwak(_ustawienia, "Kołysanie kamery", "kolysanie", 0.0, 1.0, 0.05)
+	_suwak(_ustawienia, "Skala renderu (wydajność)", "skala_renderu", 0.5, 1.0, 0.05)
+	_przelacznik(_ustawienia, "Odwróć oś Y myszy", "odwroc_y")
+	_przelacznik(_ustawienia, "Cienie od lamp", "cienie")
+	_przelacznik(_ustawienia, "Wygładzanie krawędzi", "wygladzanie")
+	_przelacznik(_ustawienia, "Wskazówki samouczka", "samouczek")
+	_przelacznik(_ustawienia, "Licznik klatek (FPS)", "pokaz_fps")
+	var rs := Button.new()
+	rs.text = "Pokaż wskazówki od nowa"
+	rs.pressed.connect(func():
+		Gra.ustawienia["samouczek_widziane"] = []
+		Gra.ustawienia["samouczek"] = true)
+	_ustawienia.add_child(rs)
 	if w_rajdzie:
 		_przycisk(v, "Opuść rajd (zaginięcie w akcji)", func():
 			zamknij()
@@ -77,10 +91,21 @@ func _suwak(v: Control, t: String, klucz: String, mn: float, mx: float, krok: fl
 	var w := Motyw.etykieta("%.2f" % s.value, 13, Motyw.TEKST_CIEMNY, Motyw.mono())
 	s.value_changed.connect(func(x):
 		Gra.ustawienia[klucz] = x
-		w.text = "%.2f" % x)
+		w.text = "%.2f" % x
+		Gra.ustawienia_zmiana.emit())
 	h.add_child(s)
 	h.add_child(w)
 	v.add_child(h)
+
+
+func _przelacznik(v: Control, t: String, klucz: String) -> void:
+	var c := CheckButton.new()
+	c.text = t
+	c.button_pressed = bool(Gra.ustawienia.get(klucz, false))
+	c.toggled.connect(func(x):
+		Gra.ustawienia[klucz] = x
+		Gra.ustawienia_zmiana.emit())
+	v.add_child(c)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -101,6 +126,8 @@ func otworz() -> void:
 
 
 func zamknij() -> void:
+	if otwarte and not w_rajdzie:
+		Gra.zapisz()
 	otwarte = false
 	_root.visible = false
 	Sterowanie.blokada = false

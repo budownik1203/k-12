@@ -3,6 +3,7 @@ extends Node
 
 signal halas(pozycja: Vector3, zasieg: float, zrodlo: Node)
 signal zmiana_bonow
+signal ustawienia_zmiana
 
 var ZAPIS := "user://zapis_k12.json"
 const WERSJA := 1
@@ -14,7 +15,8 @@ var zdrowie := {}            # część ciała -> hp po rajdzie (puste = pełne)
 var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
 var kontrakty := {"oferty": [], "aktywne": []}       # zlecenia Pośrednika
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
-var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8}
+var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8, "glosnosc_tla": 0.8, "odwroc_y": false, "kolysanie": 1.0,
+	"skala_renderu": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "samouczek_widziane": []}
 var ostatni_raport := {}
 var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0
@@ -238,6 +240,18 @@ func _rozlicz_kontrakty(wynik: Dictionary) -> void:
 		zd.append_array(notki)
 		wynik["zdarzenia"] = zd
 	odnow_oferty()
+
+
+## Wskazówka samouczka – każda pokazywana raz (można wyłączyć w ustawieniach).
+func wskazowka(id: String, tekst: String) -> void:
+	if not bool(ustawienia.get("samouczek", true)):
+		return
+	var w: Array = ustawienia.get("samouczek_widziane", [])
+	if w.has(id):
+		return
+	w.append(id)
+	ustawienia["samouczek_widziane"] = w
+	get_tree().call_group("hud", "pokaz_wskazowke", tekst)
 
 
 ## Zjedzenie / wypicie (w bazie od razu, w rajdzie po czynności gracza): zmienia głód i pragnienie.

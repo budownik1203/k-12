@@ -60,6 +60,19 @@ func _ready() -> void:
 			v.add_child(Motyw.etykieta("Uwaga komisji: rajd bez zysku. Obecność odnotowano, entuzjazmu nie.", 13, szary))
 		else:
 			v.add_child(Motyw.etykieta("Uwaga komisji: wynik w normie. Nagroda: brak nagany.", 13, szary))
+		var wyn: Array = r.get("wyniesione", [])
+		if not wyn.is_empty():
+			var suma := 0
+			for e in wyn:
+				suma += int(e["wartosc"])
+			v.add_child(Motyw.etykieta("Wyniesione ze strefy (%d szt., ok. %d bonów):" % [wyn.size(), suma], 15, ciem, Motyw.mono_b()))
+			var lista := []
+			for e in wyn.slice(0, 8):
+				lista.append("%s (%d)" % [e["nazwa"], int(e["wartosc"])])
+			var l := Motyw.etykieta("  " + ", ".join(lista) + (" i %d innych" % (wyn.size() - 8) if wyn.size() > 8 else ""), 13, ciem, Motyw.mono())
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD
+			l.custom_minimum_size = Vector2(560, 0)
+			v.add_child(l)
 	else:
 		var p: String = r.get("przyczyna", "pocisk")
 		v.add_child(Motyw.etykieta("Przyczyna zgonu: %s" % NAZWY_PRZYCZYN.get(p, p), 15, ciem, Motyw.mono()))

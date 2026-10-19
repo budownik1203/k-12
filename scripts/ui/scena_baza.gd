@@ -23,6 +23,8 @@ func _ready() -> void:
 	add_to_group("ui_bazy")
 	add_to_group("hud")
 	widok = Widok3D.zbuduj(self, 0.06, 0.16)
+	Widok3D.zastosuj(widok)
+	Gra.ustawienia_zmiana.connect(func(): Widok3D.zastosuj(widok))
 	swiat = widok["swiat"]
 	_buduj_schron()
 	gracz = Gracz.new()
@@ -47,6 +49,7 @@ func _ready() -> void:
 	Sterowanie.blokada = false
 	Sterowanie.menu_otwarte = false
 	komunikat("Baza. [F] rozmowa/użycie, [Tab] ekwipunek i skrytka.")
+	Gra.wskazowka.call_deferred("baza", "Baza: handlarze (F), skrytka i ekwipunek (Tab), stół roboczy do montażu celowników, wyjście do strefy. Pośrednik daje zlecenia i ubezpiecza sprzęt.")
 	if not Gra.zdrowie.is_empty():
 		komunikat("Masz nieleczone urazy. Medyk przyjmuje (odpłatnie).")
 	var zwrot := Gra.odbierz_poczte()
@@ -262,6 +265,10 @@ func tekst_interakcji(_g) -> String:
 
 func interakcja(_g) -> void:
 	ekran_ekw.otworz_skrytke()
+
+
+func pokaz_wskazowke(t: String) -> void:
+	komunikat("Wskazówka: " + t)
 
 
 func otworz_handel(id: String) -> void:

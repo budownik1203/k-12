@@ -38,7 +38,7 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | H | spójrz na zegarek (zdrowie na tarczy) |
 | J | obejrzyj broń z bliska, zakładanie i zdejmowanie dodatków |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
-| Esc | pauza (w rajdzie czas płynie dalej) |
+| Esc | pauza (w rajdzie czas płynie dalej); Ustawienia: czułość, FOV, głośność, kołysanie, skala renderu, cienie, oś Y, wskazówki, FPS |
 | F1 | plansza ze sterowaniem |
 
 Latarka, mapa i kompas działają tylko na slotach wyposażenia (pas + 0–2 z kamizelki). Mapa daje odległości

@@ -80,3 +80,14 @@ static func wypiecz_nawigacje(swiat: Node3D) -> NavigationRegion3D:
 	NavigationServer3D.bake_from_source_geometry_data(nm, src)
 	region.navigation_mesh = nm
 	return region
+
+
+## Ustawienia grafiki: skala renderu 3D (wydajność) i wygładzanie krawędzi.
+static func zastosuj(w: Dictionary) -> void:
+	var vp: SubViewport = w.get("viewport")
+	if vp == null:
+		return
+	var sk := clampf(float(Gra.ustawienia.get("skala_renderu", 1.0)), 0.5, 1.0)
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = sk
+	vp.msaa_3d = Viewport.MSAA_2X if bool(Gra.ustawienia.get("wygladzanie", true)) else Viewport.MSAA_DISABLED

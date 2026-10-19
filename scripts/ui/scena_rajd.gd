@@ -23,6 +23,8 @@ func _ready() -> void:
 	if a.has("--ziarno"):
 		Gra.ziarno_rajdu = int(a[a.find("--ziarno") + 1])
 	widok = Widok3D.zbuduj(self)
+	Widok3D.zastosuj(widok)
+	Gra.ustawienia_zmiana.connect(func(): Widok3D.zastosuj(widok))
 	swiat = widok["swiat"]
 	gen = GeneratorBiomu.new()
 	info = gen.generuj(Gra.ziarno_rajdu, swiat)
@@ -43,6 +45,8 @@ func _ready() -> void:
 	for w in info["wyjscia"]:
 		(w as Ewakuacja).ewakuowano.connect(_ewakuacja)
 	wartosc_poczatkowa = Gra.ekw.wartosc()
+	for p in Gra.ekw.wszystkie():
+		_start_ids[(p as Przedmiot).get_instance_id()] = true
 	if ResourceLoader.exists("res://scripts/ai/menedzer_wrogow.gd"):
 		var mw = load("res://scripts/ai/menedzer_wrogow.gd").new()
 		mw.name = "Wrogowie"
@@ -148,6 +152,7 @@ var _start_ms := 0
 # ------------------------------------------------------------------ zdarzenia w strefie
 
 var _plan_zdarzen: Array = []
+var _start_ids := {}           # przedmioty wniesione do strefy (do podsumowania łupu)
 var odwiedzone := {}           # typy pomieszczeń, w których był gracz (zlecenia zwiadu)
 var _odw_t := 0.0
 var awaria_pradu := false
@@ -408,7 +413,7 @@ func _process(delta: float) -> void:
 		# prawdziwe cienie od 3 najbliższych lamp (jak w Iron Blight: ławka i drzewo rzucają cień od latarni)
 		bliskie.sort_custom(func(a, b): return a[0] < b[0])
 		for i in bliskie.size():
-			(bliskie[i][1] as Light3D).shadow_enabled = i < 3
+			(bliskie[i][1] as Light3D).shadow_enabled = i < (3 if bool(Gra.ustawienia.get("cienie", true)) else 0)
 		# brzęczenie świetlówek: 3 najbliższe świecące lampy
 		for i in _brzeczenie.size():
 			var bz: AudioStreamPlayer3D = _brzeczenie[i]
@@ -553,6 +558,13 @@ func _zakoncz(w: Dictionary) -> void:
 	w["zabici"] = zabici
 	w["zdarzenia"] = zdarzenia
 	w["odwiedzone"] = odwiedzone.keys()
+	if w.get("przezyl", false):
+		var nowe := []
+		for p in Gra.ekw.wszystkie():
+			if not _start_ids.has((p as Przedmiot).get_instance_id()):
+				nowe.append({"nazwa": (p as Przedmiot).nazwa(), "wartosc": (p as Przedmiot).wartosc()})
+		nowe.sort_custom(func(a, b): return a["wartosc"] > b["wartosc"])
+		w["wyniesione"] = nowe
 	w["wartosc_poczatkowa"] = wartosc_poczatkowa
 	w["zdrowie"] = gracz.cialo.stan_do_zapisu()
 	w["zabojca"] = gracz.get_meta("zabojca", "")
