@@ -1332,17 +1332,25 @@ func _test_gestow(katalog: String) -> void:
 	ek.siatka_plecaka().dodaj(kon)
 	gracz._wybierz_bron("glowna")
 	await get_tree().create_timer(1.0).timeout
+	# chwyt za podświetlony uchwyt i przeciągnięcie wzdłuż jego drogi (kolejne kroki – kolejne chwyty);
+	# na końcu ciągnie jeszcze dalej – za daleko nic się nie cofa
 	var przez := func(co: String, i: int, zamyk: bool) -> bool:
-		var gui: SiatkaUI = ekran_ekw._ramki[co].get_meta("siatka_ui")
 		for proba in 30:
-			ekran_ekw._gest_start(gui, i, zamyk, co)
-			for k in 10:
-				ekran_ekw._gest_ruch(gui, i, Vector2(30, 22 if zamyk else -22), co)
-			ekran_ekw._gest_koniec(gui, i, co)
+			await _klatki(2)
+			var e: Dictionary = ekran_ekw._kieszenie[co][i]
+			if e.has("uchwyt"):
+				var m: Vector2 = e["uchwyt"]
+				if ekran_ekw._chwyc_uchwyt(m) and not ekran_ekw._gest.is_empty():
+					var kier: Vector2 = ekran_ekw._gest["kier"] * (-1.0 if zamyk else 1.0)
+					for k in 16:
+						m += kier / 10.0
+						if ekran_ekw._gest.is_empty():
+							break
+						ekran_ekw._ciagnij_uchwyt(m)
+					ekran_ekw._pusc_uchwyt()
 			var st: bool = ek.stan_kieszeni(co)[i]
 			if st != zamyk and not bool(ekran_ekw._kieszenie[co][i].get("zamyk", false)):
 				return true
-			await get_tree().process_frame
 		return false
 	ekran_ekw.otworz(null)
 	await _klatki(5)
@@ -1350,13 +1358,19 @@ func _test_gestow(katalog: String) -> void:
 	await get_tree().create_timer(1.2).timeout
 	var ik := defs.size() - 1
 	# pół gestu: klapka uniesiona do połowy (zrzut)
-	var gui0: SiatkaUI = ekran_ekw._ramki["kamizelka"].get_meta("siatka_ui")
-	ekran_ekw._gest_start(gui0, ik, false, "kamizelka")
-	for k in 3:
-		ekran_ekw._gest_ruch(gui0, ik, Vector2(0, -20), "kamizelka")
-		await get_tree().create_timer(0.08).timeout
-	await _zapisz(katalog, "gest_kamizelka_pol")
-	ekran_ekw._gest_koniec(gui0, ik, "kamizelka")
+	await _klatki(3)
+	await _zapisz(katalog, "gest_kamizelka_uchwyt")
+	var e0: Dictionary = ekran_ekw._kieszenie["kamizelka"][ik]
+	print("  uchwyt ładownicy: %s krok %s rodzaj %s" % [e0.get("uchwyt"), e0.get("uchwyt_k"), e0.get("uchwyt_rodz")])
+	if not e0.has("uchwyt"):
+		bl += 1
+	else:
+		var m0: Vector2 = e0["uchwyt"]
+		ekran_ekw._chwyc_uchwyt(m0 + Vector2(60, 60))      # obok uchwytu – nic
+		if not ekran_ekw._gest.is_empty():
+			print("  BŁĄD: chwyt obok uchwytu")
+			bl += 1
+		await _klatki(2)
 	var ok: bool = await przez.call("kamizelka", ik, false)
 	await get_tree().create_timer(0.3).timeout
 	await _zapisz(katalog, "gest_kamizelka_otwarta")
@@ -1370,21 +1384,27 @@ func _test_gestow(katalog: String) -> void:
 	# plecak: wszystkie kieszenie gestami
 	ekran_ekw.przelacz_pojemnik("plecak")
 	await get_tree().create_timer(3.5).timeout
-	var gp: SiatkaUI = ekran_ekw._ramki["plecak"].get_meta("siatka_ui")
-	ekran_ekw._gest_start(gp, 0, false, "plecak")
-	await get_tree().create_timer(0.1).timeout
-	await _zapisz(katalog, "gest_plecak_klamra")
-	await get_tree().create_timer(0.3).timeout
-	await _zapisz(katalog, "gest_plecak_klamra2")
+	await _klatki(3)
+	await _zapisz(katalog, "gest_plecak_uchwyty")
+	var e1: Dictionary = ekran_ekw._kieszenie["plecak"][0]
+	if e1.has("uchwyt"):
+		ekran_ekw._chwyc_uchwyt(e1["uchwyt"])
+		await get_tree().create_timer(0.3).timeout
+		await _zapisz(katalog, "gest_plecak_klamra")
+		await _klatki(3)
+		if e1.has("uchwyt"):
+			ekran_ekw._chwyc_uchwyt(e1["uchwyt"])
+			if not ekran_ekw._gest.is_empty():
+				var m1: Vector2 = e1["uchwyt"]
+				for k in 4:
+					m1 += (ekran_ekw._gest["kier"] as Vector2) * 0.1
+					ekran_ekw._ciagnij_uchwyt(m1)
+					await get_tree().create_timer(0.08).timeout
+				await _zapisz(katalog, "gest_plecak_klapa")
+				ekran_ekw._pusc_uchwyt()
 	var rk = ekran_ekw._r3d._reka if ekran_ekw._r3d else null
 	if rk:
 		print("  dłoń: poz %s widoczna %s" % [rk.position, rk.visible])
-	ekran_ekw._gest_start(gp, 0, false, "plecak")
-	ekran_ekw._gest_start(gp, 0, false, "plecak")
-	for k in 4:
-		ekran_ekw._gest_ruch(gp, 0, Vector2(0, -18), "plecak")
-		await get_tree().create_timer(0.08).timeout
-	await _zapisz(katalog, "gest_plecak_klapa")
 	for i in (ekran_ekw._kieszenie["plecak"] as Array).size():
 		ok = await przez.call("plecak", i, false)
 		if not ok:
@@ -2108,6 +2128,9 @@ func _zrzut_animacji(katalog: String) -> void:
 		await _klatki(40)
 		await _zapisz(katalog, "lup_rzut_lezy")
 		return
+	if OS.get_cmdline_user_args().has("--przeladowania"):
+		await _test_przeladowan(katalog)
+		return
 	if OS.get_cmdline_user_args().has("--czynnosci"):
 		gracz.sterowanie = false
 		var tylko := ""
@@ -2186,7 +2209,7 @@ func _zrzut_animacji(katalog: String) -> void:
 	b._zacznij_przeladowanie(false)
 	tot = b.stan_total
 	for fr in [0.3, 0.6, 0.85]:
-		while b.stan == "ladowanie_wewn" and b.stan_t < tot * fr:
+		while b.stan == "lamanie" and b.stan_t < tot * fr:
 			await get_tree().process_frame
 		await _zapisz(katalog, "an_obrzyn_%d" % int(fr * 100))
 	await _klatki(90)
@@ -2470,3 +2493,155 @@ func _test_mutanta(katalog: String) -> void:
 	var ok := stany.has("skok") and stany.has("ziemia") and gracz.cialo.procent() < hp0
 	print("TEST MUTANTA: ", "OK" if ok else "FAIL")
 	get_tree().quit(0 if ok else 1)
+
+
+## Klatki choreografii przeładowań (czas zatrzymany, ustawiany ręcznie) i sprawdzenie stanu broni po nich.
+func _test_przeladowan(katalog: String) -> void:
+	var b: Bron = gracz.bron
+	Gra.ustawienia["samouczek"] = false
+	for h in get_tree().get_nodes_in_group("hud"):
+		h._wsk_kolejka.clear()
+		h._wsk_t = 0.01
+	var ar := OS.get_cmdline_user_args()
+	var tylko := ""
+	if ar.has("--tylko"):
+		tylko = ar[ar.find("--tylko") + 1]
+	var bledy := 0
+	# [nazwa, broń, slot, amunicja, szybkie, przygotowanie]
+	var lista := [
+		["obrzyn_luski", "obrzyn", "glowna", "a_12", false, func(p: Przedmiot): p.dane["wewn"] = 0; p.dane["luski"] = 2],
+		["obrzyn_jedna_szybko", "obrzyn", "glowna", "a_12", true, func(p: Przedmiot): p.dane["wewn"] = 1; p.dane["luski"] = 1],
+		["kb47_pusty", "kb47", "glowna", "a_762", false, func(p: Przedmiot): p.dane["komora"] = ""; p.dane["mag"].dane["naboje"] = 0],
+		["kb47_szybko", "kb47", "glowna", "a_762", true, func(p: Przedmiot): p.dane["mag"].dane["naboje"] = 3],
+		["pm63_pusty", "pm63", "glowna", "a_9x18", false, func(p: Przedmiot): p.dane["komora"] = ""; p.dane["mag"].dane["naboje"] = 0],
+		["pw9_pusty", "pw9", "pistolet", "a_9x18", false, func(p: Przedmiot): p.dane["komora"] = ""; p.dane["mag"].dane["naboje"] = 0],
+		["pw9_szybko", "pw9", "pistolet", "a_9x18", true, func(p: Przedmiot): pass],
+	]
+	var mags := {"kb47": "mag_kb47", "pm63": "mag_pm63", "pw9": "mag_pw9"}
+	if ar.has("--pozy"):
+		# przegląd póz przechyłu: jedna klatka (dłoń przy magazynku) na wariant
+		var bid := String(ar[ar.find("--pozy") + 1])
+		var warianty := [
+			[Vector3(0.16, 0.32, 0.6), Vector3(-0.02, 0.0, 0.03)],
+			[Vector3(0.05, 0.25, -0.6), Vector3(-0.05, 0.06, 0.04)],
+			[Vector3(0.2, 0.5, -0.4), Vector3(-0.06, 0.08, 0.05)],
+			[Vector3(0.35, 0.35, 0.9), Vector3(-0.04, 0.07, 0.05)],
+			[Vector3(-0.1, 0.6, 0.3), Vector3(-0.08, 0.06, 0.05)],
+			[Vector3(0.3, -0.3, -0.5), Vector3(-0.02, 0.08, 0.04)],
+		]
+		var slot := "pistolet" if bid == "pw9" else "glowna"
+		var am := "a_762" if bid == "kb47" else "a_9x18"
+		for i in warianty.size():
+			Przeladowania.nadpisz[bid] = warianty[i]
+			for e in Gra.ekw.kieszenie.items.duplicate():
+				Gra.ekw.kieszenie.usun(e["p"])
+			var p: Przedmiot = Gra.nowy_naladowany(bid, am)
+			Gra.ekw.sloty[slot] = p
+			Gra.ekw.kieszenie.dodaj(Gra.magazynek(mags[bid], am, 5))
+			gracz._wybierz_bron(slot)
+			await _klatki(25)
+			b.zamroz = true
+			b._zacznij_przeladowanie(false)
+			for fr in [0.1, 0.17]:
+				b.stan_t = b.stan_total * fr
+				await _klatki(2)
+				await _zapisz(katalog, "pz_%s_%d_%d" % [bid, i, int(fr * 100)])
+			b.zamroz = false
+			while b.stan != "gotowa":
+				await get_tree().process_frame
+		return
+	for el in lista:
+		if tylko != "" and not String(el[0]).begins_with(tylko):
+			continue
+		for e in Gra.ekw.kieszenie.items.duplicate():
+			Gra.ekw.kieszenie.usun(e["p"])
+		var p: Przedmiot = Gra.nowy_naladowany(String(el[1]), String(el[3]))
+		(el[5] as Callable).call(p)
+		Gra.ekw.sloty[String(el[2])] = p
+		if mags.has(el[1]):
+			var mg := Gra.magazynek(mags[el[1]], String(el[3]), 30 if el[1] == "kb47" else 8)
+			if not Gra.ekw.kieszenie.dodaj(mg):
+				Gra.ekw.dodaj(mg)
+		else:
+			Gra.ekw.dodaj(Przedmiot.nowy(String(el[3]), 6))
+		gracz._wybierz_bron(String(el[2]))
+		await _klatki(30)
+		var amun_przed: int = Gra.ekw.policz_amunicje(b.bd["kaliber"])
+		b.zamroz = true
+		b._zacznij_przeladowanie(bool(el[4]))
+		var tot: float = b.stan_total
+		print("%s: stan %s, czas %.2f s" % [el[0], b.stan, tot])
+		var n := 12
+		for i in n:
+			b.stan_t = tot * (float(i) + 0.5) / n
+			await _klatki(2)
+			await _zapisz(katalog, "pr_%s_%02d" % [el[0], i])
+		b.zamroz = false
+		var t := 0.0
+		while b.stan != "gotowa" and t < 8.0:
+			await get_tree().create_timer(0.1).timeout
+			t += 0.1
+		if el[1] == "obrzyn":
+			var ok: bool = int(p.dane["wewn"]) == 2 and int(p.dane.get("luski", 0)) == 0 and Gra.ekw.policz_amunicje(b.bd["kaliber"]) == amun_przed - (2 - (1 if el[0] == "obrzyn_jedna_szybko" else 0))
+			print("  po: wewn %d luski %d amunicja %d -> %d %s" % [p.dane["wewn"], p.dane.get("luski", 0), amun_przed, Gra.ekw.policz_amunicje(b.bd["kaliber"]), "OK" if ok else "BŁĄD"])
+			if not ok:
+				bledy += 1
+		else:
+			var m: Przedmiot = p.dane["mag"]
+			var ok: bool = m != null and p.dane["komora"] != "" and b._chor == null
+			print("  po: magazynek %s, komora %s %s" % [m.dane["naboje"] if m else -1, p.dane["komora"], "OK" if ok else "BŁĄD"])
+			if not ok:
+				bledy += 1
+	# zerknięcie na okienka magazynka
+	for el in [["kb47", "glowna", "a_762", 12], ["pm63", "glowna", "a_9x18", 25], ["pw9", "pistolet", "a_9x18", 3]]:
+		if tylko != "" and tylko != "sprawdz" and not String(el[0]).begins_with(tylko):
+			continue
+		var p: Przedmiot = Gra.nowy_naladowany(String(el[0]), String(el[2]))
+		p.dane["mag"].dane["naboje"] = int(el[3])
+		Gra.ekw.sloty[String(el[1])] = p
+		gracz._wybierz_bron(String(el[1]))
+		await _klatki(30)
+		b.zamroz = true
+		b.aktualizuj(0.016, {"sprawdz": true, "moze": true})
+		var tot: float = b.stan_total
+		for i in 3:
+			b.stan_t = tot * (0.3 + 0.2 * i)
+			await _klatki(4)
+			await _zapisz(katalog, "pr_sprawdz_%s_%d" % [el[0], i])
+		b.zamroz = false
+		while b.stan != "gotowa":
+			await get_tree().process_frame
+		if b._chor != null:
+			bledy += 1
+	# sprawdzanie komór dwururki i przerwanie ładowania strzałem
+	if tylko == "" or tylko == "obrzyn":
+		var p: Przedmiot = Gra.nowy_naladowany("obrzyn", "a_12")
+		p.dane["wewn"] = 1
+		p.dane["luski"] = 1
+		Gra.ekw.sloty["glowna"] = p
+		gracz._wybierz_bron("glowna")
+		await _klatki(30)
+		b.zamroz = true
+		b.stan = "gotowa"
+		b.aktualizuj(0.016, {"sprawdz": true, "moze": true})
+		var tot: float = b.stan_total
+		for i in 4:
+			b.stan_t = tot * (0.2 + 0.2 * i)
+			await _klatki(2)
+			await _zapisz(katalog, "pr_obrzyn_sprawdz_%02d" % i)
+		b.zamroz = false
+		while b.stan != "gotowa":
+			await get_tree().process_frame
+		var amun_przed: int = Gra.ekw.policz_amunicje("12/70")
+		b._zacznij_przeladowanie(false)
+		var iz: int = b._chor.indeks("wsun")
+		while b.stan == "lamanie" and b._chor.biezacy() < iz:
+			await get_tree().process_frame
+		b.aktualizuj(0.016, {"strzal": true, "moze": true})
+		while b.stan != "gotowa":
+			await get_tree().process_frame
+		var amun_po: int = Gra.ekw.policz_amunicje("12/70")
+		print("  przerwanie: wewn %d luski %d amunicja %d -> %d" % [p.dane["wewn"], p.dane.get("luski", 0), amun_przed, amun_po])
+		if amun_po != amun_przed or int(p.dane["wewn"]) != 1:
+			bledy += 1
+	print("TEST PRZEŁADOWAŃ: błędów %d" % bledy)

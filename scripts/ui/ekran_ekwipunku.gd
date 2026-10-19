@@ -922,6 +922,7 @@ func _process(delta: float) -> void:
 				r.visible = true
 				r.position = cel
 			r.position = r.position.lerp(cel, 0.5)
+		_uchwyty_kieszeni()
 		for c in _warstwa.get_children():
 			if c.has_meta("otwieranie") and c is Control:
 				var pk2: Variant = _r3d.punkt_ekranu(_otwieranie) if _otwieranie != "" else null
@@ -939,7 +940,8 @@ func _process(delta: float) -> void:
 	if _podp_ucieczka == null and not tryb_bazy:
 		_podp_ucieczka = Motyw.etykieta("[W/S/A/D – przytrzymaj] zerwij się i uciekaj (plecak zostaje na ziemi)", 12, Color(0.85, 0.6, 0.4, 0.85), Motyw.mono())
 		_podp_ucieczka.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-		_podp_ucieczka.offset_top = -70
+		_podp_ucieczka.offset_top = -102
+		_podp_ucieczka.offset_bottom = -84
 		_podp_ucieczka.offset_left = -330
 		_podp_ucieczka.offset_right = 330
 		_podp_ucieczka.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1396,6 +1398,19 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not _drag.is_empty():
 		_upusc_drag(false)
 		get_viewport().set_input_as_handled()
+		return
+	# zapięcia kieszeni: chwyt za podświetlony suwak / klamrę / brzeg klapy i przeciągnięcie go
+	if not _proste() and _drag.is_empty() and _przekl.is_empty():
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed and _gest.is_empty():
+				if _chwyc_uchwyt(_root.get_global_mouse_position()):
+					get_viewport().set_input_as_handled()
+			elif not event.pressed and not _gest.is_empty():
+				_pusc_uchwyt()
+				get_viewport().set_input_as_handled()
+		elif event is InputEventMouseMotion and not _gest.is_empty():
+			_ciagnij_uchwyt(_root.get_global_mouse_position())
+			get_viewport().set_input_as_handled()
 
 
 func _upusc_drag(anuluj: bool) -> void:
@@ -1664,6 +1679,186 @@ func _klik_kieszeni(ui: SiatkaUI, i: int, co: String) -> void:
 var _gest := {}
 
 
+## Uchwyty zapięć: dla każdej kieszeni bieżący krok (otwieranie zamkniętej, zapinanie otwartej), jego
+## punkt na ekranie i kierunek, w którym trzeba go przeciągnąć. SiatkaUI rysuje je jako podświetlenie.
+func _uchwyty_kieszeni() -> void:
+	var t := Time.get_ticks_msec()
+	for co in _kieszenie:
+		var gui: SiatkaUI = null
+		if _ramki.has(co) and is_instance_valid(_ramki[co]) and (_ramki[co] as Control).visible:
+			gui = _ramki[co].get_meta("siatka_ui", null)
+		var lst: Array = _kieszenie[co]
+		for i in lst.size():
+			var e: Dictionary = lst[i]
+			e.erase("uchwyt")
+			if gui == null or _proste() or _r3d == null or not _r3d.ma(co) or bool(e.get("w_toku", false)):
+				continue
+			var zam := bool(e["otwarta"]) or bool(e.get("zamyk", false))
+			var pg := _postep(e, co, i)
+			var k := -1
+			if zam:
+				for q in range(pg.size() - 1, -1, -1):
+					if float(pg[q]) > 0.0:
+						k = q
+						break
+			else:
+				for q in pg.size():
+					if float(pg[q]) < 1.0:
+						k = q
+						break
+			if k < 0:
+				continue
+			var pe = _r3d.uchwyt_ekran(co, i, k)
+			if pe == null:
+				continue
+			var rodz: String = _r3d.rodzaj_kroku(co, i, k)
+			var kl := "kier_%d" % k
+			if not e.has(kl) or t - int(e.get(kl + "_t", 0)) > 600:
+				if _gest.is_empty() or _gest["co"] != co or int(_gest["i"]) != i:
+					e[kl] = _droga(co, i, k, float(pg[k]), rodz, e)
+					e[kl + "_t"] = t
+			var kier: Vector2 = e.get(kl, Vector2(0, -110))
+			e["uchwyt"] = pe
+			e["uchwyt_k"] = k
+			e["uchwyt_l"] = gui.get_global_transform().affine_inverse() * (pe as Vector2)
+			e["uchwyt_kier"] = (-kier if zam else kier).normalized()
+			e["uchwyt_rodz"] = rodz
+			e["uchwyt_akt"] = not _gest.is_empty() and _gest["co"] == co and int(_gest["i"]) == i
+		if gui:
+			gui.proste_kieszenie = _proste()
+			gui.queue_redraw()
+
+
+## Droga uchwytu na ekranie dla kroku (zamknięte -> otwarte); gdy model jej nie pokazuje (worek, blend shape) –
+## domyślna: suwak w bok na szerokość kieszeni, klapa w górę.
+func _droga(co: String, i: int, k: int, f: float, rodz: String, e: Dictionary) -> Vector2:
+	var d: Vector2 = _r3d.droga_kroku(co, i, k, f)
+	if d.length() >= 36.0:
+		return d.limit_length(260.0)
+	if rodz == "x":
+		var rr: Rect2i = e["r"]
+		return Vector2(maxf(70.0, rr.size.x * SiatkaUI.KOM * 0.9), 0)
+	return Vector2(0, -110)
+
+
+## Kliknięcie: czy trafiło w uchwyt którejś kieszeni (do 24 px). Klamra – klik i gotowe; suwak / klapa – chwyt.
+func _chwyc_uchwyt(m: Vector2) -> bool:
+	var best := {}
+	var bd := 24.0
+	for co in _kieszenie:
+		var lst: Array = _kieszenie[co]
+		for i in lst.size():
+			var e: Dictionary = lst[i]
+			if not e.has("uchwyt"):
+				continue
+			var d := (e["uchwyt"] as Vector2).distance_to(m)
+			if d < bd:
+				bd = d
+				best = {"co": co, "i": i}
+	if best.is_empty():
+		return false
+	var co: String = best["co"]
+	var i: int = best["i"]
+	var e: Dictionary = _kieszenie[co][i]
+	for x in _kieszenie[co]:
+		if bool(x.get("w_toku", false)):
+			return true
+	if gracz and not gracz.akcja.is_empty():
+		return true
+	var zam := bool(e["otwarta"]) or bool(e.get("zamyk", false))
+	if zam and bool(e["otwarta"]):
+		# zapinanie: zawartość już niedostępna
+		e["otwarta"] = false
+		_r3d.oznacz(co, i, false)
+	e["zamyk"] = zam
+	var k := int(e.get("uchwyt_k", _krok_akt(e, co, i)))
+	var pg: Array = _postep(e, co, i)
+	var rodz: String = _r3d.rodzaj_kroku(co, i, k)
+	var gui: SiatkaUI = _ramki[co].get_meta("siatka_ui", null) if _ramki.has(co) else null
+	if rodz == "klik":
+		pg[k] = 0.0 if zam else 1.0
+		_r3d.krok_anim(co, i, k, not zam)
+		Dzwiek.graj("klik", -8.0, randf_range(0.7, 0.85))
+		if gracz:
+			Gra.emituj_halas(gracz.global_position, 2.5, gracz)
+		_sprawdz_koniec(gui, e, co, i)
+		_podpowiedz(e, co, i)
+		e.erase("kier_%d" % k)
+		return true
+	var kier := _droga(co, i, k, float(pg[k]), rodz, e)
+	_gest = {"co": co, "i": i, "k": k, "zam": zam, "m0": m, "f0": float(pg[k]), "kier": kier, "t": Time.get_ticks_msec(), "ui": gui}
+	_r3d.ustaw_krok(co, i, k, float(pg[k]))     # dłoń idzie do uchwytu
+	Dzwiek.graj("szelest_0", -20.0, 1.3)
+	return true
+
+
+## Przeciąganie chwyconego uchwytu: postęp kroku to rzut ruchu myszy na drogę uchwytu. Tylko w jedną
+## stronę (otwieranie dalej otwiera, zapinanie dalej zapina) – przeciągnięcie za daleko niczego nie cofa;
+## dojście do końca kończy krok (dźwięk), następny krok trzeba chwycić osobno.
+func _ciagnij_uchwyt(m: Vector2) -> void:
+	var g := _gest
+	var co: String = g["co"]
+	var i: int = g["i"]
+	var k: int = g["k"]
+	var e: Dictionary = _kieszenie[co][i]
+	var pg: Array = e["postep"]
+	var kier: Vector2 = g["kier"]
+	var f := float(g["f0"]) + (m - (g["m0"] as Vector2)).dot(kier) / maxf(1.0, kier.length_squared())
+	var stary := float(pg[k])
+	var zam: bool = g["zam"]
+	f = minf(stary, clampf(f, 0.0, 1.0)) if zam else maxf(stary, clampf(f, 0.0, 1.0))
+	if zam and f < 0.03:
+		f = 0.0
+	elif not zam and f > 0.97:
+		f = 1.0
+	if is_equal_approx(f, stary):
+		return
+	pg[k] = f
+	_r3d.ustaw_krok(co, i, k, f)
+	# dźwięk i hałas zależne od szybkości ruchu (rzep szarpnięty – głośno, powoli – cicho)
+	var teraz := Time.get_ticks_msec()
+	var dt := maxf(0.008, (teraz - int(g["t"])) / 1000.0)
+	g["t"] = teraz
+	var szybkosc := absf(f - stary) * kier.length() / dt
+	e["dz_acc"] = float(e.get("dz_acc", 0.0)) + absf(f - stary)
+	var dz: String = _r3d.dzwiek_kroku(co, i, k)
+	if float(e["dz_acc"]) > 0.2:
+		e["dz_acc"] = 0.0
+		var gl := lerpf(-20.0, -5.0, clampf(szybkosc / 1500.0, 0.0, 1.0))
+		match dz:
+			"zamek":
+				Dzwiek.graj("zamek", gl, randf_range(0.9, 1.15))
+			"rzep":
+				Dzwiek.graj("rzep", gl + 2.0, randf_range(0.9, 1.1))
+			_:
+				Dzwiek.graj("plecak", gl - 4.0, randf_range(1.1, 1.4))
+		if gracz:
+			Gra.emituj_halas(gracz.global_position, (1.0 + szybkosc / 300.0) * (1.6 if dz == "rzep" else 1.0), gracz)
+	var koniec := (f >= 1.0 and not zam) or (f <= 0.0 and zam)
+	if koniec:
+		# krok domknięty: wyraźny dźwięk końca (suwak dojechał, klapa przylgnęła), chwyt puszczony
+		match dz:
+			"zamek":
+				Dzwiek.graj("klik", -12.0, 1.35)
+			"rzep":
+				Dzwiek.graj("rzep", -9.0, 0.8)
+			_:
+				Dzwiek.graj("plecak", -11.0, 0.95)
+		e.erase("kier_%d" % k)
+		_gest = {}
+		_sprawdz_koniec(g["ui"], e, co, i)
+	_podpowiedz(e, co, i)
+	if g["ui"] and is_instance_valid(g["ui"]):
+		(g["ui"] as SiatkaUI).queue_redraw()
+
+
+func _pusc_uchwyt() -> void:
+	var g := _gest
+	_gest = {}
+	if g.has("ui") and g["ui"] and is_instance_valid(g["ui"]):
+		(g["ui"] as SiatkaUI).queue_redraw()
+
+
 ## Tryb prosty (ustawienia): kliknięcie otwiera/zamyka całą kieszeń animacją, wolniej niż gestem.
 func _proste() -> bool:
 	return bool(Gra.ustawienia.get("proste_kieszenie", false)) or _r3d == null
@@ -1702,11 +1897,11 @@ func _podpowiedz(e: Dictionary, co: String, i: int) -> void:
 	if k >= 0 and _r3d:
 		match _r3d.rodzaj_kroku(co, i, k):
 			"klik":
-				t = "kliknij – zapnij klamrę" if zam else "kliknij – rozepnij"
+				t = "kliknij klamrę – zapnij" if zam else "kliknij klamrę – rozepnij"
 			"x":
-				t = "przeciągnij suwak w bok"
+				t = "chwyć suwak i przeciągnij"
 			_:
-				t = "przeciągnij w dół – dociśnij" if zam else "przeciągnij w górę – odsuń"
+				t = "chwyć brzeg i dociśnij" if zam else "chwyć brzeg i odciągnij"
 	e["podpowiedz"] = t
 	var pg: Array = e.get("postep", [])
 	var suma := 0.0
@@ -1720,6 +1915,11 @@ func _gest_start(ui: SiatkaUI, i: int, zamykanie: bool, co: String) -> void:
 		return
 	var e: Dictionary = _kieszenie[co][i]
 	if bool(e.get("w_toku", false)):
+		return
+	if not _proste():
+		# zapięcia otwiera się chwytając podświetlony uchwyt (suwak, klamrę, brzeg klapy), nie całą kieszeń
+		ui._gest = -1
+		_komunikat("Chwyć podświetlony suwak / klamrę i przeciągnij")
 		return
 	if _proste():
 		if zamykanie:
@@ -1817,11 +2017,16 @@ func _sprawdz_koniec(ui: SiatkaUI, e: Dictionary, co: String, i: int) -> void:
 		ekw.ustaw_kieszen(co, i, true)
 		if _r3d:
 			_r3d.oznacz(co, i, true)
-		Dzwiek.graj("plecak", -14.0, 1.3)
+		Dzwiek.graj("plecak", -10.0, 1.3)
+		_gest = {}
+		_komunikat(String(e["nazwa"]) + " – otwarta")
 	elif bool(e.get("zamyk", false)) and zadne:
 		e["zamyk"] = false
 		ekw.ustaw_kieszen(co, i, false)
-		Dzwiek.graj("plecak", -14.0, 1.1)
+		Dzwiek.graj("plecak", -10.0, 1.05)
+		Dzwiek.graj("klik", -15.0, 1.1)
+		_gest = {}
+		_komunikat(String(e["nazwa"]) + " – zapięta")
 
 
 ## Tryb prosty: zamknięcie całej kieszeni animacją (trwa).

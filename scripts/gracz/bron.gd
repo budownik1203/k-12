@@ -28,6 +28,7 @@ var bloom := 0.0
 var spust_puszczony := true
 var r_trzymany := 0.0
 var r_aktywny := false
+var zamroz := false          # testy: czas stanu ustawiany ręcznie (klatki animacji)
 
 var latarka_w_rece := false
 var _lat_node: Node3D
@@ -37,6 +38,10 @@ var _anim_akcji := ""          # "leczenie" | "magazynek" | "" – animacja rąk
 var _anim_akcji_t := 0.0
 var _kick := Vector3.ZERO
 var _kick_rot := Vector3.ZERO
+var _kick_v := Vector3.ZERO          # sprężyna odrzutu: prędkości (broń szarpnięta i wracająca z lekkim przestrzeleniem)
+var _kick_rot_v := Vector3.ZERO
+var _seria := 0                      # strzały w bieżącej serii (wzór odrzutu)
+var _seria_t := 0.0
 var _sway := Vector2.ZERO
 var _bob := 0.0
 var _ruch := 0.0
@@ -68,6 +73,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		_szklo = null
 	_reka_p = null
 	_reka_l = null
+	_chor = null
+	_chor_wezly.clear()
 	_ruchome.clear()
 	_luska_reka = null
 	stan = "gotowa"
@@ -389,6 +396,10 @@ func _animuj_montaz(rot: Vector3, poz: Vector3) -> Array:
 
 var _reka_p: Reka
 var _reka_l: Reka
+var _reka_baza := Transform3D()      # spoczynkowa poza lewej dłoni (przestrzeń modelu)
+var _lok_baza := Vector3.ZERO
+var _chor: Choreografia = null       # bieżąca choreografia przeładowania / sprawdzania
+var _chor_wezly: Array = []          # naboje, łuski, drugi magazynek – zwalniane po choreografii
 
 
 ## Dłonie przy broni: prawa obejmuje chwyt pistoletowy, lewa łoże (karabin) albo prawą dłoń (pistolet).
@@ -410,16 +421,18 @@ func _zbuduj_dlonie(pistolet: bool, tylko_prawa: bool) -> void:
 	_lewa.add_child(_reka_l)
 	if pistolet:
 		_reka_l.chwyc(chw + Vector3(-0.024, -0.012, 0.014), os_dol, Vector3(1, 0.1, 0), 0.07)
-		_reka_l.celuj_lokiec(Vector3(-0.14, -0.34, 0.4), model)
+		_lok_baza = Vector3(-0.14, -0.34, 0.4)
 	elif md.has("chwyt_pionowy"):
 		# chwyt przedni: lewa dłoń obejmuje go jak rękojeść pistoletu
 		_reka_l.ustaw_chwyt("pistolet", true)
 		_reka_l.chwyc(md["chwyt_pionowy"], Vector3(0, -1, 0.1), Vector3(1, 0, 0), 0.07)
-		_reka_l.celuj_lokiec(Vector3(md["chwyt_pionowy"]) + Vector3(-0.2, -0.3, 0.3), model)
+		_lok_baza = Vector3(md["chwyt_pionowy"]) + Vector3(-0.2, -0.3, 0.3)
 	else:
 		var przod: Vector3 = md.get("lozysko", md["przod"])
 		_reka_l.chwyc(przod, Vector3(0, 0, 1), Vector3(0.15, 1.0, 0.0), 0.062, 0.042)
-		_reka_l.celuj_lokiec(przod + Vector3(-0.22, -0.3, 0.28), model)
+		_lok_baza = przod + Vector3(-0.22, -0.3, 0.28)
+	_reka_l.celuj_lokiec(_lok_baza, model)
+	_reka_baza = _reka_l.transform
 
 
 func _wezel_latarki() -> Node3D:
@@ -663,7 +676,10 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	_bieg = move_toward(_bieg, 1.0 if we.get("bieg", false) else 0.0, delta * 5.0)
 	cooldown = maxf(0.0, cooldown - delta)
 	bloom = maxf(0.0, bloom - delta * 2.5)
-	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6
+	_seria_t += delta
+	if _seria_t > 0.32:
+		_seria = 0
+	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6 and _bieg < 0.35
 	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0 / (1.0 + (zoom() - 1.0) * 0.35))
 	if przedmiot == null:
 		# sama latarka: tylko animacja wyjmowania
@@ -676,12 +692,23 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		return
 	# stany czasowe
 	if stan != "gotowa":
-		stan_t += delta
+		if not zamroz:
+			stan_t += delta
 		_graj_fazy()
+		if _chor:
+			_chor.aktualizuj(minf(stan_t, stan_total))
 		if stan == "ladowanie_wewn" and we.get("strzal", false):
 			_koniec_stanu()  # przerwanie ładowania strzelby strzałem
+		elif stan == "lamanie" and we.get("strzal", false) and spust_puszczony and _chor:
+			# strzał w trakcie: naboje z dłoni z powrotem, od razu zamknięcie luf
+			var iz := _chor.indeks("zamknij_chwyt")
+			if iz > _chor.biezacy():
+				stan_t = _chor.skocz(iz)
+			spust_puszczony = false
 		elif stan_t >= stan_total:
 			_koniec_stanu()
+		if not we.get("strzal", false):
+			spust_puszczony = true
 		return
 	if not moze:
 		spust_puszczony = not we.get("strzal", false)
@@ -718,6 +745,13 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 		stan = "sprawdzanie"
 		stan_t = 0.0
 		stan_total = 1.8
+		if _ruchome.has("lufy"):
+			_chor = Przeladowania.obrzyn_sprawdz(self)
+			stan_total = _chor.calosc
+		elif przedmiot.dane.get("mag") != null and mag_node and _lewa:
+			# zerknięcie na okienka magazynka
+			_chor = Przeladowania.sprawdz_magazynek(self)
+			stan_total = _chor.calosc
 		return
 	if we.get("strzal", false):
 		_sprobuj_strzal(we)
@@ -734,6 +768,7 @@ func _pobierz_naboj() -> String:
 	if bd.has("wewnetrzny"):
 		if d["wewn"] > 0:
 			d["wewn"] -= 1
+			d["luski"] = int(d.get("luski", 0)) + 1     # łuska zostaje w komorze do przeładowania
 			return d["wewn_typ"]
 		return ""
 	if d["komora"] == "":
@@ -784,13 +819,33 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		_promien(space, od, kier, obr, float(ad["penetracja"]))
 	# odrzut
 	var sila: float = float(bd["odrzut"]) * przedmiot.mod("odrzut") * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0)) * lerpf(1.0, 0.62, podparcie)
+	# wzór odrzutu: w serii lufa idzie w górę i znosi ją w jedną stronę (do opanowania), trochę losowo
+	var bok := 0.0
+	match bd["kaliber"]:
+		"7.62x39": bok = 0.22 + sin(_seria * 0.8) * 0.3
+		"9x18": bok = sin(_seria * 1.3) * 0.35 - 0.05
+		_: bok = 0.0
 	if gracz.has_method("dodaj_odrzut"):
-		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
+		gracz.dodaj_odrzut(Vector2((bok + randf_range(-0.18, 0.18)) * sila, sila * (1.0 + minf(_seria, 6) * 0.04)))
+	_seria += 1
+	_seria_t = 0.0
 	if _tryb() == "auto":
 		bloom = minf(bloom + 0.35, 3.0)
-	_kick += Vector3(randf_range(-0.006, 0.006), 0.012 * lerpf(1.0, 0.2, ads), 0.07 + sila * 0.016)
+	# szarpnięcie broni w widoku (sprężyna): pistolet podbija lufę, karabin wchodzi w ramię, obrzyn – jedno i drugie
+	var p_cofa := 1.0
+	var p_lufa := 1.0
+	match bd["slot"]:
+		"pistolet":
+			p_cofa = 0.7
+			p_lufa = 1.6
+	if bd["kaliber"] == "12/70":
+		p_cofa = 1.7
+		p_lufa = 1.5
+	var mn := lerpf(1.0, 0.55, ads) * lerpf(1.0, 0.6, podparcie)
+	_kick += Vector3(0.0, 0.004, 0.02 + sila * 0.006) * p_cofa
+	_kick_v += Vector3(randf_range(-0.12, 0.12), 0.25 * lerpf(1.0, 0.25, ads), 1.6 + sila * 0.35) * p_cofa * mn
 	# przy celowaniu broń idzie głównie w tył (w ramię), a nie w górę – zamek nie wchodzi na linię wzroku
-	_kick_rot += Vector3(deg_to_rad(6.0 + sila * 2.0) * lerpf(1.0, 0.3, ads), randf_range(-0.04, 0.04), randf_range(-0.05, 0.05))
+	_kick_rot_v += Vector3(deg_to_rad(110.0 + sila * 30.0) * lerpf(1.0, 0.35, ads) * p_lufa, randf_range(-0.6, 0.6) + bok * 0.8, randf_range(-0.9, 0.9) - bok * 0.5) * mn
 	var wylot := model.global_transform * Vector3(md["lufa"])
 	Efekty.blysk(gracz.get_parent(), wylot, (3.0 if bd["slot"] == "pistolet" else 4.0) * (0.15 if _bez_plomienia else 1.0) * lerpf(1.0, 0.6, ads))
 	if not _bez_plomienia:
@@ -821,6 +876,11 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		"12/70": halas = 32.0
 	halas *= przedmiot.mod("halas")
 	Gra.emituj_halas(gracz.global_position, halas, gracz)
+	if not bd.has("wewnetrzny"):
+		# praca zamka tuż przy uchu; po ostatnim naboju zamek staje w tyle (głośniejszy, suchy klik)
+		Dzwiek.graj("klik", -17.0, randf_range(0.55, 0.65))
+		if przedmiot.dane.get("komora", "") == "" and _ruchome.has("zamek") and bool(_ruchome["zamek"]["dane"].get("blokada", false)):
+			get_tree().create_timer(0.05).timeout.connect(func(): Dzwiek.graj("klik", -7.0, 0.8))
 	var dzw := {"9x18": "strzal_pistolet", "7.62x39": "strzal_karabin", "12/70": "strzal_strzelba"}
 	var nazwa_dzw: String = dzw.get(bd["kaliber"], "strzal_pistolet")
 	if _bez_plomienia:
@@ -893,11 +953,18 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 		if ekw.policz_amunicje(bd["kaliber"]) <= 0:
 			komunikat.emit("Brak amunicji " + bd["kaliber"])
 			return
+		if _ruchome.has("lufy"):
+			# łamana: pełna choreografia (łuski, naboje, zatrzaśnięcie)
+			_chor = Przeladowania.obrzyn(self, szybkie)
+			stan = "lamanie"
+			stan_t = 0.0
+			stan_total = _chor.calosc
+			_fazy_dzw = []
+			return
 		stan = "ladowanie_wewn"
 		stan_t = 0.0
 		stan_total = float(bd["przeladowanie"]) * 0.5
-		# łamanie lufy, wkładanie naboju (zamknięcie – po ostatnim)
-		_fazy_dzw = [[0.0, "obrzyn_lam", -6.0], [0.7, "naboj_wloz", -8.0]]
+		_fazy_dzw = [[0.7, "naboj_wloz", -8.0]]
 		return
 	var z := ekw.znajdz_magazynek(bd["magazynki"])
 	if z.is_empty():
@@ -915,10 +982,10 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 	stan = "przeladowanie"
 	stan_t = 0.0
 	stan_total = t
-	# fazy: wypięcie starego magazynka, wpięcie nowego, (pusta komora) przeciągnięcie zamka
-	_fazy_dzw = [[0.12, "mag_wyjmij", -6.0], [0.58 if _byl_pusty else 0.8, "mag_wloz", -4.0]]
-	if _byl_pusty:
-		_fazy_dzw.append([0.86, _zamek_dzw(), -4.0])
+	# wypięcie starego magazynka, ładownica, wpięcie nowego, (pusta komora) przeciągnięcie zamka –
+	# dźwięki i ruchy w choreografii
+	_fazy_dzw = []
+	_chor = Przeladowania.magazynek(self, szybkie, t)
 	if z["siatka"] == ekw.kieszenie:
 		komunikat.emit("Magazynek z kieszeni – dłużej niż z ładownicy")
 	elif not z["szybki"]:
@@ -946,6 +1013,8 @@ func _koniec_stanu() -> void:
 	_fazy_dzw = []
 	var s := stan
 	stan = "gotowa"
+	if _chor:
+		_chor.aktualizuj(stan_total)
 	match s:
 		"przeladowanie":
 			_dokoncz_przeladowanie()
@@ -963,6 +1032,9 @@ func _koniec_stanu() -> void:
 					Dzwiek.graj("obrzyn_zamk", -5.0)
 		"sprawdzanie":
 			komunikat.emit(opis_amunicji())
+		"lamanie":
+			if int(przedmiot.dane.get("wewn", 0)) > 0:
+				komunikat.emit(opis_amunicji())
 		"usuwanie":
 			przedmiot.dane["zaciecie"] = false
 			_byl_pusty = false
@@ -976,7 +1048,45 @@ func _koniec_stanu() -> void:
 				przedmiot.dane["komora"] = ""
 			Efekty.luska(gracz.get_parent(), model.global_transform * Vector3(0.03, 0.05, -0.06), kamera.global_basis.x)
 			komunikat.emit("Zacięcie usunięte")
+	_chor_koniec()
 	zmiana.emit()
+
+
+## Koniec choreografii: lewa dłoń wraca do spoczynku, pomocnicze obiekty znikają.
+func _chor_koniec() -> void:
+	if _chor == null:
+		return
+	_chor = null
+	for w in _chor_wezly:
+		if is_instance_valid(w):
+			w.queue_free()
+	_chor_wezly.clear()
+	if mag_node:
+		mag_node.transform = Transform3D()
+	if _lewa and _reka_l and is_instance_valid(_reka_l):
+		_lewa.transform = Transform3D()
+		_reka_l.transform = _reka_baza
+		_reka_l.celuj_lokiec(_lok_baza, model)
+		_reka_l.ustaw_chwyt("pistolet" if (jest_pistolet() or md.has("chwyt_pionowy")) else "lozysko")
+	_raczka = 0.0
+	_odswiez_mag()
+
+
+## Szarpnięcie broni w choreografii (zatrzask luf, wpięty magazynek, puszczony zamek).
+func _kop_anim(r: Vector3, p: Vector3) -> void:
+	_kick_rot += r
+	_kick += p
+
+
+## Choreografia w tej klatce: lewa dłoń, łokieć, palce, przechył broni.
+func _zastosuj_chor() -> Array:
+	if _lewa and _reka_l and is_instance_valid(_reka_l):
+		_lewa.transform = Transform3D()
+		_reka_l.transform = _chor.reka
+		_reka_l.celuj_lokiec(_chor.reka.origin + _chor.lok, model)
+		if _chor.chwyt != "" and _reka_l._chwyt != _chor.chwyt:
+			_reka_l.ustaw_chwyt(_chor.chwyt)
+	return [_chor.bron_rot, _chor.bron_poz]
 
 
 func _dokoncz_przeladowanie() -> void:
@@ -1090,18 +1200,26 @@ func _animuj_mechanizm(delta: float) -> void:
 	_odskok = maxf(0.0, _odskok - delta * 16.0)
 	var cel_lufy := 1.0 if stan == "ladowanie_wewn" else 0.0
 	_lufy_otw = move_toward(_lufy_otw, cel_lufy, delta * 4.5)
+	var ch_lufy := -1.0
+	var ch_zamek := -1.0
+	if _chor:
+		ch_lufy = float(_chor.kanaly.get("lufy", -1.0))
+		ch_zamek = float(_chor.kanaly.get("zamek", -1.0))
+		_raczka = float(_chor.kanaly.get("raczka", 0.0))
 	for nazwa in _ruchome:
 		var r: Dictionary = _ruchome[nazwa]
 		var w: Node3D = r["wezel"]
 		var d: Dictionary = r["dane"]
 		if nazwa == "lufy":
 			var e := _lufy_otw * _lufy_otw * (3.0 - 2.0 * _lufy_otw)
-			w.rotation.x = float(d["kat"]) * e
+			w.rotation.x = float(d["kat"]) * (ch_lufy if ch_lufy >= 0.0 else e)
 			continue
 		var skok: float = d["skok"]
 		var otwarty := 0.0
 		if bool(d.get("blokada", false)) and przedmiot and przedmiot.dane.get("komora", "x") == "" and stan != "wyciaganie":
 			otwarty = 1.0      # zamek zablokowany w tylnym położeniu (pusta broń)
+		if ch_zamek >= 0.0:
+			otwarty = ch_zamek      # choreografia trzyma zamek (puszczany po wpięciu magazynka)
 		var o := maxf(maxf(sin(_odskok * PI * 0.5), otwarty), _raczka)
 		w.position = Vector3(0, 0, skok * o)
 
@@ -1110,6 +1228,7 @@ func _animuj_mechanizm(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_anim_akcji_t += delta
+	zerkniecie = move_toward(zerkniecie, 1.0 if (stan == "sprawdzanie" and stan_t < stan_total - 0.3) else 0.0, delta * 3.0)
 	_animuj_mechanizm(delta)
 	_animuj_zegarek(delta)
 	if _spust_t > 0.0:
@@ -1154,8 +1273,15 @@ func _process(delta: float) -> void:
 		_sway += _sway_v * h
 		reszta -= h
 	_sway = _sway.limit_length(0.08)
-	_kick = _kick.lerp(Vector3.ZERO, delta * 14.0)
-	_kick_rot = _kick_rot.lerp(Vector3.ZERO, delta * 12.0)
+	# sprężyny odrzutu (kroki ≤ 8 ms – stabilne przy niskim FPS)
+	var rk := minf(delta, 0.1)
+	while rk > 0.0:
+		var hk := minf(rk, 0.008)
+		_kick_v += (-_kick * 340.0 - _kick_v * 26.0) * hk
+		_kick += _kick_v * hk
+		_kick_rot_v += (-_kick_rot * 300.0 - _kick_rot_v * 22.0) * hk
+		_kick_rot += _kick_rot_v * hk
+		rk -= hk
 	_przeszkody(delta)
 	var poz := hip.lerp(ads_poz, t) + bob + _kick + Vector3(-_sway.x, _sway.y, 0) * (1.0 - t * 0.7)
 	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5) + Vector3(0, 0.05, 0) * (1.0 - t)
@@ -1192,7 +1318,13 @@ func _process(delta: float) -> void:
 	if stan != "gotowa" and stan_total > 0.0:
 		f = clampf(stan_t / stan_total, 0.0, 1.0)
 	var dip := 0.0
-	match stan:
+	var st_anim := stan
+	if _chor:
+		var rp := _zastosuj_chor()
+		rot += rp[0]
+		poz += rp[1]
+		st_anim = "chor"
+	match st_anim:
 		"przeladowanie":
 			# broń przechylona do magazynka; lewa ręka: wyjmuje stary, sięga do kamizelki, wkłada nowy
 			var przechyl := smoothstep(0.0, 0.15, f) * (1.0 - smoothstep(0.85, 1.0, f))
@@ -1256,14 +1388,14 @@ func _process(delta: float) -> void:
 			var w := 1.0 - f
 			rot += Vector3(-0.8, 0.0, 0.2) * w
 			poz += Vector3(0, -0.2, 0.05) * w
-	if stan != "przeladowanie" and stan != "sprawdzanie":
+	if stan != "przeladowanie" and stan != "sprawdzanie" and _chor == null:
 		if mag_node:
 			mag_node.position = Vector3.ZERO
 			mag_node.rotation = Vector3.ZERO
 			_odswiez_mag()
 		if _lewa and stan != "ladowanie_wewn" and stan != "sprawdzanie" and stan != "usuwanie":
 			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
-	if stan != "ladowanie_wewn":
+	if stan != "ladowanie_wewn" and _chor == null:
 		if _luska_reka and is_instance_valid(_luska_reka):
 			_luska_reka.visible = false
 		if _lewa and _reka_l and is_instance_valid(_reka_l) and _ruchome.has("lufy") and _reka_l._chwyt != "lozysko":
@@ -1313,6 +1445,7 @@ func _process(delta: float) -> void:
 
 
 var _opusc := 0.0
+var zerkniecie := 0.0        # 0..1 – głowa pochylona do broni (sprawdzanie magazynka / komór)
 var _rece_akcji: Node3D
 var _anim_cz: AnimacjeAkcji
 var _rece_typ := ""

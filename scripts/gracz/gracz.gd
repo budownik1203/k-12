@@ -48,6 +48,8 @@ var latarka_w_rece := false     # latarka w lewej ręce (sama albo z pistoletem)
 var latarka_wlaczona := true
 var latarka_broni_wl := false   # latarka taktyczna na broni
 var _kop := 0.0                 # kopnięcie kamery po strzale
+var _kam_kop := Vector3.ZERO    # sprężyna kamery po strzale: (pochylenie, odchylenie, przechył)
+var _kam_kop_v := Vector3.ZERO
 var oglusz := 0.0               # ogłuszenie po trafieniu w hełm (sekundy, malejąco)
 var ruch_z_ekwipunkiem := false  # szybka kamizelka (2x Tab): wolny marsz z otwartymi ładownicami
 var ekw_pitch := 0.0            # widok przy ekwipunku: spojrzenie w dół, przechył, przysiad
@@ -144,6 +146,12 @@ func _ready() -> void:
 
 func _ekw_zmieniony() -> void:
 	if tryb_bazy:
+		return
+	# puste ręce, a broń trafiła do slotu (podniesiona z ziemi / z łupu) – od razu w ręce
+	var nb := ekw.nowa_bron
+	ekw.nowa_bron = ""
+	if nb != "" and bron.przedmiot == null and not latarka_w_rece and ekw.sloty.get(nb) != null:
+		_wybierz_bron(nb)
 		return
 	# broń mogła zostać zdjęta w ekwipunku
 	if bron.przedmiot != ekw.sloty.get(aktywny_slot):
@@ -275,6 +283,8 @@ func ogluszenie(sila: float, tekst: String) -> void:
 ## Kopnięcie kamery przy strzale (fov i drżenie), silniejsze dla mocniejszej broni.
 func kopniecie(sila: float) -> void:
 	_kop = minf(1.5, _kop + 0.35 + sila * 0.09)
+	# gładkie szarpnięcie głowy (sprężyna) zamiast losowego drżenia: podbicie, lekki przechył w losową stronę
+	_kam_kop_v += Vector3(-(0.6 + sila * 0.22), randf_range(-0.25, 0.25) * sila * 0.3, randf_range(-1.0, 1.0) * (0.35 + sila * 0.12)) * 25.0 * lerpf(1.0, 0.6, bron.ads)
 
 
 func waga() -> float:
@@ -376,8 +386,15 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	if oglusz > 0.0:
 		var o := minf(1.0, oglusz / 2.0)
 		drzenie += Vector2(sin(Time.get_ticks_msec() * 0.0021) * 1.6, cos(Time.get_ticks_msec() * 0.0017) * 1.1) * deg_to_rad(1.5) * o
-	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * (_trafienie_shake * deg_to_rad(2.0) + _kop * deg_to_rad(0.35))
-	glowa.rotation.x = clampf(_pitch + ekw_pitch, deg_to_rad(-88), deg_to_rad(88)) + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
+	var rk := minf(delta, 0.1)
+	while rk > 0.0:
+		var hk := minf(rk, 0.008)
+		_kam_kop_v += (-_kam_kop * 260.0 - _kam_kop_v * 20.0) * hk
+		_kam_kop += _kam_kop_v * hk
+		rk -= hk
+	var shake := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * (_trafienie_shake * deg_to_rad(2.0)) + Vector2(_kam_kop.y, -_kam_kop.x) * deg_to_rad(1.0)
+	var zerk := bron.zerkniecie * bron.zerkniecie * (3.0 - 2.0 * bron.zerkniecie)
+	glowa.rotation.x = clampf(_pitch + ekw_pitch - zerk * deg_to_rad(9.0), deg_to_rad(-88), deg_to_rad(88)) + deg_to_rad(_odrzut.y) + drzenie.y + shake.y
 	glowa.rotation.y = deg_to_rad(_odrzut.x) + drzenie.x + shake.x
 	# wychylenie
 	var cel_w := 0.0
@@ -400,9 +417,9 @@ func _rozgladanie(delta: float, aktywne: bool) -> void:
 	_przechyl = lerpf(_przechyl, -bok * 0.012, minf(1.0, delta * 5.0))
 	_ladowanie = move_toward(_ladowanie, 0.0, delta * 0.6)
 	glowa.position = Vector3(wychylenie * 0.32 + bob_x, wys - absf(wychylenie) * 0.06 + bob_y - _ladowanie - ekw_glowa, 0)
-	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp + ekw_roll
+	kamera.rotation.z = -wychylenie * deg_to_rad(11) + _przechyl + sin(_bob_t) * 0.006 * _bob_amp + ekw_roll + _kam_kop.z * deg_to_rad(1.0)
 	var fov_baza := float(Gra.ustawienia.get("fov", 75.0))
-	kamera.fov = lerpf(fov_baza, fov_baza * 0.8 / bron.zoom(), bron.ads) + _kop * 2.2
+	kamera.fov = lerpf(fov_baza, fov_baza * 0.8 / bron.zoom(), bron.ads) + _kop * 1.2
 
 
 func _sciana_przy_wychyleniu(strona: float) -> bool:

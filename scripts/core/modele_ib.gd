@@ -87,7 +87,10 @@ static func _pw9() -> Dictionary:
 		B.profil([V(0.024, 0.026), V(0.036, 0.034), V(0.04, 0.046), V(0.033, 0.048), V(0.025, 0.04)], 0.009, "metal", 0.002),
 		B.box(Vector3(-0.0138, 0.036, 0.006), Vector3(0.004, 0.006, 0.016), "metal_jasny", 0.002),
 	]
-	var m := [B.profil([V(-0.002, -0.081), V(0.0, -0.088), V(0.036, -0.088), V(0.035, -0.081)], 0.022, "metal", 0.002)]
+	# stopka i korpus magazynka (korpus schowany w chwycie, widać go przy wymianie)
+	var m := [B.profil([V(-0.002, -0.081), V(0.0, -0.088), V(0.036, -0.088), V(0.035, -0.081)], 0.022, "metal", 0.002),
+		B.profil([V(-0.003, -0.006), V(0.024, -0.006), V(0.031, -0.081), V(0.001, -0.081)], 0.017, "metal", 0.002),
+		B.walec(Vector3(0, -0.0045, 0.006), Vector3(0, -0.0045, 0.016), 0.0045, 0.0045, "mosiadz", 8)]
 	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.04, 0.014), "kat_chwytu": 10.0, "lozysko": Vector3(0, -0.04, 0.014),
 		"ruchome": {"zamek": {"czesci": zamek, "skok": 0.026, "blokada": true}},
 		"montaz": {"latarka": Vector3(0, -0.004, -0.112), "latarka_pod": true}}
@@ -123,6 +126,8 @@ static func _pm63() -> Dictionary:
 	]
 	zamek.append_array(_naciecia(0.0172, 0.065, 0.0, 0.03, 6, 0.01))
 	var m := [B.profil([V(-0.014, -0.085), V(-0.012, -0.2), V(0.022, -0.2), V(0.022, -0.085)], 0.024, "metal", 0.004),
+		B.profil([V(-0.019, 0.012), V(0.02, 0.012), V(0.022, -0.085), V(-0.014, -0.085)], 0.022, "metal", 0.003),
+		B.walec(Vector3(0, 0.0135, -0.008), Vector3(0, 0.0135, 0.004), 0.0045, 0.0045, "mosiadz", 8),
 		B.profil([V(-0.016, -0.2), V(-0.016, -0.208), V(0.025, -0.208), V(0.025, -0.2)], 0.027, "metal", 0.002)]
 	return {"cialo3": c, "mag3": m, "chwyt": Vector3(0, -0.045, 0.006), "kat_chwytu": 6.0, "lozysko": Vector3(0, -0.03, -0.17),
 		"ruchome": {"zamek": {"czesci": zamek, "skok": 0.05, "blokada": true}},

@@ -16,6 +16,7 @@ const UTILITY := ["latarka", "mapa", "kompas"]
 const MAX_UTILITY := 4
 
 var sloty := {}
+var nowa_bron := ""          # slot, do którego właśnie trafiła podniesiona broń (gracz bierze ją do ręki)
 var kieszenie := Siatka.new(4, 1, 0.0)
 var bezpieczny := Siatka.new(2, 2, 0.0)   # kontener bezpieczny: przeżywa śmierć
 
@@ -353,10 +354,18 @@ func waga() -> float:
 	return total
 
 
-## Dokłada przedmiot do ekwipunku. Magazynki, amunicja i leki najpierw do kamizelki.
+## Dokłada przedmiot do ekwipunku. Broń do pustego slotu broni, magazynki, amunicja i leki najpierw
+## do kamizelki.
 func dodaj(p: Przedmiot) -> bool:
 	if p.typ() in UTILITY and wolny_util() != "":
 		return zaloz("util", p)
+	# broń: najpierw do wolnego slotu broni (pistolet – najpierw do kabury)
+	if p.typ() == "bron":
+		var sl := slot_dla(p)
+		for k in (["pistolet", "glowna"] if sl == "pistolet" else [sl]):
+			if sloty.get(k) == null and pasuje(k, p):
+				nowa_bron = k
+				return zaloz(k, p)
 	var kolejnosc := siatki_pod_reka()
 	kolejnosc.erase(bezpieczny)
 	if p.typ() not in ["magazynek", "amunicja", "med"]:

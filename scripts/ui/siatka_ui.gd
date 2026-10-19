@@ -11,6 +11,7 @@ signal gest_start(ui: SiatkaUI, indeks: int, zamykanie: bool)
 signal gest_ruch(ui: SiatkaUI, indeks: int, rel: Vector2)
 signal gest_koniec(ui: SiatkaUI, indeks: int)
 var _gest := -1
+var proste_kieszenie := true     # tryb prosty (klik w kieszeń) – w rajdzie z modelem 3D: chwytanie uchwytów
 
 const KOM := 34
 
@@ -214,10 +215,41 @@ func uchwyt_kieszeni(i: int) -> Rect2:
 	return Rect2(Vector2(r.end.x - 26, r.position.y + 1), Vector2(25, 11))
 
 
+## Podświetlony uchwyt zapięcia (pulsujący pierścień) ze strzałką: dokąd go przeciągnąć.
+func _rysuj_uchwyt(kz: Dictionary) -> void:
+	var p: Vector2 = kz["uchwyt_l"]
+	var akt := bool(kz.get("uchwyt_akt", false))
+	var puls := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 160.0)
+	var zolty := Color(1.0, 0.82, 0.3)
+	var r := 9.0 + puls * 3.0 if not akt else 7.0
+	draw_circle(p, r + 3.0, Color(0, 0, 0, 0.35))
+	draw_arc(p, r, 0, TAU, 24, Color(zolty, 0.55 + 0.45 * puls if not akt else 1.0), 2.0)
+	draw_circle(p, 3.0, Color(zolty, 0.95))
+	var rodz := String(kz.get("uchwyt_rodz", "gora"))
+	var f := Motyw.mono_b()
+	if rodz == "klik":
+		draw_string(f, p + Vector2(r + 4, 4), "klik", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(zolty, 0.9))
+		return
+	var kier: Vector2 = kz.get("uchwyt_kier", Vector2(0, -1))
+	if kier.length() < 0.1:
+		return
+	# strzałka wzdłuż drogi uchwytu
+	var a := p + kier * (r + 4.0)
+	var b := p + kier * (r + 30.0 + puls * 6.0)
+	draw_line(a, b, Color(zolty, 0.85), 2.0)
+	var bok := kier.orthogonal() * 5.0
+	draw_colored_polygon(PackedVector2Array([b + kier * 7.0, b + bok, b - bok]), Color(zolty, 0.85))
+
+
 func _rysuj_kieszenie() -> void:
+	var proste := proste_kieszenie
 	for ki in kieszenie.size():
 		var kz: Dictionary = kieszenie[ki]
+		if kz.has("uchwyt_l"):
+			_rysuj_uchwyt(kz)
 		if bool(kz["otwarta"]):
+			if not proste:
+				continue
 			# otwarta: przerywany brzeg i uchwyt „zapnij”
 			var u := uchwyt_kieszeni(ki)
 			draw_rect(u, Color(0.1, 0.09, 0.07, 0.85))

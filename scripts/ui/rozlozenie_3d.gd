@@ -296,6 +296,17 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	if _kam == null or not is_instance_valid(_kam):
 		return
+	# kamizelka odsuwa się w prawo, gdy obok leży rozłożony plecak / worek (nie zasłaniają się nawzajem)
+	if _modele.has("kamizelka"):
+		var mk: Dictionary = _modele["kamizelka"]
+		var tw: Tween = mk.get("tw")
+		if tw == null or not tw.is_valid() or not tw.is_running():
+			var inne := _modele.size() > 1
+			var w: Node3D = mk["wezel"]
+			if is_instance_valid(w):
+				w.position.x = move_toward(w.position.x, 0.21 if inne else 0.0, delta * 0.6)
+				w.position.y = move_toward(w.position.y, -0.2 if inne else -0.17, delta * 0.3)
+				w.rotation.y = move_toward(w.rotation.y, -0.32 if inne else 0.0, delta * 1.2)
 	_reka_t -= delta
 	_reka_klik = maxf(0.0, _reka_klik - delta * 5.0)
 	var cel_lok := _SPOCZYNEK
@@ -464,6 +475,45 @@ func _usun(co: String) -> void:
 
 func ma(co: String) -> bool:
 	return _modele.has(co)
+
+
+## Punkt świata na ekranie (piksele okna) albo null, gdy za kamerą.
+func do_ekranu(p: Vector3) -> Variant:
+	if _kam == null or _kam.is_position_behind(p):
+		return null
+	var vp := _kam.get_viewport()
+	var skala := Vector2(Widok3D.POMNIEJSZENIE, Widok3D.POMNIEJSZENIE)
+	if vp is SubViewport:
+		var kont := vp.get_parent() as Control
+		if kont:
+			skala = kont.size / Vector2((vp as SubViewport).size)
+	return _kam.unproject_position(p) * skala
+
+
+## Uchwyt kroku (klamra, suwak, brzeg klapy) na ekranie – tu gracz chwyta myszą.
+func uchwyt_ekran(co: String, i: int, k: int) -> Variant:
+	var p = _punkt_chwytu(co, i, k)
+	if p == null:
+		return null
+	return do_ekranu(p)
+
+
+## Droga uchwytu na ekranie od zamkniętego (0) do otwartego (1) – w tę stronę trzeba go przeciągnąć.
+## f_teraz: bieżący postęp kroku (przywracany po pomiarze).
+func droga_kroku(co: String, i: int, k: int, f_teraz: float) -> Vector2:
+	var e := _kieszen(co, i)
+	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
+		return Vector2.ZERO
+	_cicho = true
+	ustaw_krok(co, i, k, 0.0)
+	var a = uchwyt_ekran(co, i, k)
+	ustaw_krok(co, i, k, 1.0)
+	var b = uchwyt_ekran(co, i, k)
+	ustaw_krok(co, i, k, f_teraz)
+	_cicho = false
+	if a == null or b == null:
+		return Vector2.ZERO
+	return (b as Vector2) - (a as Vector2)
 
 
 ## Środek wnętrza pojemnika na ekranie (piksele okna) albo null, gdy poza kadrem.

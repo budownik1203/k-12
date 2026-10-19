@@ -25,8 +25,8 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | WSAD, Shift, Ctrl, Spacja | ruch, bieg, kucanie, skok |
 | Q / E | wychylenie zza osłony |
 | LPM / PPM | strzał / celowanie przez przyrządy |
-| R | przeładowanie (przytrzymaj: szybkie, magazynek leci na ziemię); przy zacięciu – usunięcie zacięcia |
-| B / T | tryb ognia / sprawdzenie amunicji (bez licznika na HUD) |
+| R | przeładowanie (przytrzymaj: szybkie – nowy magazynek wybija stary, obrzyn wyrzuca łuski szarpnięciem); przy zacięciu – usunięcie zacięcia; strzał w trakcie ładowania obrzyna – zatrzaśnięcie luf |
+| B / T | tryb ognia / sprawdzenie amunicji: zerknięcie na okienka magazynka (ile naboi widać), w obrzynie – uchylenie luf i rzut oka na komory |
 | 1 / 2 / 3 | broń główna / pistolet (drugie wciśnięcie: pistolet z latarką) / sama latarka |
 | F | interakcja (przeszukaj, rozmawiaj, otwórz) |
 | Tab | panel operatora; „Otwórz” przy plecaku/kontenerze: postać zdejmuje go i rozkłada przed sobą (sloty we wnętrzu); w sklepie Tab zamyka |
@@ -50,9 +50,10 @@ W ekwipunku: przeciąganie myszą, **R** obraca, **Ctrl+LPM** przenosi (w rajdzi
 PPM na broni: **Wyczyść** (zestaw do czyszczenia – brudna broń zacina się częściej); PPM na metalowym przedmiocie:
 **Owiń taśmą** (przestaje brzęczeć w biegu). Szabrownicy zbierają leżące rzeczy i okradają ciała – nie zostawiaj
 plecaka bez opieki.
-Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem otwierasz konkretne kieszenie myszą: klamrę
-klikasz, klapę / rzep / kołnierz odciągasz w górę (szybko – głośno), suwak zamka prowadzisz w bok; zapinasz odwrotnie
-(uchwyt „zapnij”). Kieszenie zostają takie, jak je zostawisz – otwarte gubią zawartość w biegu, przy skoku i trafieniu.
+Plecak: **Zdejmij** – postać kładzie go przed sobą zapiętego, potem otwierasz konkretne kieszenie myszą: przy każdej
+kieszeni pulsuje podświetlony uchwyt (klamra, suwak, brzeg klapy) ze strzałką – chwytasz go i przeciągasz (klamrę
+wystarczy kliknąć; szybko – głośno). Koniec ruchu kończy krok dźwiękiem, następny uchwyt chwytasz osobno; zapinasz tak
+samo, chwytając uchwyt otwartej kieszeni. Kieszenie zostają takie, jak je zostawisz – otwarte gubią zawartość w biegu, przy skoku i trafieniu.
 **Załóż** zakłada plecak (otwarte kieszenie zostają otwarte). W ustawieniach: „proste otwieranie” – klik zamiast gestu. Kontener bezpieczny tak samo
 (**Wyjmij kontener**, potem zatrzaski i wieko).
 Szafki, szuflady i skrzynie otwiera się w świecie (**F**), zawartość odkrywa się stopniowo – po ciemku wolniej.
@@ -71,6 +72,9 @@ Drzwi: **F** otwiera i zamyka (klamka, skrzypienie, słychać to z daleka); **ku
 głośno, metalowe dłużej. Wrogowie otwierają drzwi po drodze, a zamknięte na klucz wyważają. Stań nieruchomo przy
 zamkniętych drzwiach, żeby podsłuchać, co jest za nimi (przez skrzydło słychać lepiej niż przez mur). Drewniane
 drzwi kula przebija, metalowe nie.
+Przeładowania są pokazane krok po kroku: obrzyn łamie się na zawiasie, lewa dłoń wyciąga łuski z komór i odrzuca je,
+sięga do kieszeni po naboje, wsuwa je i zatrzaskuje lufy; magazynek KB-47 wychyla się na zaczepie, PM-63 i PW-9 wysuwa
+się z chwytu, a przy pustej komorze dłoń przeciąga rączkę zamka / zamek. Podniesiona broń trafia do pustego slotu broni.
 Budynek ma piętro – wchodzi się klatką schodową. Strop jest lity (0,6 m żelbetu), więc kule, odłamki ani wzrok
 nie przechodzą między kondygnacjami; jedyna droga w górę i w dół to schody (wrogowie też z nich korzystają).
 Dodatek (tłumik, latarka taktyczna, hamulec) upuszczony na broń montuje się w terenie z animacją; zdejmuje się z menu

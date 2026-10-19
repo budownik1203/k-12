@@ -229,6 +229,11 @@ func _process(delta: float) -> void:
 	_wskazowki(delta)
 	if gracz == null:
 		return
+	_odswiez(delta)
+	_ukryj_przy_ekranie()
+
+
+func _odswiez(delta: float) -> void:
 	if Input.is_action_just_pressed("pomoc"):
 		_pomoc.visible = not _pomoc.visible
 	var c := gracz.cialo
@@ -269,7 +274,7 @@ func _process(delta: float) -> void:
 			linie_b.append("zapas: %d mag. pod ręką" % pod_reka)
 		if b.stan == "przeladowanie":
 			linie_b.append("przeładowanie...")
-		elif b.stan == "ladowanie_wewn":
+		elif b.stan == "ladowanie_wewn" or b.stan == "lamanie":
 			linie_b.append("ładowanie...")
 	else:
 		linie_b.append("latarka w ręce" if gracz.latarka_w_rece else "bez broni")
@@ -380,6 +385,23 @@ func pokaz_wskazowke(t: String) -> void:
 	_wsk_kolejka.append(t)
 
 
+## Przy otwartym ekwipunku, łupie czy wytrychu wskaźniki HUD-u (broń, pasek, wyjścia, celownik, wskazówki)
+## znikają – nie nakładają się na rozłożone pojemniki i podpisy. Komunikaty zostają.
+var _ekran_otwarty := false
+
+
+func _ukryj_przy_ekranie() -> void:
+	var ekran := not get_tree().get_nodes_in_group("ekran_ekwipunku").is_empty()
+	for n in [_bron, _pasek, _wyjscia, _czas, _kropka, _stan, _interakcja, _wytrz, _waga, _kompas, _odliczanie, _fps]:
+		if n == null:
+			continue
+		if ekran:
+			n.visible = false
+		elif _ekran_otwarty and n in [_bron, _pasek, _wyjscia, _kropka, _stan, _interakcja, _odliczanie]:
+			n.visible = true
+	_ekran_otwarty = ekran
+
+
 func _wskazowki(delta: float) -> void:
 	if _wsk == null:
 		_wsk = PanelContainer.new()
@@ -408,7 +430,11 @@ func _wskazowki(delta: float) -> void:
 		_wsk.add_child(_wsk_lbl)
 		_wsk.visible = false
 		_root.add_child(_wsk)
-	if _wsk_t > 0.0:
+	if _ekran_otwarty:
+		# wskazówka czeka, aż ekran się zamknie
+		_wsk.visible = false
+	elif _wsk_t > 0.0:
+		_wsk.visible = true
 		_wsk_t -= delta
 		_wsk.modulate.a = clampf(_wsk_t / 0.6, 0.0, 1.0)
 		if _wsk_t <= 0.0:
