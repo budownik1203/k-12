@@ -77,7 +77,7 @@ var _ucieczka_t := 0.0
 var _kieszenie := {}
 ## Przenoszenie ręką (rajd): dłoń bierze przedmiot i odkłada; dopóki nie skończy – czekasz.
 var _przekl := {}               # {"p", "z", "wykonaj": Callable, "dz": bool}
-var _reka_p: RekaPrzekladania
+var _duch: TextureRect           # przekładany przedmiot w drodze (ikona)
 var _podp_ucieczka: Label
 
 
@@ -280,7 +280,7 @@ func przelacz_pojemnik(co: String) -> void:
 			return
 		_zamykany = co
 		if _r3d:
-			var otw: int = _r3d.ile_otwartych(co)
+			var otw := 0
 			_r3d.zamknij(co, 0.5)
 			_kieszenie.erase(co)
 			var twr := r.create_tween()
@@ -325,6 +325,7 @@ func przelacz_pojemnik(co: String) -> void:
 		gracz.ruch_z_ekwipunkiem = false
 	if _r3d:
 		_r3d.otworz(co, _siatka_pojemnika(co), czas)
+		_r3d.ustaw_stan(co, ekw.stan_kieszeni(co))
 	if co in ["kamizelka", "plecak", "bezpieczny"]:
 		var na_ziemi := co != "kamizelka" or "plecak" in otwarte or "bezpieczny" in otwarte
 		gracz.widok_ekwipunku("plecak" if na_ziemi else "kamizelka")
@@ -414,11 +415,11 @@ func zamknij_animowany(po := Callable()) -> void:
 	var czas := 0.0
 	if gracz and not tryb_bazy:
 		if "plecak" in otwarte:
-			czas += 0.95 + (_r3d.ile_otwartych("plecak") * 0.3 if _r3d else 0.0)
+			czas += 0.95
 			if ekw.siatka_plecaka():
 				czas += clampf(ekw.siatka_plecaka().masa() * 0.05, 0.0, 1.2)
 		if "bezpieczny" in otwarte:
-			czas += 0.55 + (_r3d.ile_otwartych("bezpieczny") * 0.25 if _r3d else 0.0)
+			czas += 0.55
 		if "kamizelka" in otwarte and czas == 0.0:
 			czas = 0.3
 		if _otwieranie != "":
@@ -496,8 +497,8 @@ func zamknij() -> void:
 	ekw.zakryte.clear()
 	if not _przekl.is_empty():
 		_przekl = {}
-		if _reka_p:
-			_reka_p.przerwij()
+		if _duch and is_instance_valid(_duch):
+			_duch.visible = false
 	_szybki = false
 	_ucieczka_t = 0.0
 	if gracz:
@@ -623,6 +624,11 @@ func _przebuduj() -> void:
 		if _warstwa and _kieszenie.has(co):
 			gui.kieszenie = _kieszenie[co]
 			gui.kieszen.connect(_klik_kieszeni.bind(co))
+			gui.gest_start.connect(_gest_start.bind(co))
+			gui.gest_ruch.connect(_gest_ruch.bind(co))
+			gui.gest_koniec.connect(_gest_koniec.bind(co))
+			for i in (_kieszenie[co] as Array).size():
+				_podpowiedz(_kieszenie[co][i], co, i)
 		ramka.set_meta("siatka_ui", gui)
 		gui.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		wn.add_child(gui)
@@ -884,8 +890,12 @@ func _process(delta: float) -> void:
 					# położony przed sobą, zapięty: kieszenie otwiera się każdą osobno (kamizelka: klapki ładownic)
 					var idp := "kontener" if co == "bezpieczny" else (ekw.sloty[co] as Przedmiot).id
 					var lst := []
-					for e in ModeleOporzadzenia.kieszenie_dla(idp, _siatka_pojemnika(co)):
-						lst.append({"r": e["r"], "nazwa": e["nazwa"], "otwarta": false, "w_toku": false})
+					var st := ekw.stan_kieszeni(co)
+					var defs := ModeleOporzadzenia.kieszenie_dla(idp, _siatka_pojemnika(co))
+					for j in defs.size():
+						var e: Dictionary = defs[j]
+						var otw: bool = j < st.size() and bool(st[j])
+						lst.append({"r": e["r"], "nazwa": e["nazwa"], "otwarta": otw, "w_toku": false})
 					_kieszenie[co] = lst
 				if co == "plecak":
 					Dzwiek.graj("plecak", -9.0, 1.3)
@@ -1111,6 +1121,22 @@ func _synchronizuj_dostep() -> void:
 	ekw.bezp_rozlozony = otwarty and "bezpieczny" in otwarte and _r3d != null
 	ekw.zakryte.clear()
 	for co in _kieszenie:
+		var st := ekw.stan_kieszeni(co)
+		for j in mini(st.size(), (_kieszenie[co] as Array).size()):
+			var e0: Dictionary = _kieszenie[co][j]
+			if bool(st[j]) and not bool(e0["otwarta"]) and not bool(e0.get("w_toku", false)) and not bool(e0.get("zamyk", false)):
+				# postać sama otworzyła (np. magazynek przy przeładowaniu)
+				e0["otwarta"] = true
+				e0.erase("postep")
+				if _r3d:
+					var stany := []
+					for jj in st.size():
+						stany.append(jj == j)
+					_r3d.ustaw_stan(co, stany)
+				if _ramki.has(co) and is_instance_valid(_ramki[co]):
+					var g: SiatkaUI = _ramki[co].get_meta("siatka_ui", null)
+					if g:
+						g.queue_redraw()
 		var s := _siatka_pojemnika(co)
 		if s == null or co == "kamizelka":
 			continue   # ładownice na ciele: przeładowanie sięga do nich i tak
@@ -1122,38 +1148,51 @@ func _synchronizuj_dostep() -> void:
 			ekw.zakryte[s] = zam
 
 
-## Przełożenie ręką: animacja dłoni (sięgnięcie, chwyt, łuk, odłożenie), `wykonaj` na końcu.
+## Przełożenie (bez animowanej dłoni): przedmiot przesuwa się po ekranie od miejsca do miejsca w czasie
+## zależnym od wagi, rozmiaru i odległości; dopiero po nim `wykonaj`. Trafienie w trakcie – wypada.
 func _animuj(p: Przedmiot, z: Dictionary, cel_scr: Vector2, wykonaj: Callable) -> void:
 	if not _w_swiecie():
 		wykonaj.call()
 		return
-	if _reka_p == null or not is_instance_valid(_reka_p):
-		_reka_p = RekaPrzekladania.new()
-		_reka_p.gracz = gracz
-		gracz.kamera.add_child(_reka_p)
 	var od_scr := _ekran_przedmiotu(p, z)
-	var od := _ekran_na_kamere(od_scr)
-	var do_ := _ekran_na_kamere(cel_scr)
-	var czas := 0.8 + od_scr.distance_to(cel_scr) / 1100.0 + p.waga() * 0.06 + p.szer() * p.wys() * 0.03
-	czas = clampf(czas, 0.85, 2.4)
-	_przekl = {"p": p, "z": z, "wykonaj": wykonaj, "chwyt": false, "odl": false}
-	_reka_p.zacznij(p, od, do_, czas)
+	var czas := 0.35 + od_scr.distance_to(cel_scr) / 2200.0 + p.waga() * 0.05 + p.szer() * p.wys() * 0.025
+	czas = clampf(czas, 0.35, 1.5)
+	if _duch == null or not is_instance_valid(_duch):
+		_duch = TextureRect.new()
+		_duch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_duch.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_duch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_duch.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_root.add_child(_duch)
+	_duch.texture = Dane.ikona(p.id)
+	_duch.size = Vector2(p.szer(), p.wys()) * SiatkaUI.KOM
+	_duch.pivot_offset = _duch.size * 0.5
+	_duch.visible = true
+	_duch.modulate = Color(1, 1, 1, 0.85)
+	_przekl = {"p": p, "z": z, "wykonaj": wykonaj, "chwyt": false, "odl": false, "t0": Time.get_ticks_msec(), "czas": czas, "od": od_scr, "do": cel_scr}
+	Dzwiek.graj("podnies", -15.0, randf_range(1.1, 1.3))
 	_odswiez()
 
 
 func _przekl_krok() -> void:
-	if _przekl.is_empty() or _reka_p == null:
+	if _przekl.is_empty():
+		if _duch and is_instance_valid(_duch):
+			_duch.visible = false
 		return
-	var f := _reka_p.postep()
-	if f > 0.35 and not _przekl["chwyt"]:
-		_przekl["chwyt"] = true
-		Dzwiek.graj("podnies", -14.0, randf_range(1.1, 1.3))
-	if f > 0.9 and not _przekl["odl"]:
+	var f := clampf((Time.get_ticks_msec() - int(_przekl["t0"])) / 1000.0 / float(_przekl["czas"]), 0.0, 1.0)
+	if _duch and is_instance_valid(_duch):
+		var e := f * f * (3.0 - 2.0 * f)
+		var srodek: Vector2 = (_przekl["od"] as Vector2).lerp(_przekl["do"], e) - Vector2(0, sin(f * PI) * 18.0)
+		_duch.global_position = srodek - _duch.size * 0.5
+		_duch.scale = Vector2.ONE * (1.0 + sin(f * PI) * 0.08)
+	if f > 0.85 and not _przekl["odl"]:
 		_przekl["odl"] = true
-		Dzwiek.graj("odloz", -11.0, clampf(1.3 - (_przekl["p"] as Przedmiot).waga() * 0.06, 0.7, 1.3))
-	if not _reka_p.aktywna:
+		Dzwiek.graj("odloz", -12.0, clampf(1.3 - (_przekl["p"] as Przedmiot).waga() * 0.06, 0.7, 1.3))
+	if f >= 1.0:
 		var w: Callable = _przekl["wykonaj"]
 		_przekl = {}
+		if _duch and is_instance_valid(_duch):
+			_duch.visible = false
 		if w.is_valid():
 			w.call()
 		_po_zmianie()
@@ -1166,8 +1205,8 @@ func _upusc_z_reki() -> void:
 	var p: Przedmiot = _przekl["p"]
 	var z: Dictionary = _przekl["z"]
 	_przekl = {}
-	if _reka_p:
-		_reka_p.przerwij()
+	if _duch and is_instance_valid(_duch):
+		_duch.visible = false
 	if _w_zrodle(p, z):
 		_usun_ze_zrodla(p, z)
 		gracz.upusc(p)
@@ -1614,6 +1653,191 @@ func _klik_kieszeni(ui: SiatkaUI, i: int, co: String) -> void:
 	get_tree().create_timer(maxf(0.1, czas)).timeout.connect(func():
 		e["w_toku"] = false
 		e["otwarta"] = true
+		e.erase("postep")
+		ekw.ustaw_kieszen(co, i, true)
+		if is_instance_valid(ui):
+			ui.queue_redraw())
+
+
+# ------------------------------------------------------------------ gesty przy kieszeniach
+
+var _gest := {}
+
+
+## Tryb prosty (ustawienia): kliknięcie otwiera/zamyka całą kieszeń animacją, wolniej niż gestem.
+func _proste() -> bool:
+	return bool(Gra.ustawienia.get("proste_kieszenie", false)) or _r3d == null
+
+
+func _postep(e: Dictionary, co: String, i: int) -> Array:
+	if not e.has("postep"):
+		var n: int = _r3d.liczba_krokow(co, i) if _r3d else 0
+		var a := []
+		for k in n:
+			a.append(1.0 if bool(e["otwarta"]) else 0.0)
+		e["postep"] = a
+	return e["postep"]
+
+
+func _krok_akt(e: Dictionary, co: String, i: int) -> int:
+	var pg := _postep(e, co, i)
+	if bool(e.get("zamyk", false)):
+		for k in range(pg.size() - 1, -1, -1):
+			if float(pg[k]) > 0.0:
+				return k
+	else:
+		for k in pg.size():
+			if float(pg[k]) < 1.0:
+				return k
+	return -1
+
+
+func _podpowiedz(e: Dictionary, co: String, i: int) -> void:
+	if _proste():
+		e["podpowiedz"] = "kliknij – otwórz"
+		return
+	var k := _krok_akt(e, co, i)
+	var zam: bool = e.get("zamyk", false)
+	var t := "kliknij – otwórz"
+	if k >= 0 and _r3d:
+		match _r3d.rodzaj_kroku(co, i, k):
+			"klik":
+				t = "kliknij – zapnij klamrę" if zam else "kliknij – rozepnij"
+			"x":
+				t = "przeciągnij suwak w bok"
+			_:
+				t = "przeciągnij w dół – dociśnij" if zam else "przeciągnij w górę – odsuń"
+	e["podpowiedz"] = t
+	var pg: Array = e.get("postep", [])
+	var suma := 0.0
+	for v in pg:
+		suma += float(v)
+	e["postep_calk"] = suma / maxf(1.0, pg.size())
+
+
+func _gest_start(ui: SiatkaUI, i: int, zamykanie: bool, co: String) -> void:
+	if not _kieszenie.has(co) or i < 0 or i >= (_kieszenie[co] as Array).size():
+		return
+	var e: Dictionary = _kieszenie[co][i]
+	if bool(e.get("w_toku", false)):
+		return
+	if _proste():
+		if zamykanie:
+			_zamknij_prosto(ui, i, co)
+		else:
+			_klik_kieszeni(ui, i, co)
+		return
+	_postep(e, co, i)
+	if not zamykanie and bool(e.get("zamyk", false)):
+		zamykanie = true
+	e["zamyk"] = zamykanie
+	if zamykanie and bool(e["otwarta"]):
+		# zapinanie: zawartość już niedostępna
+		e["otwarta"] = false
+		if _r3d:
+			_r3d.oznacz(co, i, false)
+	_gest = {"co": co, "i": i, "t": Time.get_ticks_msec()}
+	# krok „klik” (klamra, zatrzask) wykonuje się samym kliknięciem
+	var k := _krok_akt(e, co, i)
+	if k >= 0 and _r3d and _r3d.rodzaj_kroku(co, i, k) == "klik":
+		e["postep"][k] = 0.0 if zamykanie else 1.0
+		_r3d.krok_anim(co, i, k, not zamykanie)
+		Dzwiek.graj("klik", -9.0, randf_range(0.7, 0.85))
+		if gracz:
+			Gra.emituj_halas(gracz.global_position, 2.5, gracz)
+		_sprawdz_koniec(ui, e, co, i)
+	_podpowiedz(e, co, i)
+	ui.queue_redraw()
+
+
+func _gest_ruch(ui: SiatkaUI, i: int, rel: Vector2, co: String) -> void:
+	if _gest.is_empty() or _gest["co"] != co or _gest["i"] != i or _r3d == null:
+		return
+	var e: Dictionary = _kieszenie[co][i]
+	var k := _krok_akt(e, co, i)
+	if k < 0:
+		return
+	var rodz: String = _r3d.rodzaj_kroku(co, i, k)
+	if rodz == "klik":
+		return
+	var zam: bool = e.get("zamyk", false)
+	var dl := 110.0
+	var amt := 0.0
+	if rodz == "x":
+		var rr: Rect2i = e["r"]
+		dl = maxf(70.0, rr.size.x * SiatkaUI.KOM * 0.9)
+		amt = absf(rel.x) / dl * (-1.0 if zam else 1.0)
+	else:
+		amt = -rel.y / dl
+	var pg: Array = e["postep"]
+	var stary := float(pg[k])
+	pg[k] = clampf(stary + amt, 0.0, 1.0)
+	_r3d.ustaw_krok(co, i, k, pg[k])
+	# dźwięk i hałas zależne od szybkości ruchu (rzep szarpnięty – głośno, powoli – cicho)
+	var teraz := Time.get_ticks_msec()
+	var dt := maxf(0.008, (teraz - int(_gest["t"])) / 1000.0)
+	_gest["t"] = teraz
+	var szybkosc := rel.length() / dt
+	e["dz_acc"] = float(e.get("dz_acc", 0.0)) + absf(float(pg[k]) - stary)
+	if float(e["dz_acc"]) > 0.22:
+		e["dz_acc"] = 0.0
+		var dz: String = _r3d.dzwiek_kroku(co, i, k)
+		var gl := lerpf(-20.0, -5.0, clampf(szybkosc / 1500.0, 0.0, 1.0))
+		match dz:
+			"zamek":
+				Dzwiek.graj("zamek", gl, randf_range(0.9, 1.15))
+			"rzep":
+				Dzwiek.graj("rzep", gl + 2.0, randf_range(0.9, 1.1))
+			_:
+				Dzwiek.graj("plecak", gl - 4.0, randf_range(1.1, 1.4))
+		if gracz:
+			Gra.emituj_halas(gracz.global_position, (1.0 + szybkosc / 300.0) * (1.6 if dz == "rzep" else 1.0), gracz)
+	_sprawdz_koniec(ui, e, co, i)
+	_podpowiedz(e, co, i)
+	ui.queue_redraw()
+
+
+func _gest_koniec(ui: SiatkaUI, i: int, co: String) -> void:
+	_gest = {}
+	if is_instance_valid(ui):
+		ui.queue_redraw()
+
+
+func _sprawdz_koniec(ui: SiatkaUI, e: Dictionary, co: String, i: int) -> void:
+	var pg: Array = e["postep"]
+	var wszystkie := true
+	var zadne := true
+	for v in pg:
+		if float(v) < 1.0:
+			wszystkie = false
+		if float(v) > 0.0:
+			zadne = false
+	if not bool(e.get("zamyk", false)) and wszystkie and not bool(e["otwarta"]):
+		e["otwarta"] = true
+		ekw.ustaw_kieszen(co, i, true)
+		if _r3d:
+			_r3d.oznacz(co, i, true)
+		Dzwiek.graj("plecak", -14.0, 1.3)
+	elif bool(e.get("zamyk", false)) and zadne:
+		e["zamyk"] = false
+		ekw.ustaw_kieszen(co, i, false)
+		Dzwiek.graj("plecak", -14.0, 1.1)
+
+
+## Tryb prosty: zamknięcie całej kieszeni animacją (trwa).
+func _zamknij_prosto(ui: SiatkaUI, i: int, co: String) -> void:
+	var e: Dictionary = _kieszenie[co][i]
+	if not bool(e["otwarta"]) or bool(e["w_toku"]):
+		return
+	e["otwarta"] = false
+	e["w_toku"] = true
+	var czas: float = _r3d.zamknij_kieszen(co, i) * 1.3 if _r3d else 0.3
+	_zajmij(czas)
+	ui.queue_redraw()
+	get_tree().create_timer(maxf(0.1, czas)).timeout.connect(func():
+		e["w_toku"] = false
+		e.erase("postep")
+		ekw.ustaw_kieszen(co, i, false)
 		if is_instance_valid(ui):
 			ui.queue_redraw())
 

@@ -904,6 +904,8 @@ func _zacznij_przeladowanie(szybkie: bool) -> void:
 		komunikat.emit("Brak załadowanych magazynków (napełnij: G w ekwipunku)")
 		return
 	var t := float(bd["przeladowanie"]) * float(z.get("mnoznik", 1.0 if z["szybki"] else 1.7))
+	if gracz.has_method("_otworz_po_drodze"):
+		gracz._otworz_po_drodze(z["p"])
 	if szybkie:
 		t *= 0.7
 	if przedmiot.dane["komora"] == "":

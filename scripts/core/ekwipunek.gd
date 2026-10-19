@@ -199,9 +199,111 @@ func _dodaj_do(s: Siatka, p: Przedmiot) -> bool:
 	return false
 
 
-## Jak daleko sięga ręka: ładownica kamizelki pod ręką, kieszeń spodni wolniej, rozłożony plecak najwolniej.
-func mnoznik_dostepu(s: Siatka) -> float:
+# ------------------------------------------------------------------ kieszenie: otwarte / zapięte (trwale)
+
+var bezp_kieszenie: Array = []      # stan klapy kontenera bezpiecznego
+var _kz_cache := {}
+
+
+func co_dla_siatki(s: Siatka) -> String:
+	if s == null:
+		return ""
 	if s == siatka_kamizelki():
+		return "kamizelka"
+	if s == siatka_plecaka():
+		return "plecak"
+	if s == bezpieczny:
+		return "bezpieczny"
+	return ""
+
+
+## Definicje kieszeni pojemnika (prostokąty siatki, nazwy, rodzaj zapięcia).
+func kieszenie_def(co: String) -> Array:
+	var id := "kontener"
+	var s: Siatka = bezpieczny
+	if co != "bezpieczny":
+		var p: Przedmiot = sloty.get(co)
+		if p == null:
+			return []
+		id = p.id
+		s = siatka_kamizelki() if co == "kamizelka" else siatka_plecaka()
+	if not _kz_cache.has(id):
+		_kz_cache[id] = ModeleOporzadzenia.kieszenie_dla(id, s)
+	return _kz_cache[id]
+
+
+## Stan kieszeni (true = otwarta): zapisany przy pojemniku, przeżywa zamknięcie ekwipunku i zapis gry.
+func stan_kieszeni(co: String) -> Array:
+	var n := kieszenie_def(co).size()
+	var st: Array
+	if co == "bezpieczny":
+		st = bezp_kieszenie
+	else:
+		var p: Przedmiot = sloty.get(co)
+		if p == null:
+			return []
+		st = p.dane.get("kieszenie_otw", [])
+		p.dane["kieszenie_otw"] = st
+	while st.size() < n:
+		st.append(false)
+	if co == "bezpieczny":
+		bezp_kieszenie = st
+	return st
+
+
+func ustaw_kieszen(co: String, i: int, otw: bool) -> void:
+	var st := stan_kieszeni(co)
+	if i >= 0 and i < st.size():
+		st[i] = otw
+		zmieniony.emit()
+
+
+func indeks_kieszeni(co: String, x: int, y: int) -> int:
+	var d := kieszenie_def(co)
+	for i in d.size():
+		if (d[i]["r"] as Rect2i).has_point(Vector2i(x, y)):
+			return i
+	return -1
+
+
+## Czy przedmiot leży w otwartej kieszeni (pojemnik bez kieszeni – zawsze tak).
+func kieszen_otwarta_dla(s: Siatka, p: Przedmiot) -> bool:
+	var co := co_dla_siatki(s)
+	if co == "" or not s.zawiera(p):
+		return true
+	var poz := s.pozycja(p)
+	var i := indeks_kieszeni(co, poz.x, poz.y)
+	if i < 0:
+		return true
+	return bool(stan_kieszeni(co)[i])
+
+
+func siatka_z(p: Przedmiot) -> Siatka:
+	for s in siatki():
+		if (s as Siatka).zawiera(p):
+			return s
+	return null
+
+
+## Postać sama otwiera kieszeń, sięgając po przedmiot (np. magazynek przy przeładowaniu) – zostaje otwarta.
+func otworz_kieszen_dla(s: Siatka, p: Przedmiot) -> bool:
+	var co := co_dla_siatki(s)
+	if co == "" or not s.zawiera(p):
+		return false
+	var poz := s.pozycja(p)
+	var i := indeks_kieszeni(co, poz.x, poz.y)
+	if i < 0 or bool(stan_kieszeni(co)[i]):
+		return false
+	ustaw_kieszen(co, i, true)
+	return true
+
+
+## Jak daleko sięga ręka: ładownica kamizelki pod ręką (otwarta – najszybciej, zapięta – trzeba ją
+## najpierw otworzyć), kieszeń spodni wolniej, rozłożony plecak najwolniej.
+func mnoznik_dostepu(s: Siatka, p: Przedmiot = null) -> float:
+	if s == siatka_kamizelki():
+		if p != null:
+			return 0.85 if kieszen_otwarta_dla(s, p) else 1.35
 		return 1.0
 	if s == kieszenie:
 		return 1.35
@@ -277,7 +379,7 @@ func znajdz_magazynek(mag_ids: Array) -> Dictionary:
 			var p: Przedmiot = e["p"]
 			if p.id in mag_ids and p.dane["naboje"] > 0:
 				var szybki := czy_szybka(s)
-				var mn := mnoznik_dostepu(s)
+				var mn := mnoznik_dostepu(s, p)
 				# najpierw najbliżej ręki, potem najpełniejszy
 				var score: int = p.dane["naboje"] + int((2.0 - mn) * 2000.0)
 				if best.is_empty() or score > best["score"]:
@@ -442,7 +544,7 @@ func to_dict() -> Dictionary:
 	var sl := {}
 	for s in SLOTY:
 		sl[s] = sloty[s].to_dict() if sloty[s] != null else null
-	return {"sloty": sl, "kieszenie": kieszenie.to_dict(), "bezpieczny": bezpieczny.to_dict()}
+	return {"sloty": sl, "kieszenie": kieszenie.to_dict(), "bezpieczny": bezpieczny.to_dict(), "bezp_kieszenie": bezp_kieszenie}
 
 
 static func from_dict(d: Dictionary) -> Ekwipunek:
@@ -460,4 +562,5 @@ static func from_dict(d: Dictionary) -> Ekwipunek:
 			e.sloty["util0"] = z["p"]
 	if d.has("bezpieczny"):
 		e.bezpieczny = Siatka.from_dict(d["bezpieczny"])
+	e.bezp_kieszenie = d.get("bezp_kieszenie", [])
 	return e

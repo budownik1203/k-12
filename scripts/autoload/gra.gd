@@ -16,7 +16,7 @@ var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
 var kontrakty := {"oferty": [], "aktywne": []}       # zlecenia Pośrednika
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8, "glosnosc_tla": 0.8, "odwroc_y": false, "kolysanie": 1.0,
-	"skala_renderu": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "samouczek_widziane": []}
+	"skala_renderu": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "proste_kieszenie": false, "samouczek_widziane": []}
 var ostatni_raport := {}
 var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0

@@ -5,6 +5,12 @@ extends Control
 signal klik(ui: SiatkaUI, p: Przedmiot, przycisk: int, pozycja: Vector2)
 signal najechano(p: Przedmiot)
 signal kieszen(ui: SiatkaUI, indeks: int)
+## Gesty przy kieszeniach: wciśnięcie na zapiętej (otwieranie) albo na uchwycie otwartej (zamykanie),
+## ruch myszy z wciśniętym przyciskiem, puszczenie.
+signal gest_start(ui: SiatkaUI, indeks: int, zamykanie: bool)
+signal gest_ruch(ui: SiatkaUI, indeks: int, rel: Vector2)
+signal gest_koniec(ui: SiatkaUI, indeks: int)
+var _gest := -1
 
 const KOM := 34
 
@@ -201,9 +207,22 @@ static func rysuj_przedmiot(ci: CanvasItem, p: Przedmiot, r: Rect2, podswietl :=
 		ci.draw_string(Motyw.cond(), r.position + Vector2(4, 12), p.nazwa().substr(0, int(r.size.x / 7)), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.72, 0.62, 0.85))
 
 
+## Uchwyt zapinania otwartej kieszeni (prawy górny róg).
+func uchwyt_kieszeni(i: int) -> Rect2:
+	var rr: Rect2i = kieszenie[i]["r"]
+	var r := Rect2(Vector2(rr.position) * KOM, Vector2(rr.size) * KOM)
+	return Rect2(Vector2(r.end.x - 26, r.position.y + 1), Vector2(25, 11))
+
+
 func _rysuj_kieszenie() -> void:
-	for kz in kieszenie:
+	for ki in kieszenie.size():
+		var kz: Dictionary = kieszenie[ki]
 		if bool(kz["otwarta"]):
+			# otwarta: przerywany brzeg i uchwyt „zapnij”
+			var u := uchwyt_kieszeni(ki)
+			draw_rect(u, Color(0.1, 0.09, 0.07, 0.85))
+			draw_rect(u, Color(0.86, 0.8, 0.62, 0.6), false, 1.0)
+			draw_string(Motyw.cond(), u.position + Vector2(2, 9), "zapnij", HORIZONTAL_ALIGNMENT_CENTER, u.size.x - 4, 8, Color(0.86, 0.8, 0.62, 0.85))
 			continue
 		var rr: Rect2i = kz["r"]
 		var r := Rect2(Vector2(rr.position) * KOM, Vector2(rr.size) * KOM).grow(-1)
@@ -216,7 +235,11 @@ func _rysuj_kieszenie() -> void:
 		draw_rect(r, Color(0.86, 0.8, 0.62, 0.45), false, 1.5)
 		var f := Motyw.cond()
 		var nz := String(kz["nazwa"])
-		var t2 := "otwieranie..." if bool(kz.get("w_toku", false)) else "kliknij – otwórz"
+		var t2 := "otwieranie..." if bool(kz.get("w_toku", false)) else String(kz.get("podpowiedz", "kliknij – otwórz"))
+		# pasek postępu gestu (ile materiału już odsunięte)
+		var pg := float(kz.get("postep_calk", 0.0))
+		if pg > 0.0 and pg < 1.0:
+			draw_rect(Rect2(r.position.x + 3, r.end.y - 5, (r.size.x - 6) * pg, 2), Color(0.95, 0.85, 0.45, 0.9))
 		var sz := minf(12.0, r.size.x / maxf(1.0, nz.length()) * 1.7)
 		draw_string(f, Vector2(r.position.x + 4, r.get_center().y - 2), nz, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, int(maxf(8.0, sz)), Color(0.86, 0.8, 0.62, 0.9))
 		draw_string(f, Vector2(r.position.x + 4, r.get_center().y + 12), t2, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, 9, Color(0.7, 0.66, 0.52, 0.75))
@@ -224,6 +247,16 @@ func _rysuj_kieszenie() -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if siatka == null:
+		return
+	if event is InputEventMouseMotion and _gest >= 0:
+		gest_ruch.emit(self, _gest, event.relative)
+		accept_event()
+		return
+	if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _gest >= 0:
+		var g := _gest
+		_gest = -1
+		gest_koniec.emit(self, g)
+		accept_event()
 		return
 	if event is InputEventMouseMotion:
 		var k := komorka_pod(event.position)
@@ -236,9 +269,17 @@ func _gui_input(event: InputEvent) -> void:
 			queue_redraw()
 	elif event is InputEventMouseButton and event.pressed:
 		var k := komorka_pod(event.position)
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			for ki in kieszenie.size():
+				if bool(kieszenie[ki]["otwarta"]) and uchwyt_kieszeni(ki).has_point(event.position):
+					_gest = ki
+					gest_start.emit(self, ki, true)
+					accept_event()
+					return
 		if zakryta(k):
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				kieszen.emit(self, kieszen_pod(k))
+				_gest = kieszen_pod(k)
+				gest_start.emit(self, _gest, false)
 			accept_event()
 			return
 		var p := siatka.przedmiot_w(k.x, k.y)

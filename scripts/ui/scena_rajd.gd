@@ -1226,6 +1226,122 @@ func _test_ruchu_broni(katalog: String) -> void:
 	print("TEST RUCHU BRONI: błędów %d" % bledy)
 
 
+## Gesty przy kieszeniach: otwieranie i zapinanie myszą (klamry, klapy, rzep, zamek), trwały stan,
+## wypadanie z otwartych kieszeni w biegu, przeładowanie otwiera zapiętą ładownicę.
+func _test_gestow(katalog: String) -> void:
+	var bl := 0
+	var ek := Gra.ekw
+	ek.sloty["kamizelka"] = Przedmiot.nowy("napiersnik")
+	ek.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")
+	var kb: Przedmiot = Gra.nowy_naladowany("kb47", "a_762")
+	kb.dane["mag"].dane["naboje"] = 0
+	kb.dane["komora"] = ""
+	ek.sloty["glowna"] = kb
+	for sg in ek.siatki(true):
+		for e in (sg as Siatka).items.duplicate():
+			if (e["p"] as Przedmiot).typ() == "magazynek":
+				(sg as Siatka).usun(e["p"])
+	var kam := ek.siatka_kamizelki()
+	var mag := Gra.magazynek("mag_kb47", "a_762", 30)
+	var defs := ek.kieszenie_def("kamizelka")
+	var r0: Rect2i = defs[defs.size() - 1]["r"]
+	kam.poloz(mag, r0.position.x, r0.position.y, false)
+	var kon := Przedmiot.nowy("konserwa")
+	ek.siatka_plecaka().dodaj(kon)
+	gracz._wybierz_bron("glowna")
+	await get_tree().create_timer(1.0).timeout
+	var przez := func(co: String, i: int, zamyk: bool) -> bool:
+		var gui: SiatkaUI = ekran_ekw._ramki[co].get_meta("siatka_ui")
+		for proba in 30:
+			ekran_ekw._gest_start(gui, i, zamyk, co)
+			for k in 10:
+				ekran_ekw._gest_ruch(gui, i, Vector2(30, 22 if zamyk else -22), co)
+			ekran_ekw._gest_koniec(gui, i, co)
+			var st: bool = ek.stan_kieszeni(co)[i]
+			if st != zamyk and not bool(ekran_ekw._kieszenie[co][i].get("zamyk", false)):
+				return true
+			await get_tree().process_frame
+		return false
+	ekran_ekw.otworz(null)
+	await _klatki(5)
+	ekran_ekw.przelacz_pojemnik("kamizelka")
+	await get_tree().create_timer(1.2).timeout
+	var ik := defs.size() - 1
+	# pół gestu: klapka uniesiona do połowy (zrzut)
+	var gui0: SiatkaUI = ekran_ekw._ramki["kamizelka"].get_meta("siatka_ui")
+	ekran_ekw._gest_start(gui0, ik, false, "kamizelka")
+	for k in 3:
+		ekran_ekw._gest_ruch(gui0, ik, Vector2(0, -20), "kamizelka")
+	await get_tree().create_timer(0.3).timeout
+	await _zapisz(katalog, "gest_kamizelka_pol")
+	ekran_ekw._gest_koniec(gui0, ik, "kamizelka")
+	var ok: bool = await przez.call("kamizelka", ik, false)
+	await get_tree().create_timer(0.3).timeout
+	await _zapisz(katalog, "gest_kamizelka_otwarta")
+	print("  kamizelka: ładownica otwarta gestem: %s, stan %s" % [ok, ek.stan_kieszeni("kamizelka")])
+	if not ok:
+		bl += 1
+	ok = await przez.call("kamizelka", ik, true)
+	print("  kamizelka: zapięta gestem: %s, stan %s" % [ok, ek.stan_kieszeni("kamizelka")])
+	if not ok or bool(ek.stan_kieszeni("kamizelka")[ik]):
+		bl += 1
+	# plecak: wszystkie kieszenie gestami
+	ekran_ekw.przelacz_pojemnik("plecak")
+	await get_tree().create_timer(3.5).timeout
+	for i in (ekran_ekw._kieszenie["plecak"] as Array).size():
+		ok = await przez.call("plecak", i, false)
+		if not ok:
+			print("  BŁĄD: plecak kieszeń %d nie otwarta" % i)
+			bl += 1
+	await get_tree().create_timer(0.5).timeout
+	await _zapisz(katalog, "gest_plecak_otwarty")
+	print("  plecak: stan %s" % [ek.stan_kieszeni("plecak")])
+	ekran_ekw.zamknij()
+	await get_tree().create_timer(1.0).timeout
+	print("  po zamknięciu ekwipunku stan zachowany: %s" % [ek.stan_kieszeni("plecak")])
+	if not bool(ek.stan_kieszeni("plecak")[0]):
+		bl += 1
+	# przeładowanie z zapiętej ładownicy: otwiera ją
+	gracz.bron._zacznij_przeladowanie(false)
+	await get_tree().create_timer(0.2).timeout
+	print("  po przeładowaniu ładownica otwarta: %s" % ek.stan_kieszeni("kamizelka")[ik])
+	if not bool(ek.stan_kieszeni("kamizelka")[ik]):
+		bl += 1
+	await get_tree().create_timer(4.0).timeout
+	# wypadanie: otwarta ładownica z magazynkiem, bieg
+	var mag2 := Gra.magazynek("mag_kb47", "a_762", 30)
+	for e in kam.items.duplicate():
+		if r0.has_point(Vector2i(int(e["x"]), int(e["y"]))):
+			kam.usun(e["p"])
+	kam.poloz(mag2, r0.position.x, r0.position.y, false)
+	print("  magazynek w ładownicy: %s" % kam.zawiera(mag2))
+	ek.ustaw_kieszen("kamizelka", ik, true)
+	var przed := get_tree().get_nodes_in_group("lup_swiat").size()
+	for k in 40:
+		gracz._gubienie(2.0)
+		if not kam.zawiera(mag2):
+			break
+	await get_tree().create_timer(1.0).timeout
+	var po := get_tree().get_nodes_in_group("lup_swiat").size()
+	print("  LupNaZiemi w świecie: %d" % swiat.get_children().filter(func(x): return x is LupNaZiemi).size())
+	print("  wypadanie: magazynek wypadł %s, na ziemi %d -> %d" % [not kam.zawiera(mag2), przed, po])
+	if kam.zawiera(mag2):
+		bl += 1
+	# zapięta – nic nie wypada
+	var mag3 := Gra.magazynek("mag_kb47", "a_762", 30)
+	for e in kam.items.duplicate():
+		if r0.has_point(Vector2i(int(e["x"]), int(e["y"]))):
+			kam.usun(e["p"])
+	kam.poloz(mag3, r0.position.x, r0.position.y, false)
+	ek.ustaw_kieszen("kamizelka", ik, false)
+	for k in 40:
+		gracz._gubienie(2.0)
+	print("  zapięta: magazynek został %s" % kam.zawiera(mag3))
+	if not kam.zawiera(mag3):
+		bl += 1
+	print("TEST GESTÓW: błędów %d" % bl)
+
+
 ## Test drzwi: otwieranie, uchylanie, zamykanie, wyważanie, wróg otwierający drzwi, podsłuch, przestrzał.
 func _test_drzwi(katalog: String) -> void:
 	var bledy := 0
@@ -1397,6 +1513,9 @@ func _zrzut_animacji(katalog: String) -> void:
 		return
 	if OS.get_cmdline_user_args().has("--drzwi"):
 		await _test_drzwi(katalog)
+		return
+	if OS.get_cmdline_user_args().has("--gesty"):
+		await _test_gestow(katalog)
 		return
 	if OS.get_cmdline_user_args().has("--granat"):
 		var w = _wrog_testowy
@@ -1638,10 +1757,8 @@ func _zrzut_animacji(katalog: String) -> void:
 		ekran_ekw._animuj(kons, {"typ": "siatka", "siatka": Gra.ekw.kieszenie}, cel, func():
 			Gra.ekw.kieszenie.usun(kons)
 			Gra.ekw.siatka_plecaka().poloz(kons, 2, 2, false))
-		for fr in [0.2, 0.45, 0.65, 0.88]:
-			while ekran_ekw._reka_p.aktywna and ekran_ekw._reka_p.postep() < fr:
-				await get_tree().process_frame
-			await _zapisz(katalog, "rk_%d" % int(fr * 100))
+		await get_tree().create_timer(0.3).timeout
+		await _zapisz(katalog, "rk_50")
 		while not ekran_ekw._przekl.is_empty():
 			await get_tree().process_frame
 		print("konserwa w plecaku: ", Gra.ekw.siatka_plecaka().zawiera(kons))

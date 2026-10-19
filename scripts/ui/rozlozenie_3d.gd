@@ -122,6 +122,111 @@ func otworz_kieszen(co: String, i: int) -> float:
 	return czas
 
 
+## Stan kieszeni od razu (bez animacji) – po rozłożeniu pojemnika otwarte zostają otwarte.
+func ustaw_stan(co: String, stany: Array) -> void:
+	if not _modele.has(co):
+		return
+	var kz: Array = _modele[co].get("kieszenie", [])
+	for i in mini(kz.size(), stany.size()):
+		if bool(stany[i]):
+			var e: Dictionary = kz[i]
+			for k in (e["kroki"] as Array).size():
+				ustaw_krok(co, i, k, 1.0)
+			e["otwarta"] = true
+
+
+func liczba_krokow(co: String, i: int) -> int:
+	var e := _kieszen(co, i)
+	return (e["kroki"] as Array).size() if not e.is_empty() else 0
+
+
+## Rodzaj kroku do gestu: "klik" (klamra, zatrzask, guzik), "x" (suwak zamka w poprzek), "gora" (klapa,
+## rzep, kołnierz – odciągnięcie materiału).
+func rodzaj_kroku(co: String, i: int, k: int) -> String:
+	var e := _kieszen(co, i)
+	if e.is_empty():
+		return "gora"
+	var dz: String = e["dzwieki"][k] if k < (e["dzwieki"] as Array).size() else "plecak"
+	match dz:
+		"klik":
+			return "klik"
+		"zamek":
+			return "x"
+	return "gora"
+
+
+func dzwiek_kroku(co: String, i: int, k: int) -> String:
+	var e := _kieszen(co, i)
+	if e.is_empty():
+		return "plecak"
+	return e["dzwieki"][k] if k < (e["dzwieki"] as Array).size() else "plecak"
+
+
+func _kieszen(co: String, i: int) -> Dictionary:
+	if not _modele.has(co):
+		return {}
+	var kz: Array = _modele[co].get("kieszenie", [])
+	return kz[i] if i >= 0 and i < kz.size() else {}
+
+
+## Postęp jednego kroku otwierania (0 = zamknięte, 1 = otwarte) – sterowany gestem myszy.
+func ustaw_krok(co: String, i: int, k: int, f: float) -> void:
+	var e := _kieszen(co, i)
+	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
+		return
+	if e.get("tw") and (e["tw"] as Tween).is_valid():
+		(e["tw"] as Tween).kill()
+	var krok: Array = e["kroki"][k]
+	for q in krok.size():
+		var zm: Array = krok[q]
+		var a = e["start"][k][q]
+		var b = zm[2]
+		var v = a
+		if a is float or a is int:
+			v = lerpf(float(a), float(b), f)
+		elif a is Vector3:
+			v = (a as Vector3).lerp(b, f)
+		(zm[0] as Node).set_indexed(NodePath(String(zm[1])), v)
+
+
+## Krok wykonany animacją (klik klamry): krótko.
+func krok_anim(co: String, i: int, k: int, otworz_: bool, czas := 0.15) -> void:
+	var e := _kieszen(co, i)
+	if e.is_empty() or k < 0 or k >= (e["kroki"] as Array).size():
+		return
+	var tw := create_tween()
+	tw.tween_method(func(f): ustaw_krok(co, i, k, f), 0.0 if otworz_ else 1.0, 1.0 if otworz_ else 0.0, czas)
+
+
+func oznacz(co: String, i: int, otw: bool) -> void:
+	var e := _kieszen(co, i)
+	if not e.is_empty():
+		e["otwarta"] = otw
+
+
+## Zamknięcie jednej kieszeni animacją (tryb prosty): kroki od końca.
+func zamknij_kieszen(co: String, i: int) -> float:
+	var e := _kieszen(co, i)
+	if e.is_empty() or not bool(e["otwarta"]):
+		return 0.0
+	e["otwarta"] = false
+	var tw := create_tween()
+	e["tw"] = tw
+	var czas := 0.0
+	var kroki: Array = e["kroki"]
+	for j in range(kroki.size() - 1, -1, -1):
+		var dl := 0.0
+		for zm in kroki[j]:
+			dl = maxf(dl, float(zm[3]))
+		czas += dl + 0.03
+		var dz: String = e["dzwieki"][j] if j < (e["dzwieki"] as Array).size() else "plecak"
+		var jj := j
+		tw.tween_callback(func(): _dzwiek(dz))
+		tw.tween_method(func(f): ustaw_krok(co, i, jj, f), 1.0, 0.0, dl)
+		tw.tween_interval(0.03)
+	return czas
+
+
 func ile_otwartych(co: String) -> int:
 	var n := 0
 	if _modele.has(co):
@@ -230,7 +335,7 @@ func zamknij(co: String, czas: float) -> void:
 	var wieko: Node3D = m["wieko"]
 	var tw := create_tween()
 	m["tw"] = tw
-	_zamknij_kieszenie(tw, m, 0.55)
+	# kieszenie zostają tak, jak je zostawiono (otwarte mogą gubić zawartość)
 	_zamknij_kroki(tw, m, 0.6)
 	if co == "kamizelka":
 		tw.tween_property(wezel, "position", Vector3(0.0, -0.45, -0.3), czas * 0.5)

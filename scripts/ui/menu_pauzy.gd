@@ -47,6 +47,7 @@ func _ready() -> void:
 	_przelacznik(_ustawienia, "Cienie od lamp", "cienie")
 	_przelacznik(_ustawienia, "Wygładzanie krawędzi", "wygladzanie")
 	_przelacznik(_ustawienia, "Wskazówki samouczka", "samouczek")
+	_przelacznik(_ustawienia, "Proste otwieranie kieszeni (klik zamiast gestu)", "proste_kieszenie")
 	_przelacznik(_ustawienia, "Licznik klatek (FPS)", "pokaz_fps")
 	var rs := Button.new()
 	rs.text = "Pokaż wskazówki od nowa"

@@ -311,6 +311,10 @@ func _physics_process(delta: float) -> void:
 	_bron(delta, we_aktywne)
 	_dzwieki_ciala(delta)
 	_potrzeby(delta)
+	_wypadanie_t -= delta
+	if _wypadanie_t <= 0.0:
+		_wypadanie_t = 0.25
+		_wypadanie(0.25)
 	przygniecenie = maxf(0.0, przygniecenie - delta * 0.3)
 	_samouczek_t -= delta
 	if _samouczek_t <= 0.0:
@@ -473,11 +477,14 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			cialo.upadek(wys)
 			if wys > 2.2:
 				wypadnij_z_kieszeni(0.45)
+			if wys > 0.4:
+				wstrzas_kieszeni(clampf(0.08 + wys * 0.06, 0.08, 0.35), "upadek")
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.krok(global_position, get_parent(), clampf(-6.0 + wys * 3.0, -6.0, 3.0), 0.8)
 		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
 			velocity.y = 3.6
 			wytrzymalosc -= 10.0
+			wstrzas_kieszeni(0.06, "skok")
 	else:
 		if not _w_powietrzu:
 			_w_powietrzu = true
@@ -618,7 +625,8 @@ func rzuc_granat() -> void:
 		komunikat.emit("Brak granatu pod ręką (kamizelka, kieszenie)")
 		return
 	var p: Przedmiot = z["p"]
-	var czas := 1.1 * ekw.mnoznik_dostepu(z["siatka"])
+	var czas := 1.1 * ekw.mnoznik_dostepu(z["siatka"], p)
+	_otworz_po_drodze(p)
 	var nisko := kucanie > 0.5
 	zacznij_akcje("Granat", czas, func():
 		if not ekw.usun_przedmiot(p):
@@ -656,6 +664,95 @@ func spozyj(p: Przedmiot) -> void:
 		ekw.zmieniony.emit()
 		komunikat.emit(opis)
 		, "picie" if picie else "jedzenie", 0, Callable(), {"id": p.id})
+
+
+# ------------------------------------------------------------------ otwarte kieszenie gubią zawartość
+
+var _wypadanie_t := 0.25
+## Szansa na sekundę biegu, że coś wypadnie z otwartej kieszeni danego rodzaju zapięcia.
+const WYPADANIE := {"rzep": 0.035, "zatrzask": 0.035, "guzik": 0.03, "zamek": 0.015, "klapa": 0.05, "sciagacz": 0.045, "wieko": 0.0}
+
+
+## Otwarte kieszenie kamizelki i plecaka na plecach: w ruchu (bieg najmocniej) coś może z nich wypaść.
+func _wypadanie(dt: float) -> void:
+	if tryb_bazy or not is_on_floor():
+		return
+	var v := Vector2(velocity.x, velocity.z).length()
+	var ruch := 0.0
+	if _biegnie and v > 2.5:
+		ruch = 1.0
+	elif v > 1.0:
+		ruch = 0.12 if kucanie < 0.5 else 0.25
+	if ruch <= 0.0:
+		return
+	_gubienie(ruch * dt)
+
+
+## Jednorazowy wstrząs (skok, lądowanie, trafienie): szansa na wypadnięcie z każdej otwartej kieszeni.
+func wstrzas_kieszeni(szansa: float, _powod: String) -> void:
+	if tryb_bazy:
+		return
+	_gubienie(szansa * 20.0)
+
+
+func _gubienie(mnoznik: float) -> void:
+	for co in ["kamizelka", "plecak"]:
+		if co == "plecak" and (ekw.plecak_rozlozony or ekw.siatka_plecaka() == null):
+			continue
+		var s: Siatka = ekw.siatka_kamizelki() if co == "kamizelka" else ekw.siatka_plecaka()
+		if s == null:
+			continue
+		var st := ekw.stan_kieszeni(co)
+		var defs := ekw.kieszenie_def(co)
+		var worek: bool = co == "plecak" and (ekw.sloty["plecak"] as Przedmiot).id == "worek"
+		for i in mini(st.size(), defs.size()):
+			if not bool(st[i]):
+				continue
+			var typ: String = defs[i]["typ"]
+			if co == "kamizelka":
+				typ = ModeleOporzadzenia.TYP_LADOWNIC.get((ekw.sloty["kamizelka"] as Przedmiot).id, typ)
+			var p_s: float = float(WYPADANIE.get(typ, 0.03)) * (1.6 if worek else 1.0)
+			if randf() > p_s * mnoznik:
+				continue
+			_wypadnij_z(s, defs[i]["r"], co)
+
+
+## Z otwartej kieszeni wypada przedmiot leżący najbliżej wylotu (ładownica – u góry), drobne łatwiej.
+func _wypadnij_z(s: Siatka, r: Rect2i, co: String) -> void:
+	var kand := []
+	for e in s.items:
+		var p: Przedmiot = e["p"]
+		if r.intersects(Rect2i(int(e["x"]), int(e["y"]), p.szer(), p.wys())):
+			kand.append(e)
+	if kand.is_empty():
+		return
+	kand.sort_custom(func(a, b): return int(a["y"]) * 10 + (a["p"] as Przedmiot).szer() * (a["p"] as Przedmiot).wys() < int(b["y"]) * 10 + (b["p"] as Przedmiot).szer() * (b["p"] as Przedmiot).wys())
+	var e0: Dictionary = kand[0] if co == "kamizelka" else kand.pick_random()
+	var p0: Przedmiot = e0["p"]
+	if p0.szer() * p0.wys() > 4 and randf() < 0.7:
+		return     # duże rzeczy rzadko wyskakują same
+	s.usun(p0)
+	ekw.zmieniony.emit()
+	var l := LupNaZiemi.new()
+	l.przedmiot = p0
+	l.rzut_z = global_position + Vector3.UP * (1.15 if co == "kamizelka" else 1.3) + global_basis.z * 0.15
+	get_parent().add_child(l)
+	l.global_position = global_position + global_basis.z * randf_range(0.4, 0.9) + global_basis.x * randf_range(-0.4, 0.4) + Vector3.UP * 0.3
+	komunikat.emit("Coś upadło za tobą – z otwartej %s." % ("ładownicy" if co == "kamizelka" else "kieszeni plecaka"))
+	Gra.wskazowka("wypadlo", "Z otwartej kieszeni wypadł przedmiot – leży za tobą. Zapięte kieszenie nie gubią zawartości (w ekwipunku: uchwyt „zapnij”).")
+
+
+## Sięgnięcie do zapiętej ładownicy / kieszeni: postać ją otwiera (dźwięk rzepu / klamry) i zostawia otwartą.
+func _otworz_po_drodze(p: Przedmiot) -> bool:
+	if tryb_bazy:
+		return false
+	var s := ekw.siatka_z(p)
+	if s == null or not ekw.otworz_kieszen_dla(s, p):
+		return false
+	Dzwiek.graj("rzep", -9.0, randf_range(0.9, 1.1))
+	Gra.emituj_halas(global_position, 3.5, self)
+	Gra.wskazowka("ladownica_otwarta", "Sięgając do zapiętej ładownicy, postać ją otwiera – i zostawia otwartą. Z otwartej wyjmuje się szybciej, ale w biegu, przy skoku czy trafieniu coś może z niej wypaść. Zapniesz ją w ekwipunku (uchwyt „zapnij”).")
+	return true
 
 
 ## Głód i pragnienie w rajdzie: maleją z czasem (szybciej w biegu); niskie spowalniają odzyskiwanie sił,
@@ -733,6 +830,9 @@ func uzyj_leku(med: Przedmiot, szybki := true, czesc := "") -> void:
 		komunikat.emit("Nie ma czego leczyć" + ((" (" + Cialo.NAZWY[czesc].to_lower() + ")") if czesc != "" else ""))
 		return
 	var czas := float(md["czas"]) * (1.0 if szybki else 1.5)
+	# zapięta ładownica: najpierw odpiąć klapkę (zostaje otwarta)
+	if _otworz_po_drodze(med):
+		czas += 0.6
 	var przet: bool = med.dane.get("przeterminowany", false)
 	if przet:
 		czas *= 1.4     # zbrylony proszek, sklejony opatrunek – idzie opornie
@@ -884,6 +984,7 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 		return
 	# trafiony przy rozłożonym plecaku / przeszukiwaniu: zrywa się, sprzęt zostaje na ziemi
 	get_tree().call_group("ekran_ekwipunku", "zerwij_sie", "trafienie")
+	wstrzas_kieszeni(0.12, "trafienie")
 	var wys: float = lerpf(WYS_STOJ, WYS_KUC, kucanie) + 0.12
 	var y: float = (punkt.y - global_position.y) / wys
 	var czesc := "nogi"
