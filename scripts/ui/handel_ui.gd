@@ -19,25 +19,33 @@ const HANDLARZE := {
 	"zbrojmistrz": {
 		"nazwa": "Zbrojmistrz", "opis": "cyniczny były kwatermistrz",
 		"powitania": ["Broń jest. Amunicji też trochę. Sumienia brak na stanie.", "Zwrotów nie przyjmuję. Zwłaszcza od nieboszczyków.", "Podpisz tu, tu i tu. Nie, nie czytaj."],
+		# sprzęt wyższej klasy (kl. 4, BP, tłumiki, celowniki, plecak wojskowy) – u przedstawicieli frakcji, za reputację
 		"oferta": [["pw9", 1], ["obrzyn", 1], ["pm63", 1], ["kb47", 1], ["mag_pw9", 1], ["mag_pm63", 1], ["mag_kb47", 1],
-			["a_9x18", 50], ["a_12", 20], ["a_762", 60], ["a_762bp", 30], ["kamizelka_kl2", 1], ["helm_wz67", 1],
-			["granat_f1", 1], ["tlumik_9", 1], ["tlumik_762", 1], ["hamulec", 1], ["kolimator", 1], ["luneta", 1], ["chwyt", 1], ["latarka_taktyczna", 1],
-			["kamizelka_kl4", 1], ["kamizelka_lbv", 1], ["napiersnik", 1], ["plecak_szturmowy", 1], ["plecak_turystyczny", 1], ["plecak_wojskowy", 1]],
-		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik", "dodatek", "granat"], "skup": 0.5,
+			["a_9x18", 50], ["a_12", 20], ["a_762", 60], ["kamizelka_kl2", 1], ["helm_wz67", 1], ["hamulec", 1], ["latarka_taktyczna", 1],
+			["zestaw_czyszczacy", 1], ["napiersnik", 1], ["plecak_turystyczny", 1]],
+		"skupuje": ["bron", "magazynek", "amunicja", "pancerz", "pojemnik", "dodatek", "granat"], "skup": 0.45,
 	},
 	"medyk": {
 		"nazwa": "Medyk", "opis": "zmęczony lekarz-uciekinier z kompleksu",
 		"powitania": ["Znowu ty. Co tym razem przestało działać?", "Nie pytaj, co jest w tabletkach. Ja też nie pytałem.", "Krwawisz mi na podłogę. Podłoga też jest na kartki."],
 		"oferta": [["bandaz", 1], ["opatrunek", 1], ["szyna", 1], ["bolostop", 1], ["apteczka", 1]],
-		"skupuje": ["med"], "skup": 0.55,
+		"skupuje": ["med"], "skup": 0.5,
 	},
 	"posrednik": {
 		"nazwa": "Pośrednik", "opis": "skup i sprzedaż, znajomości u Szabrowników",
 		"powitania": ["Wszystko ma swoją cenę. Ty też, ale na razie kupuję zegarki.", "Pochodzenie towaru mnie nie interesuje. Stan – owszem.", "Dla stałych klientów rabat. Ty jeszcze nie jesteś stały. Ani żywy na dłużej."],
 		"oferta": [["worek", 1], ["chlebak", 1], ["kamizelka_wedkarska", 1], ["kamizelka_mysliwska", 1], ["latarka", 1], ["mapa", 1], ["kompas", 1], ["klucz_piwnica", 1], ["konserwa", 1], ["suchary", 1], ["woda", 1], ["papierosy", 1]],
-		"skupuje": ["lup", "klucz", "latarka", "mapa", "kompas", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.45, "skup_lup": 0.7,
+		"skupuje": ["lup", "klucz", "latarka", "mapa", "kompas", "med", "pojemnik", "bron", "magazynek", "amunicja", "pancerz"], "skup": 0.4, "skup_lup": 0.6,
+	},
+	"kwatermistrz": {
+		"nazwa": "Kwatermistrz", "opis": "zaopatrzenie kwater placówki",
+		"powitania": ["Meble z przydziału. Przydział jest, mebli mało. Płać.", "Kwatera to nie hotel. Ale prycza się należy. Za opłatą.", "Szafka metalowa – klasyk. Kłódka osobno. Żartuję, jest w cenie."],
+		"oferta": [], "skupuje": [], "skup": 0.0,
 	},
 }
+
+## Skup u przedstawicieli frakcji (każdy bierze swoje).
+const SKUP_FRAKCJI := {"szabrownik": [["lup", "klucz", "mapa"], 0.55], "najemnik": [["med", "dodatek", "amunicja"], 0.45], "wojskowy": [["bron", "magazynek", "pancerz", "granat"], 0.45]}
 
 
 func _ready() -> void:
@@ -127,7 +135,14 @@ func _ready() -> void:
 
 
 func otworz(id: String) -> void:
-	handlarz = HANDLARZE[id].duplicate(true)
+	if FrakcjeBazy.DANE.has(id):
+		var fd: Dictionary = FrakcjeBazy.DANE[id]
+		var wrogi := FrakcjeBazy.rep(id) <= FrakcjeBazy.PROG_WROGOSCI
+		handlarz = {"nazwa": fd["przedstawiciel"], "opis": "%s · reputacja %+d (%s)" % [fd["opis"], FrakcjeBazy.rep(id), FrakcjeBazy.opis_rep(FrakcjeBazy.rep(id))],
+			"powitania": fd["wrogie"] if wrogi else fd["powitania"], "oferta": fd["oferta"], "frakcja": id, "wrogi": wrogi,
+			"skupuje": [] if wrogi else SKUP_FRAKCJI[id][0], "skup": SKUP_FRAKCJI[id][1]}
+	else:
+		handlarz = HANDLARZE[id].duplicate(true)
 	handlarz["id"] = id
 	otwarty = true
 	_root.visible = true
@@ -166,12 +181,14 @@ func _process(_d: float) -> void:
 
 ## Zlecenia Pośrednika: oferty do przyjęcia (najwyżej dwa naraz) i przyjęte z postępem; dostawę oddaje się
 ## ze skrytki.
-func _panel_zlecen() -> Control:
+func _panel_zlecen(od := "") -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
-	v.add_child(Motyw.naglowek("Zlecenia"))
 	var akt: Array = Gra.kontrakty.get("aktywne", [])
+	v.add_child(Motyw.naglowek("Zlecenia  (przyjęte: %d/%d)" % [akt.size(), Gra.MAX_ZLECEN]))
 	for k in akt:
+		if String(k.get("od", "")) != od:
+			continue
 		var r := HBoxContainer.new()
 		var post := "" if k["typ"] in ["dostawa", "wyjscie", "zwiad"] else "  [%d/%d]" % [int(k["postep"]), int(k["ile"])]
 		r.add_child(Motyw.etykieta("✔ " + String(k["opis"]) + post + "  ·  %d bonów" % int(k["nagroda"]), 14, Motyw.ZOLC))
@@ -189,23 +206,23 @@ func _panel_zlecen() -> Control:
 					_przebuduj())
 			r.add_child(b)
 		v.add_child(r)
-	var of: Array = Gra.kontrakty.get("oferty", [])
+	var of: Array = Gra.kontrakty.get("oferty", []) if od == "" else (Gra.kontrakty.get("frakcje", {}) as Dictionary).get(od, [])
 	for i in of.size():
 		var k2: Dictionary = of[i]
 		var r2 := HBoxContainer.new()
-		r2.add_child(Motyw.etykieta("• " + String(k2["opis"]) + "  ·  %d bonów" % int(k2["nagroda"]), 14))
+		r2.add_child(Motyw.etykieta("• " + String(k2["opis"]) + "  ·  %d bonów" % int(k2["nagroda"]) + ("  · rep. +%d" % int(k2["rep"]) if k2.has("rep") else ""), 14))
 		var b2 := Button.new()
 		b2.text = "Przyjmij"
-		b2.disabled = akt.size() >= 2
+		b2.disabled = akt.size() >= Gra.MAX_ZLECEN or bool(handlarz.get("wrogi", false))
 		var idx := i
 		b2.pressed.connect(func():
-			if Gra.przyjmij_kontrakt(idx):
+			if Gra.przyjmij_kontrakt(idx, od):
 				Dzwiek.graj("pieczatka", -4.0)
 				_powitanie.text = "„Umowa ustna, ale wiążąca. Bardziej niż myślisz.”"
 				_przebuduj())
 		r2.add_child(b2)
 		v.add_child(r2)
-	if akt.is_empty() and of.is_empty():
+	if akt.filter(func(k): return String(k.get("od", "")) == od).is_empty() and of.is_empty():
 		v.add_child(Motyw.etykieta("Na razie nic. Wróć po następnym wyjściu.", 14, Motyw.TEKST_CIEMNY))
 	return v
 
@@ -215,11 +232,17 @@ func _przebuduj() -> void:
 		c.queue_free()
 	for c in _dodatki.get_children():
 		c.queue_free()
+	if handlarz["id"] == "kwatermistrz":
+		_oferta_mebli()
+	var fr := String(handlarz.get("frakcja", ""))
 	for o in handlarz["oferta"]:
 		var pid: String = o[0]
 		var ile: int = o[1]
+		var prog: int = int(o[2]) if o.size() > 2 else -999
 		var d := Dane.def(pid)
 		var cena := int(d["cena"]) * ile
+		if fr != "":
+			cena = int(cena * FrakcjeBazy.mnoznik_ceny(fr))
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 10)
 		var ik := TextureRect.new()
@@ -237,11 +260,19 @@ func _przebuduj() -> void:
 		r.add_child(n)
 		r.add_child(Motyw.etykieta("%d" % cena, 15, Motyw.ZOLC, Motyw.mono_b()))
 		var b := Button.new()
-		b.text = "Kup"
-		b.disabled = Gra.bony < cena
+		var wrogi := bool(handlarz.get("wrogi", false))
+		var zablok := fr != "" and ((prog > 0 and FrakcjeBazy.rep(fr) < prog) or wrogi)
+		b.text = ("rep. %+d" % prog) if zablok and not wrogi else "Kup"
+		b.disabled = Gra.bony < cena or zablok
+		if zablok:
+			n.modulate = Color(1, 1, 1, 0.45)
+			b.tooltip_text = "Dostępne od reputacji %+d (masz %+d)." % [prog, FrakcjeBazy.rep(fr)]
 		b.pressed.connect(func(): _kup(pid, ile, cena))
 		r.add_child(b)
 		_oferta.add_child(r)
+	if fr != "":
+		_dodatki.add_child(_panel_frakcji(fr))
+		_dodatki.add_child(_panel_zlecen(fr))
 	match handlarz["id"]:
 		"medyk":
 			var koszt := koszt_leczenia()
@@ -264,7 +295,7 @@ func _przebuduj() -> void:
 			ub.add_theme_constant_override("separation", 4)
 			ub.add_child(Motyw.naglowek("Ubezpieczenie"))
 			_dodatki.add_child(ub)
-			for sl in ["glowna", "pistolet", "pancerz", "helm", "plecak"]:
+			for sl in ["glowna", "pistolet", "pancerz", "helm", "kamizelka", "plecak"]:
 				var p: Przedmiot = Gra.ekw.sloty[sl]
 				if p == null or p.dane.get("ubezp", false):
 					continue
@@ -293,6 +324,53 @@ func _przebuduj() -> void:
 			_dodatki.add_child(b2)
 
 
+## Reputacja u frakcji: poziom, rozejm w strefie, ceny.
+func _panel_frakcji(fr: String) -> Control:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 3)
+	v.add_child(Motyw.naglowek("Reputacja"))
+	var r := FrakcjeBazy.rep(fr)
+	v.add_child(Motyw.etykieta("%s: %+d (%s)" % [FrakcjeBazy.DANE[fr]["nazwa"], r, FrakcjeBazy.opis_rep(r)], 14, Motyw.ZOLC, Motyw.mono_b()))
+	var pr := FrakcjeBazy.prog_rozejmu(fr)
+	v.add_child(Motyw.etykieta(("W strefie nie strzelają pierwsi (rozejm do twojego strzału)." if r >= pr else "Rozejm w strefie od reputacji %+d." % pr), 13, Motyw.TEKST_CIEMNY))
+	v.add_child(Motyw.etykieta("Ceny: %+d%%  ·  zabity ich człowiek: %d" % [int(round((FrakcjeBazy.mnoznik_ceny(fr) - 1.0) * 100.0)), FrakcjeBazy.ZABICIE], 13, Motyw.TEKST_CIEMNY))
+	return v
+
+
+## Kwatermistrz: meble do kryjówki (trafiają do magazynu kwatery, stawia się je w kryjówce – [B]).
+func _oferta_mebli() -> void:
+	var naglowek := Motyw.etykieta("Meble trafiają do magazynu kwatery – w kryjówce [B] otwiera plan i stawianie.", 13, Motyw.TEKST_CIEMNY)
+	naglowek.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_oferta.add_child(naglowek)
+	for id in MebleKryjowki.KATALOG:
+		var m: Dictionary = MebleKryjowki.KATALOG[id]
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 10)
+		var postawione := Gra.kryjowka.filter(func(e): return String(e["id"]) == id).size()
+		var zapas := int(Gra.meble_zapas.get(id, 0))
+		var n := Motyw.etykieta(MebleKryjowki.nazwa(id) + ("   [%d+%d]" % [postawione, zapas] if postawione + zapas > 0 else ""), 15)
+		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		n.mouse_filter = Control.MOUSE_FILTER_STOP
+		n.tooltip_text = String(m["opis"]) + "\n[postawione + w magazynie]"
+		r.add_child(n)
+		var cena := int(m["cena"])
+		r.add_child(Motyw.etykieta("%d" % cena, 15, Motyw.ZOLC, Motyw.mono_b()))
+		var b := Button.new()
+		b.text = "Kup"
+		b.disabled = Gra.bony < cena
+		b.pressed.connect(func():
+			if Gra.bony < cena:
+				return
+			Gra.dodaj_bony(-cena)
+			Gra.meble_zapas[id] = int(Gra.meble_zapas.get(id, 0)) + 1
+			Dzwiek.graj("kasa", -6.0)
+			_powitanie.text = "„%s – wydane. Postaw sobie sam, tragarzy nie mamy.”" % MebleKryjowki.nazwa(id)
+			Gra.zapisz()
+			_przebuduj())
+		r.add_child(b)
+		_oferta.add_child(r)
+
+
 static func koszt_leczenia() -> int:
 	var c := Cialo.new(Gra.zdrowie)
 	var brak := 0.0
@@ -314,6 +392,8 @@ func _kup(pid: String, ile: int, cena: int) -> void:
 
 
 func cena_skupu(p: Przedmiot) -> int:
+	if p.dane.get("przydzial", false):
+		return 0
 	var t := p.typ()
 	if t not in handlarz["skupuje"]:
 		return 0

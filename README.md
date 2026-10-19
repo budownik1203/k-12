@@ -95,8 +95,18 @@ medykamenty – krzyż, żywność i picie – metka z ceną, narzędzia – blu
 
 ## Pętla gry
 
-1. **Baza** (schron, chodzony w pierwszej osobie): Zbrojmistrz, Medyk i Pośrednik, skrytka w szafkach,
-   leczenie, ubezpieczenie, darmowy zestaw startowy, gdy nie masz broni.
+1. **Placówka** (chodzona w pierwszej osobie, bez ładowania między częściami):
+   - **kryjówka** – twój betonowy boks. Meble kupujesz u Kwatermistrza i stawiasz pod **[B]** (podgląd pod celownikiem,
+     **R** / kółko obraca, **LPM** stawia, **PPM** anuluje; na postawionym meblu **LPM** przestawia, **X** chowa do magazynu).
+     Szafki, regały, skrzynie, szafa, biurko i lodówka powiększają skrytkę (start: 16 rzędów). Stół roboczy pozwala montować
+     celowniki i chwyt, prycza leczy połowę ran raz po każdym powrocie, a kuchenka podaje posiłek na ciepło (sytszy, bez pragnienia);
+   - **korytarz** do **recepcji** – stragany Zbrojmistrza, Medyka, Pośrednika i Kwatermistrza, przedstawiciele trzech frakcji
+     i śluza do strefy;
+   - **frakcje** (Szabrownicy, Najemnicy, Wojsko) – reputacja od −100 do 100. Zabity członek frakcji to −5 u niej i +1 u pozostałych;
+     ich zlecenia dają bony i reputację. Lepszy sprzęt (kl. 4, BP, tłumiki, celowniki, plecak wojskowy) jest u nich od progu
+     reputacji, ceny spadają do −15%. Przy wysokiej reputacji ich oddziały nie strzelają pierwsze (rozejm do twojego strzału);
+     przy −30 nie handlują;
+   - leczenie u Medyka, ubezpieczenie u Pośrednika, darmowy zestaw startowy, gdy nie masz broni (z przydziału – nie do sprzedania).
 2. **Rajd**: losowa sieć szerokich korytarzy z pomieszczeniami bloku oddzielonymi grubym murem (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
    szabrownicy i najemnicy z taktycznym AI, pełzacze (mutanty chodzące po ścianach), łup w szafkach i na zwłokach.
 3. **Wyjścia**: brama (zawsze), piwnica nr 7 (na klucz z rajdu), okno na rusztowanie (tylko w oknie czasowym).
@@ -137,6 +147,9 @@ godot --headless --path . res://scenes/rajd.tscn -- --test_bron   # klawisze bro
 godot --path . res://scenes/rajd.tscn -- --posterunek <katalog>  # posterunki wojska i korytarze
 godot --path . res://scenes/rajd.tscn -- --postacie <plik.png>   # przeciwnicy w pozach
 godot --path . res://scenes/rajd.tscn -- --vm <katalog>          # fazy przeładowania
+godot --path . res://scenes/baza.tscn -- --test_kryjowki         # meble, skrytka, sen, kuchenka, reputacja, rozejm
+godot --path . res://scenes/baza.tscn -- --zrzuty <katalog>      # kryjówka, recepcja, tryb budowy, handel
+godot --path . res://scenes/rajd.tscn -- --ekonomia --ziarno 3   # sonda balansu: łup w meblach i sprzęt wrogów na mapie
 ```
 
 Testy używają osobnego pliku zapisu i nie ruszają zapisu gracza.

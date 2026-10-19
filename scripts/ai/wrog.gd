@@ -118,6 +118,9 @@ func przygotuj(frak: String, zestaw: Dictionary, rng: RandomNumberGenerator) -> 
 	cecha = ["ostrozny", "agresywny", "tchorzliwy", "zwykly", "zwykly"][rng.randi() % 5]
 	granaty = rng.randi_range(0, 2) if frak != "szabrownik" else (1 if rng.randf() < 0.12 else 0)
 	morale = float(dane_frakcji["morale"]) * 100.0 + {"agresywny": 15.0, "tchorzliwy": -15.0}.get(cecha, 0.0)
+	# reputacja w placówce: oddziały przyjaznej frakcji nie strzelają pierwsze
+	if FrakcjeBazy.rep(frak) >= FrakcjeBazy.prog_rozejmu(frak):
+		rozejm = true
 
 
 func _pojemnosc() -> int:
@@ -511,6 +514,14 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 	_drgniecie = minf(1.0, _drgniecie + 0.45 + wynik["obr"] * 0.012)
 	velocity *= 0.25
 	cialo.obrazenia(czesc, wynik["obr"], "pocisk")
+	if od_kogo is Gracz and rozejm:
+		# strzał gracza zrywa rozejm całego oddziału – także gdy trafiony zginął od razu
+		if oddzial:
+			for w in oddzial.czlonkowie:
+				if is_instance_valid(w):
+					w.rozejm = false
+					w.wykrycie = maxf(float(w.wykrycie), 0.6)
+		rozejm = false
 	var swiat := get_parent() as Node3D
 	if wynik["pancerz"] and not wynik["przebity"]:
 		Efekty.czastki(swiat, punkt, -kier, Color(0.9, 0.8, 0.5), 6, 3.0)

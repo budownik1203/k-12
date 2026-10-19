@@ -113,6 +113,9 @@ func _ready() -> void:
 	elif args.has("--drzwi_ai"):
 		_tryb_testu = "drzwi_ai"
 		_test_drzwi_ai.call_deferred()
+	elif args.has("--ekonomia"):
+		_tryb_testu = "ekonomia"
+		_sonda_ekonomii.call_deferred()
 	elif args.has("--test_bron"):
 		_tryb_testu = "bron"
 		_test_broni.call_deferred()
@@ -2755,3 +2758,36 @@ func _test_ziemi(katalog: String) -> void:
 			if lezy.is_empty() or odl > 0.25:
 				bl += 1
 	print("TEST ZIEMI: błędów %d" % bl)
+
+
+## Sonda ekonomii (balans): wartość łupu w meblach i na ziemi, wrogowie i ich sprzęt na tej mapie.
+func _sonda_ekonomii() -> void:
+	for _i in 20:
+		await get_tree().process_frame
+	var poj := 0
+	var w_poj := 0
+	var w_ziemia := 0
+	var kat := {}
+	for n in swiat.find_children("*", "", true, false):
+		if n is Pojemnik:
+			poj += 1
+			for p in (n as Pojemnik).siatka.wszystkie():
+				w_poj += (p as Przedmiot).wartosc()
+				var t := (p as Przedmiot).typ()
+				kat[t] = int(kat.get(t, 0)) + (p as Przedmiot).wartosc()
+		elif n is LupNaZiemi and (n as LupNaZiemi).przedmiot:
+			w_ziemia += (n as LupNaZiemi).przedmiot.wartosc()
+	var wrogowie := {}
+	var w_wrog := 0
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if not (w is Wrog):
+			wrogowie["fauna"] = int(wrogowie.get("fauna", 0)) + 1
+			continue
+		var f := String(w.get("frakcja"))
+		wrogowie[f] = int(wrogowie.get(f, 0)) + 1
+		for p in [w.get("bron"), w.get("pancerz"), w.get("helm")] + (w.get("lup") as Array):
+			if p:
+				w_wrog += (p as Przedmiot).wartosc()
+	print("EKONOMIA ziarno=%d pojemniki=%d lup_meble=%d lup_ziemia=%d wrogowie=%s sprzet_wrogow=%d wyjscia=%d" % [Gra.ziarno_rajdu, poj, w_poj, w_ziemia, wrogowie, w_wrog, (info["wyjscia"] as Array).size()])
+	print("EKONOMIA kategorie ", kat)
+	get_tree().quit()

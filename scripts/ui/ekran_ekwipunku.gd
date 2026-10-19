@@ -2891,6 +2891,8 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 			t += "Czas użycia %.1f s\n" % m["czas"]
 	if p.dane.get("ubezp", false):
 		t += "[color=#6f9a68]UBEZPIECZONY – wróci do skrytki po śmierci[/color]\n"
+	if p.dane.get("przydzial", false):
+		t += "[color=#8c8670]Z przydziału (zestaw startowy) – nikt tego nie odkupi[/color]\n"
 	t += "[i][color=#a49d86]%s[/color][/i]" % d.get("opis", "")
 	return t
 

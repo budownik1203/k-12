@@ -21,12 +21,16 @@ var ostatni_raport := {}
 var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0
 var rajd_w_toku := false
+var kryjowka: Array = []      # postawione meble kryjówki: {"id", "x", "z", "r" (obrót co 90°)}
+var meble_zapas := {}         # kupione, niepostawione meble: id -> liczba
+var reputacja := {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
+var odpoczynek := false       # po powrocie z rajdu można raz przespać się w kryjówce
 
 
 func _ready() -> void:
 	# testy automatyczne nie nadpisują zapisu gracza
 	var a := OS.get_cmdline_user_args()
-	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis"):
+	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia"):
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
@@ -34,7 +38,11 @@ func _ready() -> void:
 
 func nowa_gra() -> void:
 	bony = 12000
-	skrytka = Siatka.new(20, 28, 0.0)
+	kryjowka = MebleKryjowki.START.duplicate(true)
+	meble_zapas = {}
+	reputacja = {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
+	odpoczynek = false
+	skrytka = Siatka.new(MebleKryjowki.SZER_SKRYTKI, MebleKryjowki.wiersze_skrytki(kryjowka), 0.0)
 	ekw = Ekwipunek.new()
 	zdrowie = {}
 	potrzeby = {"glod": 80.0, "pragnienie": 80.0}
@@ -105,13 +113,22 @@ func ma_bron() -> bool:
 func wydaj_zestaw_startowy() -> bool:
 	if ma_bron():
 		return false
+	# sprzęt z przydziału: nie do sprzedania (inaczej zestaw byłby darmową maszynką do bonów)
 	var b := nowy_naladowany("pw9", "a_9x18")
+	b.dane["przydzial"] = true
+	(b.dane["mag"] as Przedmiot).dane["przydzial"] = true
 	ekw.zaloz("pistolet", b)
 	if ekw.sloty["kamizelka"] == null:
-		ekw.zaloz("kamizelka", Przedmiot.nowy("kamizelka_wedkarska"))
+		var k := Przedmiot.nowy("kamizelka_wedkarska")
+		k.dane["przydzial"] = true
+		ekw.zaloz("kamizelka", k)
 	if ekw.sloty["plecak"] == null:
-		ekw.zaloz("plecak", Przedmiot.nowy("worek"))
-	ekw.dodaj(_magazynek("mag_pw9", "a_9x18", 8))
+		var w := Przedmiot.nowy("worek")
+		w.dane["przydzial"] = true
+		ekw.zaloz("plecak", w)
+	var m := _magazynek("mag_pw9", "a_9x18", 8)
+	m.dane["przydzial"] = true
+	ekw.dodaj(m)
 	ekw.dodaj(Przedmiot.nowy("a_9x18", 16))
 	ekw.dodaj(Przedmiot.nowy("bandaz"))
 	if not ekw.ma_wyposazenie("latarka") and ekw.znajdz_id("latarka").is_empty():
@@ -139,16 +156,30 @@ func rozpocznij_rajd() -> void:
 	ziarno_rajdu = randi()
 	rajd_w_toku = true
 	statystyki["rajdy"] += 1
+	# droga do strefy i noc w terenie: głód i pragnienie rosną (jedzenie w bazie ma sens)
+	potrzeby["glod"] = maxf(0.0, float(potrzeby["glod"]) - 10.0)
+	potrzeby["pragnienie"] = maxf(0.0, float(potrzeby["pragnienie"]) - 14.0)
+	odpoczynek = false
 	zapisz()
 	get_tree().change_scene_to_file("res://scenes/rajd.tscn")
+
+
+## Skrytka dopasowana do mebli kryjówki (nigdy nie ucina przedmiotów).
+func dopasuj_skrytke() -> void:
+	skrytka.zmien_wysokosc(maxi(MebleKryjowki.wiersze_skrytki(kryjowka), skrytka.zajete_wiersze()))
+
+
+func zmien_reputacje(f: String, o: int) -> void:
+	if reputacja.has(f):
+		reputacja[f] = clampi(int(reputacja[f]) + o, -100, 100)
 
 
 ## wynik: {"przezyl": bool, "przyczyna": String, "czas": float, "zabici": Array, "wyjscie": String,
 ##         "wartosc_poczatkowa": int, "utracone": Array, "zdrowie": Dictionary, "zdarzenia": Array}
 # ------------------------------------------------------------------ kontrakty (zlecenia Pośrednika)
 
-const KONTRAKTY_DOSTAWA := [["teczka_akt", 1, 6500], ["lampa_elektronowa", 2, 5000], ["maszyna_do_pisania", 1, 7000], ["radio", 1, 5200],
-	["akumulator", 2, 5800], ["telefon", 1, 4200], ["przewody", 3, 3800], ["zegarek", 2, 5000]]
+const KONTRAKTY_DOSTAWA := [["teczka_akt", 1, 9500], ["lampa_elektronowa", 2, 5000], ["maszyna_do_pisania", 1, 8500], ["radio", 1, 5200],
+	["akumulator", 2, 9000], ["telefon", 1, 4200], ["przewody", 3, 3800], ["zegarek", 2, 7000]]
 const KONTRAKTY_ELIMINACJA := [["szabrownik", 3, 5000], ["najemnik", 2, 8500], ["wojskowy", 2, 9000]]
 const KONTRAKTY_WYJSCIE := [["Brama na podwórze", 2800], ["Piwnica nr 7", 4500], ["Okno na rusztowanie", 3800]]
 const KONTRAKTY_ZWIAD := [["warsztat", "warsztatu", 3000], ["piwnica", "piwnicy", 3200], ["administracja", "biur administracji", 2600], ["magazyn", "magazynu", 2800]]
@@ -181,11 +212,19 @@ func odnow_oferty() -> void:
 				out.append({"typ": "zwiad", "cel": e4[0], "ile": 1, "postep": 0, "nagroda": e4[2],
 					"opis": "Zwiad: wejdź do %s i wróć żywy" % e4[1]})
 	kontrakty["oferty"] = out
+	var fr := {}
+	for f in FrakcjeBazy.DANE:
+		fr[f] = FrakcjeBazy.losuj_zlecenia(f, rng)
+	kontrakty["frakcje"] = fr
 
 
-func przyjmij_kontrakt(i: int) -> bool:
-	var of: Array = kontrakty["oferty"]
-	if i < 0 or i >= of.size() or (kontrakty["aktywne"] as Array).size() >= 2:
+const MAX_ZLECEN := 3
+
+
+## Przyjęcie zlecenia: od Pośrednika (od = "") albo od przedstawiciela frakcji.
+func przyjmij_kontrakt(i: int, od := "") -> bool:
+	var of: Array = kontrakty["oferty"] if od == "" else (kontrakty.get("frakcje", {}) as Dictionary).get(od, [])
+	if i < 0 or i >= of.size() or (kontrakty["aktywne"] as Array).size() >= MAX_ZLECEN:
 		return false
 	(kontrakty["aktywne"] as Array).append(of[i])
 	of.remove_at(i)
@@ -208,6 +247,8 @@ func oddaj_dostawe(k: Dictionary) -> bool:
 	for p in znalezione:
 		skrytka.usun(p)
 	dodaj_bony(int(k["nagroda"]))
+	if k.has("od"):
+		zmien_reputacje(String(k["od"]), int(k.get("rep", 0)))
 	(kontrakty["aktywne"] as Array).erase(k)
 	zapisz()
 	return true
@@ -234,7 +275,11 @@ func _rozlicz_kontrakty(wynik: Dictionary) -> void:
 		if String(k["typ"]) != "dostawa" and int(k["postep"]) >= int(k["ile"]):
 			dodaj_bony(int(k["nagroda"]))
 			aktywne.erase(k)
-			notki.append({"czas": 0.0, "tekst": "Zlecenie wykonane: %s (+%d bonów)." % [k["opis"], int(k["nagroda"])]})
+			var od := String(k.get("od", ""))
+			if od != "":
+				zmien_reputacje(od, int(k.get("rep", 0)))
+			notki.append({"czas": 0.0, "tekst": "Zlecenie wykonane: %s (+%d bonów%s)." % [k["opis"], int(k["nagroda"]),
+				(", reputacja: %s +%d" % [FrakcjeBazy.DANE[od]["nazwa"], int(k.get("rep", 0))]) if od != "" else ""]})
 	if not notki.is_empty():
 		var zd: Array = wynik.get("zdarzenia", [])
 		zd.append_array(notki)
@@ -282,6 +327,18 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 	rajd_w_toku = false
 	_rozlicz_kontrakty(wynik)
 	statystyki["zabici"] += wynik.get("zabici", []).size()
+	# reputacja: frakcje dowiadują się o zabitych (także gdy gracz nie wrócił)
+	var bilans := {}
+	for z in wynik.get("zabici", []):
+		var fz := String(z.get("frakcja", ""))
+		if not reputacja.has(fz):
+			continue
+		for f in reputacja:
+			bilans[f] = int(bilans.get(f, 0)) + (FrakcjeBazy.ZABICIE if f == fz else FrakcjeBazy.ZABICIE_INNYCH)
+	for f in bilans:
+		zmien_reputacje(f, bilans[f])
+	wynik["reputacja"] = bilans
+	odpoczynek = bool(wynik.get("przezyl", false))
 	if wynik["przezyl"]:
 		statystyki["przezyte"] += 1
 		zdrowie = wynik.get("zdrowie", {})
@@ -300,6 +357,8 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 				p.dane.erase("ubezp")
 				# zwracany pusty (bez magazynka i zawartości)
 				var kopia := Przedmiot.nowy(p.id)
+				if p.dane.get("przydzial", false):
+					kopia.dane["przydzial"] = true
 				poczta.append(kopia.to_dict())
 				zwrot.append(p.nazwa())
 		for sl in Ekwipunek.SLOTY:
@@ -323,7 +382,7 @@ func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
 		"zdrowie": zdrowie, "potrzeby": potrzeby, "kontrakty": kontrakty, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
-		"latarka_wydana": true,
+		"latarka_wydana": true, "kryjowka": kryjowka, "meble_zapas": meble_zapas, "reputacja": reputacja, "odpoczynek": odpoczynek,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -354,6 +413,19 @@ func wczytaj() -> bool:
 		statystyki.merge(d.get("statystyki", {}), true)
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])
+		# kryjówka (zapisy sprzed v0.10: dawny schron – trzy szafki, stół roboczy, kącik)
+		kryjowka = d.get("kryjowka", MebleKryjowki.MIGRACJA.duplicate(true))
+		meble_zapas = d.get("meble_zapas", {})
+		reputacja = {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
+		for f in d.get("reputacja", {}):
+			reputacja[f] = int(d["reputacja"][f])
+		odpoczynek = bool(d.get("odpoczynek", false))
+		if not (kontrakty as Dictionary).has("frakcje"):
+			var o: Array = kontrakty.get("oferty", [])
+			odnow_oferty()
+			if not o.is_empty():
+				kontrakty["oferty"] = o
+		dopasuj_skrytke()
 		# przedmioty, które po zmianie rozmiarów (stosy, przegródki) nie zmieściły się – do skrytki albo na pocztę
 		for p in Przedmiot.przepelnienie:
 			if not skrytka.dodaj(p):

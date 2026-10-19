@@ -156,6 +156,8 @@ func wartosc() -> int:
 			if dane["naboje"] > 0:
 				v += Dane.def(dane["amunicja"]).get("cena", 0) * dane["naboje"]
 		"bron":
+			# zużyta broń jest warta mniej (czyszczenie podnosi wartość)
+			v *= 0.55 + 0.45 * clampf(float(dane.get("stan", 100.0)) / 100.0, 0.0, 1.0)
 			if dane["mag"] != null:
 				v += (dane["mag"] as Przedmiot).wartosc()
 			for dd in dodatki():

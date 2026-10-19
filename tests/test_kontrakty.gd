@@ -13,12 +13,19 @@ func _ready() -> void:
 	Gra.kontrakty["oferty"] = [
 		{"typ": "eliminacja", "cel": "szabrownik", "ile": 2, "postep": 0, "nagroda": 1000, "opis": "e"},
 		{"typ": "wyjscie", "cel": "Brama na podwórze", "ile": 1, "postep": 0, "nagroda": 500, "opis": "w"},
-		{"typ": "dostawa", "cel": "radio", "ile": 1, "postep": 0, "nagroda": 700, "opis": "d"}]
+		{"typ": "dostawa", "cel": "radio", "ile": 1, "postep": 0, "nagroda": 700, "opis": "d"},
+		{"typ": "dostawa", "cel": "radio", "ile": 1, "postep": 0, "nagroda": 700, "opis": "d2"}]
+	# limit przyjętych: Gra.MAX_ZLECEN (3) łącznie – Pośrednik i frakcje
 	Gra.przyjmij_kontrakt(0)
 	Gra.przyjmij_kontrakt(0)
-	if Gra.przyjmij_kontrakt(0):
-		print("BŁĄD: trzecie zlecenie przyjęte")
+	if not Gra.przyjmij_kontrakt(0, "wojskowy"):
+		print("BŁĄD: zlecenie frakcji nieprzyjęte")
 		bl += 1
+	if Gra.przyjmij_kontrakt(0):
+		print("BŁĄD: czwarte zlecenie przyjęte")
+		bl += 1
+	var od_wojska: Dictionary = Gra.kontrakty["aktywne"][2]
+	Gra.kontrakty["aktywne"].erase(od_wojska)
 	var b0 := Gra.bony
 	var w := {"przezyl": true, "wyjscie": "Brama na podwórze", "zabici": [{"frakcja": "szabrownik"}, {"frakcja": "szabrownik"}, {"frakcja": "wojskowy"}], "zdarzenia": []}
 	Gra._rozlicz_kontrakty(w)

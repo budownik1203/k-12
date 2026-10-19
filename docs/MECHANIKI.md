@@ -31,3 +31,13 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 4. Przekupstwo, rozejm i wojna frakcji (przebudowa sojuszy).
 5. Podsłuch wroga, plecak na ziemi, głód i pragnienie.
 6. Zdarzenia w strefie.
+
+## Placówka i reputacja (v0.10.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Kryjówka z meblami | meble z funkcją (skrytka, warsztat, sen, kuchnia, światło) i ozdobne; tryb budowy [B] | zastępuje stałe szafki i stół roboczy dawnego schronu; stare zapisy dostają dawny układ |
+| Sen po rajdzie | prycza leczy połowę ran raz po każdym powrocie | Medyk nadal leczy w pełni i od razu – prycza tylko tańsza i wolniejsza droga |
+| Kuchenka | posiłek ze skrytki ×1,5 sytości, woda jako herbata | głód i pragnienie maleją też przy wyjściu do strefy, więc jedzenie w bazie ma sens |
+| Reputacja frakcji | zabijanie −5, zlecenia +, progi oferty, ceny, rozejm w strefie | rozejm korzysta z istniejącego przekupstwa (flaga oddziału); zabójstwa dla zleceń jednej frakcji kosztują reputację u innej – wybór strony |
+| Zestaw z przydziału | darmowy zestaw nie do sprzedania | zamyka pętlę „sprzedaj pistolet → weź nowy zestaw” |

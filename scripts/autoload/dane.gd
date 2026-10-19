@@ -4,6 +4,7 @@ extends Node
 var przedmioty := {}   # id -> Dictionary
 var tabele := {}       # nazwa -> Array [[id, waga], ...]
 var frakcje := {}
+var meble := {}     # assets/dane/meble.json: id -> {rozmiar, pojemnik, nazwa, ...}
 var _ikony := {}
 
 
@@ -14,6 +15,7 @@ func _ready() -> void:
 		przedmioty[p["id"]] = p
 	tabele = js["tabele_lootu"]
 	frakcje = js["frakcje"]
+	meble = JSON.parse_string(FileAccess.get_file_as_string("res://assets/dane/meble.json"))
 
 
 func def(id: String) -> Dictionary:

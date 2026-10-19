@@ -1,4 +1,4 @@
-# Stan demo (19.10.2026, v0.9.25)
+# Stan demo (20.10.2026, v0.10.0)
 
 Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.6, renderer Compatibility.
 
@@ -24,7 +24,7 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 | Ekwipunek (wygląd) | wygląd rozpiętego oporządzenia (płótno, kieszenie z przeszyciem, naszywki), sloty wokół sylwetki, wyrzucanie przeciągnięciem poza sloty, siatki pojemników (kieszenie, kamizelka, plecak, skrytka, kontener bezpieczny), obracanie, stosy, redukcja wagi pojemnika, sloty na ciele, przeszukiwanie ze stopniowym odkrywaniem zawartości |
 | Przeciwnicy | frakcje walczą ze sobą (gracz nie ma pierwszeństwa – cel to najbliższy widoczny wróg, strzały NPC słychać i ściągają innych); Szabrownicy, Najemnicy i Wojskowi (posterunki z worków z piaskiem: siedzą w gnieździe, wstają do strzału, nie wychodzą); krwawienie z kroplami krwi na podłodze, opatrywanie się za osłoną, szok przy dużej utracie krwi (mniej „gąbek”), zachwianie po trafieniu; trzymanie kątów po utracie kontaktu, w oddziale naprzód idzie jeden, reszta osłania; krótkie przemyślane skoki do osłon (bieg tylko pod ostrzałem), pod silnym ogniem chowają głowę; w oddziałach; wzrok (stożek, oświetlenie gracza, kucanie), słuch liczony po drodze dźwięku przez korytarze i drzwi (zakręty tłumią), blisko: alarm i szukanie, daleko: nasłuch w miejscu; pamięć pozycji; osłony, flankowanie, wychylanie zza osłon, łączność w oddziale, morale i ucieczka, nowy dowódca u najemników; okrzyki z napisami; łup z ciał; rosnące zagrożenie (kolejne grupy) |
 | Fauna | pełzacze – mutanty chodzące po ścianach i sufitach: czają się pod stropem, pełzną nad ofiarą, zeskakują z wrzaskiem, gryzą, ranne uciekają po ścianie w ciemność; atakują każdego (gracza i ludzi wszystkich frakcji) |
-| Baza | schron chodzony w FPS, 3 handlarzy z ofertą i skupem, leczenie u Medyka, ubezpieczenie u Pośrednika, darmowy zestaw startowy, rozkaz wyjścia z ostrzeżeniami |
+| Placówka (v0.10.0) | jedna chodzona przestrzeń: kryjówka gracza (beton, 8 x 7 m) – korytarz – recepcja (20 x 14 m, filary, poczekalnia): stragany z plandekami Zbrojmistrza, Medyka, Pośrednika i Kwatermistrza, stoliki Szabrowników i Najemników, punkt kontrolny Wojska przy śluzie do strefy; rozkaz wyjścia z ostrzeżeniami (głód, rany, magazynki), listą rozejmów i zleceń |
 | Oprawa | styl Iron Blight: pełna rozdzielczość, oświetlenie per piksel, cienie od trzech najbliższych lamp, tonemapping filmic, bloom, MSAA; pikselowe są tekstury (ok. 64 px/m, ostre piksele): dwukolorowe ściany z lamperią, tapety z ornamentem, deski, dywan perski, cegła, kafle; broń z fazowanych brył i walców (wytarta stal, rudy orzech, okładziny w kratkę), dłonie z palcami, rękawy i zegarek z krzyżykiem zdrowia; postacie z teksturą tkaniny i twarzami; wszystko generowane kodem |
 | Poprawki (v0.9.8) | kolejka czynności: lek z paska albo napełnianie zlecone w trakcie innej czynności rusza po jej końcu (do 3, widać „→ następna” przy kółku, X czyści kolejkę); szabrownik przyłapany przy łupie ucieka z nim; przy rączce zamka łokieć idzie za dłonią (przedramię nie odstaje); kontener bezpieczny podpisany „zawartość przetrwa śmierć” |
 | Dźwięk (v0.9.9) | kroki wg podłoża (lastryko, parkiet ze skrzypnięciem, kafelki, beton – po 4 warianty, też u wrogów); pogłos zależny od pomieszczenia słuchacza (piwnica, magazyn, klatka dudnią; pokój suchy); okluzja – dźwięk zza ściany ciszej i głucho; przeładowanie w fazach (wypięcie, wpięcie, zamek przy pustej komorze; obrzyn: łamanie, nabój, zamknięcie), przełącznik ognia, brzęk łusek o podłogę; głosy wrogów (krzyk alarmu, komenda, mruknięcie, ranny, śmierć – barwa stała dla postaci); zadyszka przy niskiej wytrzymałości, serce przy ciężkich ranach, szelest ubrania; tło strefy: brzęczenie świetlówek, kapanie, skrzypienie budynku, odległe strzelaniny i wycie, wiatr; dron napięcia narastający przy czujnych wrogach |
@@ -48,6 +48,9 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 | Zakładanie i rozmiary (v0.9.25) | podniesiony pancerz/hełm/kamizelka/plecak zakłada się od razu, gdy slot jest pusty; bandaż 2x2, zegarek/łańcuszek 2x1, kompas 2x2 itd. – 1x1 tylko garść naboi |
 | Kategorie ikon (v0.9.25) | papier i dodatki wg kategorii: broń (pieczątka ОДОБРЕНО), części (nr detalu), amunicja (szablon kalibru), pancerze, oporządzenie, medykamenty (czerwony krzyż), żywność i picie (metka z ceną), narzędzia (niebieski blueprint), rupiecie (gazetowy papier) |
 | Audyt nakładania UI (v0.9.25) | licznik bonów bazy chowa się pod handlem/skrytką, pasek klawiszy i podpis ucieczki z obrysem nad modelami 3D, podpisy przedmiotów dopasowują czcionkę do szerokości, okno łupu nie styka się z panelem gracza |
+| Kryjówka i meble (v0.10.0) | meble kupowane u Kwatermistrza (18 rodzajów) trafiają do magazynu kwatery; tryb budowy [B]: podgląd mebla pod celownikiem (zielony / czerwony z powodem: poza kryjówką, zasłania przejście, koliduje, stoisz tu), siatka 10 cm, dociąganie do ścian, obrót co 90°, przestawianie i zabieranie; skrytka rośnie z meblami (10 rzędów + szafka 6, regał 8, szafa 8, skrzynia wojskowa 6, biurko 4, lodówka 4, skrzynka 3; maks. 64), zabranie mebla, które ucięłoby przedmioty, jest odrzucane; stół roboczy (montaż celowników), prycza/wersalka (sen: połowa ran, raz po rajdzie), kuchenka (posiłek ×1,5 sytości + herbata), żarówki (światło); stare zapisy dostają dawny schron (3 szafki = 28 rzędów, stół roboczy) |
+| Frakcje i reputacja (v0.10.0) | reputacja u Szabrowników, Najemników i Wojska (−100..100): zabity członek −5 (+1 u pozostałych), zlecenia frakcji +6..14; oferta z progami (kl. 4 od +40, luneta od +55, BP od +20/+30, tłumiki, kolimator, plecak wojskowy), ceny −15%..+25%, przy −30 brak handlu; rozejm w strefie od +35/+40/+50 – oddziały nie strzelają pierwsze, strzał gracza zrywa rozejm całego oddziału (też gdy trafiony zginie od razu); po dwa zlecenia od każdej frakcji, razem najwyżej 3 przyjęte; bilans reputacji w raporcie |
+| Balans (v0.10.0) | sonda --ekonomia: łup w meblach na mapę 1,3–1,6 mln → ok. 0,5 mln bonów (losowania 0–3, częściej puste, kosztowności tańsze: łańcuszek 6000, zegarek 4000, teczka 9000…), broń warta tyle, w jakim jest stanie (55–100%), skup 45/50/40%, łup u Pośrednika 60%; mniej pancerzy kl. 4 u wojska (nowy zestaw z PM-63); głód −10 i pragnienie −14 przy wyjściu do strefy; zestaw startowy z przydziału nie do sprzedania (koniec nieskończonych bonów), ubezpieczenie obejmuje kamizelkę |
 | Poprawki (v0.9.7) | przy zwłokach przyklęk na kolano, obie dłonie przeszukują ciało; zdejmowanie pancerza i hełmu z animacją (szarpanie rzepów i klamer, uniesienie zdjętego); otwieranie mebli wg rodzaju (drzwi łukiem, szuflada do siebie, wieko obiema rękami do góry); przy szybkim zerknięciu na kamizelkę – podsumowanie, co jest w plecaku (czy warto go zdejmować); broń wrogów też się zacina (okrzyk, przerwa w ogniu); brudna broń gracza trochę rozrzuca; przeterminowane leki oznaczone na ikonie |
 | Ekwipunek (v0.9.5) | szabrownicy i najemnicy w patrolu wypatrują leżących rzeczy, ciał i porzuconych plecaków: podchodzą, przyklękają, grzebią (słychać) i zabierają – rzecz trafia do ich łupu (odzyskasz ją z ich ciała); zużycie broni (każdy strzał brudzi, tłumik bardziej; brudna zacina się częściej, pasek stanu na ikonie), czyszczenie zestawem do czyszczenia (6 s z animacją, 4 użycia); przeterminowane leki z szafek (wolniej, czasem nie działają); wgniecenia i przetarcia na ikonie pancerza wg zużycia; taśma izolacyjna – owinięty metal nie brzęczy (6 użyć); przy upadku z wysokości albo ogłuszeniu drobiazg może wypaść z kieszeni spodni; w schronie przycisk „Sortuj skrytkę” |
 | Ekwipunek (v0.9.4) | plecak na plecach niedostępny: przeładowanie, leki, napełnianie [G] i podnoszenie sięgają tylko do kamizelki i kieszeni, a po rozłożeniu plecaka – do otwartych kieszeni; magazynek z ładownicy najszybciej, z kieszeni spodni wolniej (ręka sięga niżej), z plecaka najwolniej; pełny plecak zdejmuje się i zakłada dłużej (ciężki – głośno); kamizelka: osobna klapka na rzep nad każdą ładownicą; brzęk luźnego metalu w plecaku i kieszeniach przy biegu (słyszą go wrogowie); nieznane przedmioty („metalowy drobiazg”, „pakunek”) – obejrzenie z animacją obracania w dłoniach, po ciemku się nie da, w schronie wszystko rozpoznane; znalezione magazynki nieprzeliczone („pełny?”, „~½+”, „mało”) do przeliczenia; oznaczanie ★ (nie wyrzucisz przypadkiem); podgląd wagi po wzięciu łupu (ostrzeżenie o progu); ręka przy łączeniu stosów, wkładaniu magazynka do broni, do pojemnika i wyrzucaniu |
@@ -59,20 +62,16 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 
 ## Świadome uproszczenia demo
 
-- Jedno piętro w rajdzie (bez pionowości), drzwi bez otwierania.
-- Obraz 3D w 1/2 rozdzielczości (wcześniej 1/3) i słabsza mgła – cel widać z kilkunastu metrów.
-- Brak granatów i zacięć; modyfikacje broni tylko jako dodatki (bez wymiany luf i kolb).
-- Brak zapisu zawieszającego w trakcie rajdu (wyjście z rajdu = zaginięcie w akcji).
-- Sojusze frakcji statyczne, tylko 2 frakcje ludzkie (Wojskowi w kolejnej iteracji).
-- Ręce i bronie animowane proceduralnie (bez szkieletu).
-- Brak craftu, reputacji u handlarzy i drzewka rozwoju bazy.
-- Boss biomu jeszcze nie istnieje.
+- Jeden biom (Blokowisko) i dwie kondygnacje; brak zapisu w trakcie rajdu (wyjście z gry = zaginięcie w akcji).
+- Ręce i bronie animowane proceduralnie (bez szkieletu); 4 bronie, modyfikacje tylko jako dodatki.
+- Kryjówka ma stały rozmiar (bez rozbudowy pomieszczeń), meble stawiane na podłodze, obrót co 90°.
+- Reputacja nie zmienia składu oddziałów w strefie (tylko rozejm), Pośrednik i handlarze bez własnej reputacji.
+- Boss biomu jeszcze nie istnieje; brak craftu amunicji.
 
-## Proponowane następne kroki (etap 4 z roadmapy)
+## Proponowane następne kroki
 
-1. Wojskowi jako trzecia frakcja z punktami kontrolnymi.
-2. Boss biomu 1: dowódca z oddziałem i zadaniem terenowym.
-3. Granaty (odłamkowy, dymny) i otwierane drzwi.
-4. Pionowość: klatka schodowa jako łącznik pięter (model już istnieje).
-5. Craft amunicji w bazie, więcej dodatków (kolby, magazynki bębnowe).
-6. Kontrakty handlarzy (cele rajdu).
+1. Boss biomu 1: dowódca z oddziałem i zadaniem terenowym (zlecenie Wojska lub Najemników).
+2. Rozbudowa kryjówki: drugie pomieszczenie za bony, meble na ścianie (stojak na broń, tablica z mapą).
+3. Craft amunicji i naprawa pancerza na stole roboczym.
+4. Reputacja wpływa na strefę: przyjazne oddziały ostrzegają przed innymi, wrogie polują na gracza.
+5. Więcej dodatków (kolby, magazynki bębnowe) i druga broń długa.

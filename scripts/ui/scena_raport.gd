@@ -100,6 +100,12 @@ func _ready() -> void:
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(sp)
 	var s: Dictionary = Gra.statystyki
+	var rp: Dictionary = r.get("reputacja", {})
+	if not rp.is_empty():
+		var czesci := []
+		for f in rp:
+			czesci.append("%s %+d (%+d)" % [FrakcjeBazy.DANE[f]["nazwa"], int(rp[f]), FrakcjeBazy.rep(f)])
+		v.add_child(Motyw.etykieta("Reputacja: " + " · ".join(czesci), 13, szary, Motyw.mono()))
 	v.add_child(Motyw.etykieta("Kartoteka: rajdy %d · przeżyte %d · zgony %d · zlikwidowani %d" % [s["rajdy"], s["przezyte"], s["zgony"], s["zabici"]], 13, szary, Motyw.mono()))
 	var b := Button.new()
 	b.text = "Podpisz i wróć do bazy"

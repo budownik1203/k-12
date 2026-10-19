@@ -59,6 +59,24 @@ func _init(sw := 4, sh := 4, red := 0.0) -> void:
 	redukcja = red
 
 
+## Najniższy zajęty wiersz + 1 (0 = pusta). Skrytka nie może się skurczyć poniżej tej wartości.
+func zajete_wiersze() -> int:
+	var m := 0
+	for e in items:
+		m = maxi(m, int(e["y"]) + (e["p"] as Przedmiot).wys())
+	return m
+
+
+## Zmiana wysokości (skrytka rośnie z meblami kryjówki). Odmawia, gdy ucięłaby przedmioty.
+func zmien_wysokosc(nh: int) -> bool:
+	if nh < zajete_wiersze() or not maska.is_empty():
+		return false
+	if nh != h:
+		h = nh
+		zmieniona.emit()
+	return true
+
+
 func _zajete(ignore: Przedmiot = null) -> PackedByteArray:
 	var occ := PackedByteArray()
 	occ.resize(w * h)

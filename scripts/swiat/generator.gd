@@ -1523,7 +1523,8 @@ func _mebel(id: String, pos: Vector3, rot: float, z_kolizja := true, k := Vector
 			"szafa", "regal": sw = 10; sh = 8
 			"apteczka_scienna": sw = 6; sh = 4
 		pj.siatka = Siatka.new(sw, sh)
-		pj.wypelnij(info["pojemnik"], rng.randi_range(1, 4), rng)
+		# losowań: zwykle 1, czasem 2–3, bywa pusto (balans v0.10: średnio ok. 1,4 zamiast 2,5)
+		pj.wypelnij(info["pojemnik"], [0, 1, 1, 1, 2, 2, 3][rng.randi() % 7], rng)
 		if id in MONTOWANE_NA_SCIANIE:
 			pj.collision_layer = Balistyka.WARSTWA_INTERAKCJE   # nie blokuje przejść
 		pj.mebel_id = id

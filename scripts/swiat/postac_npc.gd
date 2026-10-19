@@ -46,6 +46,20 @@ func _ready() -> void:
 			bryly.append([Vector3(0, 0.18, -0.14), Vector3(0.5, 0.8, 0.04), Color(0.78, 0.78, 0.72)])  # fartuch
 		"posrednik":
 			bryly.append([Vector3(0, 0.36, -0.14), Vector3(0.48, 0.44, 0.05), d])  # marynarka
+		"kwatermistrz":
+			bryly.append([Vector3(0, 0.12, -0.14), Vector3(0.5, 0.7, 0.04), Color(0.32, 0.3, 0.26)])  # fartuch roboczy
+			bryly.append([Vector3(0.12, 0.42, -0.165), Vector3(0.06, 0.12, 0.02), Color(0.7, 0.68, 0.6)])  # ołówek i notes
+		"szabrownik":
+			bryly.append([Vector3(0, 0.3, -0.14), Vector3(0.5, 0.58, 0.05), d.lightened(0.1)])  # kurtka
+			bryly.append([Vector3(0, 0.6, 0.0), Vector3(0.44, 0.08, 0.3), Color(0.3, 0.12, 0.1)])  # szalik
+		"najemnik":
+			bryly.append([Vector3(0, 0.3, -0.15), Vector3(0.5, 0.46, 0.06), Color(0.18, 0.2, 0.17)])  # kamizelka taktyczna
+			for lx in [-0.13, 0.0, 0.13]:
+				bryly.append([Vector3(lx, 0.16, -0.19), Vector3(0.1, 0.14, 0.05), Color(0.15, 0.17, 0.14)])  # ładownice
+		"wojskowy":
+			bryly.append([Vector3(0, 0.3, -0.14), Vector3(0.48, 0.5, 0.04), d])  # mundur
+			bryly.append([Vector3(-0.2, 0.55, -0.02), Vector3(0.12, 0.03, 0.28), Color(0.5, 0.45, 0.2)])  # pagon
+			bryly.append([Vector3(0.2, 0.55, -0.02), Vector3(0.12, 0.03, 0.28), Color(0.5, 0.45, 0.2)])
 	_tulow.add_child(Kit.instancja(bryly))
 	_glowa = Node3D.new()
 	_glowa.position.y = 0.62
@@ -60,6 +74,18 @@ func _ready() -> void:
 		"posrednik":
 			gl.append([Vector3(0, 0.31, 0), Vector3(0.34, 0.03, 0.34), Color(0.12, 0.12, 0.12)])
 			gl.append([Vector3(0, 0.36, 0), Vector3(0.22, 0.09, 0.22), Color(0.12, 0.12, 0.12)])  # kapelusz
+		"kwatermistrz":
+			gl.append([Vector3(0, 0.29, 0.01), Vector3(0.26, 0.06, 0.28), Color(0.28, 0.3, 0.34)])  # czapka
+			gl.append([Vector3(0, 0.15, -0.125), Vector3(0.2, 0.04, 0.02), Color(0.3, 0.25, 0.15)])  # okulary w rogowej
+		"szabrownik":
+			gl.append([Vector3(0, 0.28, 0), Vector3(0.26, 0.1, 0.27), Color(0.25, 0.25, 0.27)])  # czapka uszatka
+			gl.append([Vector3(0, 0.03, -0.11), Vector3(0.2, 0.08, 0.03), Color(0.25, 0.2, 0.16)])  # zarost
+		"najemnik":
+			gl.append([Vector3(0.03, 0.28, 0), Vector3(0.28, 0.05, 0.28), Color(0.12, 0.14, 0.12)])  # beret
+			gl.append([Vector3(0, 0.14, -0.125), Vector3(0.22, 0.05, 0.02), Color(0.05, 0.05, 0.05)])  # okulary
+		"wojskowy":
+			gl.append([Vector3(0, 0.29, 0), Vector3(0.3, 0.07, 0.32), d])  # rogatywka
+			gl.append([Vector3(0, 0.27, -0.17), Vector3(0.22, 0.02, 0.08), Color(0.1, 0.1, 0.08)])  # daszek
 	_glowa.add_child(Kit.instancja(gl))
 	_t = randf() * 10.0
 

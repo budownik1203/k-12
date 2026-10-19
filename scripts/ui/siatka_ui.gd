@@ -31,10 +31,13 @@ var _hover: Przedmiot = null
 func ustaw(s: Siatka, nazwa := "") -> void:
 	if siatka and siatka.zmieniona.is_connected(queue_redraw):
 		siatka.zmieniona.disconnect(queue_redraw)
+	if siatka and siatka.zmieniona.is_connected(_dopasuj_rozmiar):
+		siatka.zmieniona.disconnect(_dopasuj_rozmiar)
 	siatka = s
 	tytul = nazwa
 	if siatka:
 		siatka.zmieniona.connect(queue_redraw)
+		siatka.zmieniona.connect(_dopasuj_rozmiar)
 		custom_minimum_size = Vector2(siatka.w * KOM, siatka.h * KOM)
 	else:
 		custom_minimum_size = Vector2(KOM * 2, KOM)
@@ -332,3 +335,9 @@ func _notification(what: int) -> void:
 		_hover = null
 		najechano.emit(null)
 		queue_redraw()
+
+
+## Skrytka zmienia wysokość wraz z meblami kryjówki.
+func _dopasuj_rozmiar() -> void:
+	if siatka:
+		custom_minimum_size = Vector2(siatka.w * KOM, siatka.h * KOM)
