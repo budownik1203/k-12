@@ -143,15 +143,22 @@ func _ready() -> void:
 
 func _buduj_model() -> void:
 	var kol: Dictionary = dane_frakcji.get("kolory", {})
-	var ubr := _kolor(kol.get("ubranie", [0.3, 0.3, 0.3]))
-	var spod := _kolor(kol.get("spodnie", [0.2, 0.2, 0.2]))
-	var gl := _kolor(kol.get("glowa", [0.2, 0.2, 0.2]))
-	var skora := Color(0.6, 0.46, 0.38)
+	# warianty: każda postać trochę inna (budowa, odcień ubrania i skóry, nakrycie głowy, dodatki)
+	var rr := RandomNumberGenerator.new()
+	rr.seed = get_instance_id()
+	var odc := func(c: Color, z: float) -> Color: return Color(clampf(c.r * rr.randf_range(1.0 - z, 1.0 + z), 0, 1), clampf(c.g * rr.randf_range(1.0 - z, 1.0 + z), 0, 1), clampf(c.b * rr.randf_range(1.0 - z, 1.0 + z), 0, 1))
+	var ubr: Color = odc.call(_kolor(kol.get("ubranie", [0.3, 0.3, 0.3])), 0.12)
+	var spod: Color = odc.call(_kolor(kol.get("spodnie", [0.2, 0.2, 0.2])), 0.1)
+	var gl: Color = odc.call(_kolor(kol.get("glowa", [0.2, 0.2, 0.2])), 0.12)
+	var skora := Color(0.6, 0.46, 0.38) * rr.randf_range(0.93, 1.06)
+	skora.a = 1.0
 	var ciemny := Color(0.09, 0.085, 0.08)
 	var rek := ciemny if frakcja != "szabrownik" else skora
 	var ubr_c := ubr.darkened(0.25)
 	_model = Node3D.new()
 	add_child(_model)
+	var bud := rr.randf_range(0.94, 1.08)
+	_model.scale = Vector3(bud, rr.randf_range(0.95, 1.05), bud)
 	# miednica i pas
 	_czesci["biodra"] = _czesc(_model, Vector3(0, 0.95, 0))
 	_czesci["biodra"].add_child(_bryly([
@@ -182,6 +189,25 @@ func _buduj_model() -> void:
 	if frakcja == "szabrownik" and randf() < 0.6:
 		tul.append([Vector3(0, 0.33, 0.2), Vector3(0.3, 0.36, 0.15), Color(0.3, 0.22, 0.14)])   # tobołek
 		tul.append([Vector3(0, 0.53, 0.2), Vector3(0.24, 0.06, 0.13), Color(0.25, 0.18, 0.11)])
+	# odzież wierzchnia i dodatki
+	if frakcja == "szabrownik":
+		match rr.randi() % 3:
+			0:   # waciak: pikowane pasy
+				for y in [0.12, 0.24, 0.36, 0.48]:
+					tul.append([Vector3(0, y, -0.128), Vector3(0.42, 0.012, 0.012), ubr.darkened(0.35)])
+			1:   # kurtka dresowa z lampasami
+				for x in [-0.205, 0.205]:
+					tul.append([Vector3(x, 0.32, 0.0), Vector3(0.014, 0.42, 0.24), Color(0.85, 0.85, 0.82)])
+			_:   # płaszcz do pół uda
+				_czesci["biodra"].add_child(_bryly([[Vector3(0, -0.07, 0.005), Vector3(0.39, 0.26, 0.255), ubr]]))
+	if frakcja != "szabrownik" and rr.randf() < 0.35:
+		tul.append([Vector3(0, 0.33, 0.2), Vector3(0.3, 0.38, 0.16), ubr.darkened(0.15)])     # plecak
+		tul.append([Vector3(0, 0.5, 0.13), Vector3(0.28, 0.08, 0.06), ubr.darkened(0.3)])
+	if frakcja == "wojskowy" and rr.randf() < 0.3:
+		tul.append([Vector3(-0.12, 0.43, -0.16), Vector3(0.07, 0.11, 0.05), Color(0.2, 0.22, 0.16)])   # radiostacja
+		tul.append([Vector3(-0.14, 0.6, -0.16), Vector3(0.008, 0.26, 0.008), ciemny.lightened(0.1)])
+	if rr.randf() < 0.3:
+		_czesci["biodra"].add_child(_bryly([[Vector3(0.2 if rr.randf() < 0.5 else -0.2, 0.0, -0.02), Vector3(0.08, 0.13, 0.12), Color(0.32, 0.33, 0.24)]]))  # torba z maską
 	_czesci["tulow"].add_child(_bryly(tul))
 	if not panc.is_empty():
 		# osobny węzeł: zdjęty z ciała pancerz znika z modelu
@@ -194,15 +220,7 @@ func _buduj_model() -> void:
 		[Vector3(0, 0.17, 0), Vector3(0.2, 0.24, 0.22), skora],
 		[Vector3(0, 0.135, -0.113), Vector3(0.032, 0.05, 0.022), skora.darkened(0.05)],    # nos
 	]
-	if frakcja == "szabrownik":
-		glowa_bryly.append([Vector3(0, 0.2, 0.025), Vector3(0.26, 0.3, 0.24), gl])           # kaptur
-		glowa_bryly.append([Vector3(0, 0.1, -0.112), Vector3(0.19, 0.1, 0.02), Color(0.14, 0.11, 0.1)])  # chusta
-	elif frakcja == "wojskowy":
-		glowa_bryly.append([Vector3(0, 0.07, 0.0), Vector3(0.215, 0.07, 0.235), gl])         # kołnierz
-	else:
-		glowa_bryly.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])         # kominiarka
-		glowa_bryly.append([Vector3(0, 0.19, -0.119), Vector3(0.15, 0.045, 0.01), skora.darkened(0.2)])
-		glowa_bryly.append([Vector3(0, 0.19, -0.125), Vector3(0.14, 0.026, 0.01), Color(0.06, 0.05, 0.05)])
+	_nakrycie_glowy(glowa_bryly, gl, skora, rr)
 	var gm := _bryly(glowa_bryly)
 	_czesci["glowa"].add_child(gm)
 	if helm != null:
@@ -268,6 +286,51 @@ func _buduj_model() -> void:
 		_hitbox(_czesci["kolano" + s2], "nogi", Vector3(0, -0.22, 0), Vector3(0.15, 0.46, 0.16))
 	for mi in _model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+
+## Nakrycie głowy wg frakcji (losowy wariant): kaptur, uszanka, czapka, włosy; furażerka, beret;
+## kominiarka, czapka z daszkiem, gogle.
+func _nakrycie_glowy(gb: Array, gl: Color, skora: Color, rr: RandomNumberGenerator) -> void:
+	var wlosy: Color = [Color(0.12, 0.09, 0.07), Color(0.3, 0.22, 0.14), Color(0.42, 0.4, 0.38)][rr.randi() % 3]
+	match frakcja:
+		"szabrownik":
+			match rr.randi() % 4:
+				0:
+					gb.append([Vector3(0, 0.2, 0.025), Vector3(0.26, 0.3, 0.24), gl])           # kaptur
+					gb.append([Vector3(0, 0.1, -0.112), Vector3(0.19, 0.1, 0.02), Color(0.14, 0.11, 0.1)])  # chusta
+				1:
+					gb.append([Vector3(0, 0.3, 0.0), Vector3(0.25, 0.1, 0.25), Color(0.36, 0.3, 0.24)])   # uszanka
+					for sx in [-1.0, 1.0]:
+						gb.append([Vector3(sx * 0.12, 0.2, 0.01), Vector3(0.035, 0.11, 0.15), Color(0.36, 0.3, 0.24)])
+				2:
+					gb.append([Vector3(0, 0.29, 0.005), Vector3(0.215, 0.09, 0.235), gl])        # czapka z wełny
+					gb.append([Vector3(0, 0.35, 0.0), Vector3(0.05, 0.04, 0.05), gl.lightened(0.2)])
+				_:
+					gb.append([Vector3(0, 0.29, 0.012), Vector3(0.205, 0.05, 0.225), wlosy])     # włosy
+					gb.append([Vector3(0, 0.2, 0.1), Vector3(0.2, 0.17, 0.03), wlosy])
+		"wojskowy":
+			gb.append([Vector3(0, 0.07, 0.0), Vector3(0.215, 0.07, 0.235), gl])                  # kołnierz
+			if helm == null:
+				match rr.randi() % 3:
+					0:
+						gb.append([Vector3(0, 0.3, 0.0), Vector3(0.08, 0.05, 0.23), gl.darkened(0.1)])     # furażerka
+					1:
+						gb.append([Vector3(0.01, 0.295, 0.0), Vector3(0.24, 0.035, 0.24), Color(0.38, 0.12, 0.1), Vector3(0, 0, 8)])  # beret
+					_:
+						gb.append([Vector3(0, 0.285, 0.012), Vector3(0.205, 0.04, 0.225), wlosy])
+		_:
+			match rr.randi() % 3:
+				0, 1:
+					gb.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])         # kominiarka
+					gb.append([Vector3(0, 0.19, -0.119), Vector3(0.15, 0.045, 0.01), skora.darkened(0.2)])
+					gb.append([Vector3(0, 0.19, -0.125), Vector3(0.14, 0.026, 0.01), Color(0.06, 0.05, 0.05)])
+					if helm == null and rr.randf() < 0.5:
+						gb.append([Vector3(0, 0.26, -0.11), Vector3(0.2, 0.05, 0.03), Color(0.1, 0.1, 0.1)])   # gogle na czole
+				_:
+					gb.append([Vector3(0, 0.15, 0.0), Vector3(0.215, 0.27, 0.235), gl])
+					if helm == null:
+						gb.append([Vector3(0, 0.3, 0.005), Vector3(0.22, 0.07, 0.24), Color(0.15, 0.15, 0.14)])   # czapka z daszkiem
+						gb.append([Vector3(0, 0.275, -0.15), Vector3(0.16, 0.012, 0.09), Color(0.13, 0.13, 0.12)])
 
 
 func _kolor(a: Array) -> Color:

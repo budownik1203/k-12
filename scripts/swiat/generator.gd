@@ -912,6 +912,7 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 			var id: String = ["hydrant", "tablica_ogloszen", "kaloryfer"][rng.randi() % 3]
 			_mebel(id, sc[0] + Vector3.UP * float(WYSOKOSC_MONTAZU[id]), ROT[sc[1]], true, k)
 	_rekwizyty_korytarza(k, drzwi_poz)
+	_detale_korytarza(k, drzwi_poz)
 	# osłona w narożniku kwadratu, tylko między dwiema ślepymi ścianami
 	var c := _srodek(k)
 	for dx in [-1, 1]:
@@ -925,6 +926,99 @@ func _wyposaz_korytarz(k: Vector2i) -> void:
 
 
 # ------------------------------------------------------------------ korytarze: rekwizyty i barykady
+
+## Drobne detale korytarza (bez kolizji, jedna siatka na komórkę): rury i korytka kablowe pod sufitem
+## z uchwytami, zwisające kable, włączniki i puszki, odpadający tynk i zacieki, śmieci na podłodze
+## (kartki, szkło, liście, gruz), listwa przypodłogowa.
+func _detale_korytarza(k: Vector2i, drzwi_poz: Array) -> void:
+	var cz := []
+	var B := preload("res://scripts/core/bryly.gd")
+	var odcinki := []
+	for ram in komorki[k]["ramiona"]:
+		odcinki.append([ram[1], ram[0].x != 0])
+	var rc: Rect2 = komorki[k]["rect"]
+	odcinki.append([rc, odcinki[0][1] if not odcinki.is_empty() else true])
+	var rura_strona := -1 if rng.randf() < 0.5 else 1
+	var ma_rure := rng.randf() < 0.75
+	for od in odcinki:
+		var r: Rect2 = od[0]
+		var poziomo: bool = od[1]
+		var a0 := r.position.x if poziomo else r.position.y
+		var a1 := r.end.x if poziomo else r.end.y
+		var dl := a1 - a0
+		if dl < 0.6:
+			continue
+		var pkt := func(u: float, w: float, y: float) -> Vector3:
+			return Vector3(u, y, w) if poziomo else Vector3(w, y, u)
+		var sciana_w := func(strona: int) -> float:
+			return ((r.position.y if poziomo else r.position.x) if strona < 0 else (r.end.y if poziomo else r.end.x))
+		var roz := func(wzdl: float, h: float, gl: float) -> Vector3:
+			return Vector3(wzdl, h, gl) if poziomo else Vector3(gl, h, wzdl)
+		# rury pod sufitem wzdłuż korytarza z uchwytami
+		if ma_rure:
+			var wz: float = sciana_w.call(rura_strona) - rura_strona * 0.16
+			for i in 2:
+				var ww := wz - rura_strona * i * 0.09
+				var yy := H - 0.22 - i * 0.03
+				cz.append(B.walec(pkt.call(a0, ww, yy), pkt.call(a1, ww, yy), 0.035 - i * 0.01, 0.035 - i * 0.01, "metal_ciemny_m", 8))
+			var u := a0 + 0.4
+			while u < a1:
+				cz.append({"t": "box", "c": pkt.call(u, wz + rura_strona * 0.06, H - 0.12), "s": roz.call(0.02, 0.12, 0.2), "m": "metal_ciemny_m", "f": 0.003})
+				u += 1.5
+		# listwa przypodłogowa
+		for st in [-1, 1]:
+			cz.append({"t": "box", "c": pkt.call((a0 + a1) * 0.5, sciana_w.call(st) - st * 0.008, 0.05), "s": roz.call(dl, 0.1, 0.016), "m": "drewno_m", "k": Color(0.35, 0.26, 0.2), "f": 0.0})
+		# rzeczy na ścianach i podłodze
+		var ile := int(dl / 1.2)
+		for i in ile:
+			var u2 := rng.randf_range(a0 + 0.3, a1 - 0.3)
+			var st2 := -1 if rng.randf() < 0.5 else 1
+			var w2: float = sciana_w.call(st2)
+			var p0: Vector3 = pkt.call(u2, w2, 0.0)
+			if drzwi_poz.any(func(dp): return Vector2((dp as Vector3).x - p0.x, (dp as Vector3).z - p0.z).length() < 1.0):
+				continue
+			var los := rng.randf()
+			if los < 0.18:
+				# włącznik / gniazdko z puszką i rurką kablową w górę
+				var y := 1.25 if rng.randf() < 0.6 else 0.3
+				cz.append({"t": "box", "c": pkt.call(u2, w2 - st2 * 0.012, y), "s": roz.call(0.07, 0.07, 0.024), "m": "emalia_m", "k": Color(0.85, 0.82, 0.74), "f": 0.004})
+				cz.append({"t": "box", "c": pkt.call(u2, w2 - st2 * 0.026, y), "s": roz.call(0.02, 0.03, 0.006), "m": "czern", "f": 0.0})
+				cz.append(B.walec(pkt.call(u2, w2 - st2 * 0.012, y + 0.035), pkt.call(u2, w2 - st2 * 0.012, H - 0.05), 0.008, 0.008, "emalia_m", 6))
+			elif los < 0.36:
+				# odpadający tynk / zaciek
+				var hy := rng.randf_range(0.6, 2.4)
+				var sz := rng.randf_range(0.2, 0.6)
+				var kol := Color(0.6, 0.55, 0.45) if rng.randf() < 0.5 else Color(0.32, 0.28, 0.22)
+				cz.append({"t": "box", "c": pkt.call(u2, w2 - st2 * 0.004, hy), "s": roz.call(sz, sz * rng.randf_range(0.5, 1.6), 0.006), "m": "lastryko_m", "k": kol, "f": 0.0})
+			elif los < 0.62:
+				# kartki, gazety
+				var pp: Vector3 = pkt.call(u2, w2 - st2 * rng.randf_range(0.2, 0.9), 0.006)
+				for j in rng.randi_range(1, 3):
+					cz.append({"t": "box", "c": pp + Vector3(rng.randf_range(-0.2, 0.2), j * 0.002, rng.randf_range(-0.2, 0.2)), "s": Vector3(0.21, 0.003, 0.29), "m": "opakowanie", "k": Color(0.9, 0.88, 0.8), "f": 0.0, "r": Vector3(0, rng.randf_range(0, 180), 0)})
+			elif los < 0.78:
+				# potłuczone szkło, kawałki tynku
+				var pp2: Vector3 = pkt.call(u2, w2 - st2 * rng.randf_range(0.15, 0.6), 0.0)
+				for j in 6:
+					var szk := rng.randf() < 0.5
+					cz.append({"t": "box", "c": pp2 + Vector3(rng.randf_range(-0.25, 0.25), 0.008, rng.randf_range(-0.25, 0.25)),
+						"s": Vector3(rng.randf_range(0.02, 0.07), 0.012 if not szk else 0.004, rng.randf_range(0.02, 0.07)), "m": "lastryko_m" if not szk else "metal_jasny",
+						"k": Color(0.7, 0.66, 0.6) if not szk else Color(0.6, 0.75, 0.75), "f": 0.002, "r": Vector3(0, rng.randf_range(0, 90), 0)})
+			elif los < 0.88:
+				# zwisający kabel z sufitu
+				var pk: Vector3 = pkt.call(u2, (a0 + a1) * 0.0 + w2 - st2 * rng.randf_range(0.4, 1.0), H)
+				cz.append(B.walec(pk, pk + Vector3(rng.randf_range(-0.1, 0.1), -rng.randf_range(0.5, 1.1), rng.randf_range(-0.1, 0.1)), 0.006, 0.006, "czern", 5))
+			else:
+				# liście naniesione z podwórza
+				var pp3: Vector3 = pkt.call(u2, w2 - st2 * rng.randf_range(0.1, 0.4), 0.004)
+				for j in 8:
+					cz.append({"t": "box", "c": pp3 + Vector3(rng.randf_range(-0.3, 0.3), 0.0, rng.randf_range(-0.3, 0.3)), "s": Vector3(0.05, 0.003, 0.035), "m": "opakowanie",
+						"k": [Color(0.55, 0.35, 0.12), Color(0.45, 0.4, 0.15), Color(0.35, 0.22, 0.1)][j % 3], "f": 0.0, "r": Vector3(0, rng.randf_range(0, 180), 0)})
+	if cz.is_empty():
+		return
+	var mi := B.instancja(cz, false)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	swiat.add_child(mi)
+
 
 ## Rekwizyty w ramionach korytarza: beczki, skrzynie, przewrócona szafa, gruz, worki z piaskiem.
 ## Zawsze przy jednej ścianie (przejście zostaje), z punktami osłon wzdłuż korytarza.

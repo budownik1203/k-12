@@ -10,10 +10,10 @@ const B := preload("res://scripts/core/bryly.gd")
 static var _mat := {}
 
 
-static func material(k: Color) -> ShaderMaterial:
-	var klucz := k.to_html()
+static func material(k: Color, nazwa := "tkanina", vm := true) -> ShaderMaterial:
+	var klucz := "%s|%s|%s" % [k.to_html(), nazwa, vm]
 	if not _mat.has(klucz):
-		var m := (B.material("tkanina", true, k) as ShaderMaterial).duplicate() as ShaderMaterial
+		var m := (B.material(nazwa, vm, k) as ShaderMaterial).duplicate() as ShaderMaterial
 		m.set_shader_parameter("use_vertex_color", true)
 		_mat[klucz] = m
 	return _mat[klucz]
@@ -98,7 +98,7 @@ static func powierzchnia(nu: int, nv: int, f: Callable, f2: Callable, k: Color, 
 			b[Mesh.ARRAY_NORMAL] = arrs[1][1]
 			bl.append(b)
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr, bl)
-		mesh.surface_set_material(mesh.get_surface_count() - 1, material(st[0]))
+		mesh.surface_set_material(mesh.get_surface_count() - 1, material(st[0], String(opcje.get("mat", "tkanina")), bool(opcje.get("vm", true))))
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -242,3 +242,19 @@ static func plat(w: float, d: float, g: float, k: Color, zwis := 0.01, wyp := 0.
 		return Vector3(x, y, zz)
 	return powierzchnia(18, 10, func(u, v): return f.call(u, v), Callable(), k,
 		{"ao": func(u, _v): return 1.0 if sin(u * TAU) > 0.0 else 0.8})
+
+
+## Rura (kończyna, szyja, palec): oś od a do b, promień prof(v) (v: 0 przy a, 1 przy b), przekrój elipsa
+## spłaszczona `spl`; zamknięte końce (promień schodzi do zera na brzegach v).
+static func rura(a: Vector3, b: Vector3, prof: Callable, k: Color, opcje := {}, spl := 1.0, nu := 10, nv := 8) -> MeshInstance3D:
+	var os := b - a
+	var w := os.normalized()
+	var u0 := w.cross(Vector3.UP if absf(w.y) < 0.95 else Vector3.RIGHT).normalized()
+	var v0 := w.cross(u0)
+	var f := func(u: float, v: float) -> Vector3:
+		var th := u * TAU
+		var r: float = prof.call(v)
+		# zaokrąglone końce
+		var kon := sin(clampf(v / 0.08, 0.0, 1.0) * PI * 0.5) * sin(clampf((1.0 - v) / 0.08, 0.0, 1.0) * PI * 0.5)
+		return a + os * v + (u0 * cos(th) + v0 * sin(th) * spl) * r * kon
+	return powierzchnia(nu, nv, f, Callable(), k, opcje)

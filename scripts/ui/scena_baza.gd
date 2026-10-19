@@ -91,17 +91,17 @@ func _buduj_schron() -> void:
 	gen.meble = JSON.parse_string(FileAccess.get_file_as_string("res://assets/dane/meble.json"))
 	# stanowiska handlarzy
 	_handlarz("zbrojmistrz", "Zbrojmistrz", Vector3(2.75, 0, 0.9), {"ubranie": Color(0.26, 0.29, 0.22), "spodnie": Color(0.2, 0.22, 0.18), "dodatek": Color(0.2, 0.24, 0.16)})
-	gen._mebel("stol_warsztatowy", Vector3(2.75, 0, 2.1), PI, true)
+	_lada("zbrojmistrz", 2.75)
 	gen._mebel("regal_metalowy", Vector3(1.0, 0, 0.35), 0.0, true)
 	gen._mebel("skrzynia_wojskowa", Vector3(4.4, 0, 0.45), 0.0, true)
 	gen._mebel("worki_piasek", Vector3(4.4, 0, 2.6), PI / 2.0, true)
 	_handlarz("medyk", "Medyk", Vector3(8.0, 0, 0.9), {"ubranie": Color(0.5, 0.52, 0.5), "spodnie": Color(0.3, 0.3, 0.32), "dodatek": Color(0.8, 0.8, 0.75)})
-	gen._mebel("biurko", Vector3(8.0, 0, 2.1), PI, true)
+	_lada("medyk", 8.0)
 	gen._mebel("lozko", Vector3(6.6, 0, 0.6), 0.0, true)
 	gen._mebel("apteczka_scienna", Vector3(9.5, 1.3, 0.15), 0.0, false)
 	gen._mebel("szafka_metalowa", Vector3(10.0, 0, 0.35), 0.0, true)
 	_handlarz("posrednik", "Pośrednik", Vector3(13.25, 0, 0.9), {"ubranie": Color(0.24, 0.2, 0.18), "spodnie": Color(0.15, 0.14, 0.13), "dodatek": Color(0.3, 0.24, 0.2)})
-	gen._mebel("stol", Vector3(13.25, 0, 2.1), 0.0, true)
+	_lada("posrednik", 13.25)
 	gen._mebel("regal_metalowy", Vector3(11.4, 0, 0.35), 0.0, true)
 	gen._mebel("regal_metalowy", Vector3(15.0, 0, 0.35), 0.0, true)
 	gen._mebel("tablica_ogloszen", Vector3(14.6, 1.3, 2.9), PI / 2.0 + PI, false)
@@ -168,6 +168,80 @@ func _buduj_schron() -> void:
 		l.omni_attenuation = 0.9
 		swiat.add_child(l)
 		l.position = p + Vector3(0, -0.4, 0)
+
+
+## Lada handlarza (stanowisko szer. ok. 5 m, lada na z = 2,1): drewniany kontuar z blatem obitym blachą,
+## u zbrojmistrza krata z okienkiem i stojak z bronią na ścianie, u medyka szyba i fartuch na haku,
+## u pośrednika kasa, telefon i papiery. Na blacie leżą prawdziwe modele przedmiotów z asortymentu.
+func _lada(id: String, cx: float) -> void:
+	var B := preload("res://scripts/core/bryly.gd")
+	var cz := []
+	var szer := 3.6
+	var z := 2.1
+	var drewno := Color(0.5, 0.36, 0.24) if id != "medyk" else Color(0.85, 0.85, 0.8)
+	var m_korp := "drewno_m" if id != "medyk" else "emalia_m"
+	cz.append({"t": "box", "c": Vector3(cx, 0.5, z), "s": Vector3(szer, 1.0, 0.5), "m": m_korp, "k": drewno, "f": 0.01})
+	cz.append({"t": "box", "c": Vector3(cx, 1.025, z - 0.04), "s": Vector3(szer + 0.08, 0.05, 0.66), "m": "metal_jasny" if id == "zbrojmistrz" else "fornir_m", "k": Color(0.62, 0.62, 0.6) if id == "zbrojmistrz" else Color(0.55, 0.4, 0.28), "f": 0.006})
+	cz.append({"t": "box", "c": Vector3(cx, 0.05, z + 0.24), "s": Vector3(szer, 0.1, 0.03), "m": "metal_ciemny_m", "f": 0.0})
+	# przetarte deski frontu
+	for i in 5:
+		cz.append({"t": "box", "c": Vector3(cx - szer * 0.5 + (i + 0.5) * szer / 5.0, 0.5, z + 0.252), "s": Vector3(0.012, 0.86, 0.006), "m": "czern", "k": Color(0.2, 0.15, 0.1), "f": 0.0})
+	match id:
+		"zbrojmistrz":
+			# krata z okienkiem nad ladą
+			var x := cx - szer * 0.5
+			while x <= cx + szer * 0.5 + 0.001:
+				if absf(x - cx) > 0.32:
+					cz.append(B.walec(Vector3(x, 1.05, z - 0.25), Vector3(x, WYS, z - 0.25), 0.009, 0.009, "metal_ciemny_m", 6))
+				x += 0.12
+			for y in [1.06, 1.75, WYS - 0.05]:
+				cz.append({"t": "box", "c": Vector3(cx, y, z - 0.25), "s": Vector3(szer, 0.03, 0.02), "m": "metal_ciemny_m", "f": 0.003})
+			cz.append({"t": "box", "c": Vector3(cx, 1.55, z - 0.25), "s": Vector3(0.7, 0.03, 0.03), "m": "metal_ciemny_m", "f": 0.003})
+			# stojak na broń na tylnej ścianie
+			cz.append({"t": "box", "c": Vector3(cx + 1.0, 1.2, 0.08), "s": Vector3(1.4, 0.06, 0.12), "m": "drewno_m", "k": drewno, "f": 0.006})
+			cz.append({"t": "box", "c": Vector3(cx + 1.0, 0.35, 0.12), "s": Vector3(1.4, 0.08, 0.2), "m": "drewno_m", "k": drewno, "f": 0.006})
+		"medyk":
+			# szyba (okienko) i parawan
+			cz.append({"t": "box", "c": Vector3(cx, 1.6, z - 0.2), "s": Vector3(szer, 1.1, 0.012), "m": "metal_jasny", "k": Color(0.7, 0.85, 0.85), "f": 0.0})
+			cz.append({"t": "box", "c": Vector3(cx, 1.07, z - 0.2), "s": Vector3(0.5, 0.06, 0.03), "m": "czern", "f": 0.0})
+			for sx in [-1.0, 1.0]:
+				cz.append({"t": "box", "c": Vector3(cx + sx * szer * 0.5, 1.6, z - 0.2), "s": Vector3(0.04, 1.1, 0.04), "m": "emalia_m", "k": Color(0.85, 0.85, 0.8), "f": 0.004})
+		_:
+			cz.append({"t": "box", "c": Vector3(cx - 1.2, 1.12, z - 0.1), "s": Vector3(0.36, 0.14, 0.3), "m": "metal_jasny", "k": Color(0.35, 0.33, 0.3), "f": 0.01})   # kasa
+			cz.append({"t": "box", "c": Vector3(cx - 1.2, 1.24, z - 0.18), "s": Vector3(0.3, 0.1, 0.06), "m": "czern", "f": 0.004})
+	var mi := B.instancja(cz, false)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	swiat.add_child(mi)
+	var sb := StaticBody3D.new()
+	sb.collision_layer = Balistyka.WARSTWA_SWIAT
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(szer + 0.08, 1.05, 0.66)
+	cs.shape = bs
+	cs.position = Vector3(cx, 0.525, z - 0.04)
+	sb.add_child(cs)
+	swiat.add_child(sb)
+	# towar na blacie i na stojaku
+	var towar: Array = {"zbrojmistrz": [["mag_kb47", -0.9, 0.0], ["a_762", -0.55, 0.3], ["a_9x18", 0.6, 0.0], ["mag_pw9", 0.9, 0.5], ["tlumik_9", 1.25, 0.2]],
+		"medyk": [["bandaz", -1.0, 0.2], ["apteczka", -0.4, 0.0], ["bolostop", 0.5, 0.4], ["szyna", 1.1, 0.1], ["opatrunek", 0.8, 1.2]],
+		"posrednik": [["telefon", -0.4, 0.3], ["teczka_akt", 0.4, 0.1], ["zegarek", 0.85, 0.7], ["papierosy", 1.2, 0.2], ["radio", 1.4, 0.0]]}.get(id, [])
+	for t in towar:
+		if not Dane.przedmioty.has(t[0]):
+			continue
+		var w := ModelePrzedmiotow.wezel(Przedmiot.nowy(t[0]))
+		swiat.add_child(w)
+		w.position = Vector3(cx + float(t[1]), 1.05, z - 0.08 + randf_range(-0.12, 0.12))
+		w.rotation.y = float(t[2])
+	if id == "zbrojmistrz":
+		for i in 3:
+			var bid: String = ["kb47", "pm63", "obrzyn"][i]
+			if not Dane.przedmioty.has(bid):
+				continue
+			var bw := ModelePrzedmiotow.wezel(Przedmiot.nowy(bid))
+			swiat.add_child(bw)
+			# pionowo, kolbą na dolnej półce
+			bw.rotation = Vector3(0, PI * 0.5, PI * 0.5)
+			bw.position = Vector3(cx + 0.55 + i * 0.42, 0.42, 0.16)
 
 
 func _handlarz(id: String, nazwa: String, pos: Vector3, kol: Dictionary) -> void:

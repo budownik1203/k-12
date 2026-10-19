@@ -84,50 +84,115 @@ func _na_start() -> void:
 # ------------------------------------------------------------------ model
 
 func _buduj() -> void:
-	var skora := Color(0.62, 0.58, 0.52)
-	var zyly := Color(0.42, 0.3, 0.3)
-	var ciemna := Color(0.25, 0.2, 0.2)
+	# organiczne kształty (Tkanina: powierzchnie parametryczne ze skórą): wychudły tułów z żebrami
+	# i grzebieniem kręgosłupa, wydłużona czaszka z zapadniętymi oczodołami, szczęka z zębami,
+	# długie kończyny ze stawami i trzema pazurami
+	var T := preload("res://scripts/ui/tkanina.gd")
+	var B := preload("res://scripts/core/bryly.gd")
+	var skora := Color(0.6, 0.6, 0.62)
+	var opc := {"mat": "skora_npc", "vm": false}
 	_model = Node3D.new()
 	add_child(_model)
-	_model.add_child(Kit.instancja([
-		[Vector3(0, 0.3, 0.02), Vector3(0.3, 0.17, 0.62), skora],
-		[Vector3(0, 0.36, -0.12), Vector3(0.2, 0.08, 0.3), zyly],
-		[Vector3(0, 0.31, 0.38), Vector3(0.18, 0.12, 0.22), skora, Vector3(-12, 0, 0)],
-		[Vector3(0, 0.39, 0.1), Vector3(0.04, 0.04, 0.5), ciemna],          # kręgosłup
-		[Vector3(0, 0.36, -0.28), Vector3(0.24, 0.12, 0.14), skora],
-	]))
+	var tulow := func(u: float, v: float) -> Vector3:
+		var th := u * TAU
+		var z := lerpf(0.34, -0.32, v)
+		var cy := 0.3 + 0.05 * sin(v * PI)
+		var r := 0.0
+		if v < 0.12:
+			r = 0.1 * sin(v / 0.12 * PI * 0.5)
+		elif v < 0.35:
+			r = lerpf(0.1, 0.066, (v - 0.12) / 0.23)
+		elif v < 0.75:
+			var t := (v - 0.35) / 0.4
+			r = lerpf(0.066, 0.13, sin(t * PI * 0.75))
+		elif v < 0.9:
+			r = 0.115
+		else:
+			r = lerpf(0.115, 0.05, (v - 0.9) / 0.1)
+		var gora := maxf(0.0, sin(th))
+		# żebra po bokach i na grzbiecie, grzebień kręgów na środku grzbietu
+		if v > 0.42 and v < 0.76 and sin(th) > -0.4:
+			r += 0.012 * maxf(0.0, sin(v * 72.0))
+		r += 0.022 * pow(maxf(0.0, cos(th - PI * 0.5)), 12.0) * (0.55 + 0.45 * sin(v * 95.0))
+		var rx := r * (1.15 if v > 0.72 and v < 0.92 else 1.0)
+		return Vector3(cos(th) * rx, cy + sin(th) * r * (0.85 + 0.15 * gora), z)
+	var ao_t := func(u: float, v: float) -> float:
+		var th := u * TAU
+		var a := 0.85 + 0.15 * sin(th)
+		if v > 0.42 and v < 0.76 and sin(th) > -0.4:
+			a *= 0.8 + 0.2 * maxf(0.0, sin(v * 72.0))
+		if sin(u * 41.0 + v * 17.0) > 0.97:
+			a *= 0.78     # żyły
+		return a
+	_model.add_child(T.powierzchnia(18, 40, tulow, Callable(), skora, {"mat": "skora_npc", "vm": false, "ao": ao_t}))
+	# szyja: żylasta, wysunięta do przodu
+	_model.add_child(T.rura(Vector3(0, 0.31, -0.24), Vector3(0, 0.36, -0.4), func(v): return 0.045 - 0.008 * sin(v * PI), skora, opc))
 	_glowa = Node3D.new()
-	_glowa.position = Vector3(0, 0.34, -0.38)
+	_glowa.position = Vector3(0, 0.34, -0.36)
 	_model.add_child(_glowa)
-	_glowa.add_child(Kit.instancja([
-		[Vector3(0, 0.03, -0.12), Vector3(0.15, 0.12, 0.26), skora],
-		[Vector3(0, 0.08, -0.06), Vector3(0.12, 0.05, 0.16), zyly],
-		[Vector3(-0.045, 0.05, -0.24), Vector3(0.025, 0.02, 0.01), Color(0.95, 0.85, 0.5)],
-		[Vector3(0.045, 0.05, -0.24), Vector3(0.025, 0.02, 0.01), Color(0.95, 0.85, 0.5)],
-	]))
+	var czaszka := func(u: float, v: float) -> Vector3:
+		var th := u * TAU
+		var z := lerpf(0.03, -0.27, v)
+		var r := 0.0
+		if v < 0.1:
+			r = 0.065 * sin(v / 0.1 * PI * 0.5)
+		elif v < 0.4:
+			r = lerpf(0.065, 0.082, (v - 0.1) / 0.3)
+		elif v < 0.9:
+			r = lerpf(0.082, 0.042, (v - 0.4) / 0.5)
+		else:
+			r = 0.042 * cos((v - 0.9) / 0.1 * PI * 0.5)
+		# wał nad oczodołami
+		if v > 0.5 and v < 0.62:
+			r += 0.008 * pow(maxf(0.0, sin(th)), 2.0)
+		return Vector3(cos(th) * r, 0.03 + sin(th) * r * 0.78, z)
+	var ao_g := func(u: float, v: float) -> float:
+		var th := u * TAU
+		# zapadnięte oczodoły
+		if v > 0.56 and v < 0.7 and sin(th) > 0.3 and absf(cos(th)) > 0.35:
+			return 0.25
+		return 0.9 + 0.1 * sin(th)
+	_glowa.add_child(T.powierzchnia(16, 20, czaszka, Callable(), skora, {"mat": "skora_npc", "vm": false, "ao": ao_g}))
+	var zeby := []
+	for i in 6:
+		for sx in [-1.0, 1.0]:
+			var z := -0.12 - i * 0.022
+			zeby.append(B.walec(Vector3(sx * (0.03 - i * 0.002), 0.0, z), Vector3(sx * (0.03 - i * 0.002), -0.022, z), 0.006, 0.0, "bandaz", 5))
+	# oczy: małe, mętne, świecące
+	zeby.append({"t": "box", "c": Vector3(-0.044, 0.075, -0.17), "s": Vector3(0.018, 0.01, 0.012), "m": "czern", "k": Color(1.0, 0.9, 0.5), "f": 0.004})
+	zeby.append({"t": "box", "c": Vector3(0.044, 0.075, -0.17), "s": Vector3(0.018, 0.01, 0.012), "m": "czern", "k": Color(1.0, 0.9, 0.5), "f": 0.004})
+	var mz := B.instancja(zeby, true)
+	_glowa.add_child(mz)
 	_szczeka = Node3D.new()
 	_szczeka.position = Vector3(0, -0.02, -0.02)
 	_glowa.add_child(_szczeka)
-	_szczeka.add_child(Kit.instancja([
-		[Vector3(0, -0.02, -0.12), Vector3(0.13, 0.04, 0.22), skora.darkened(0.1)],
-		[Vector3(0, 0.005, -0.18), Vector3(0.11, 0.015, 0.12), Color(0.55, 0.08, 0.06)],
-		[Vector3(0, 0.012, -0.22), Vector3(0.1, 0.02, 0.02), Color(0.85, 0.8, 0.65)],
-	]))
-	# cztery długie, pająkowate kończyny: udo w górę i na bok, goleń w dół do powierzchni
-	var stawy := [Vector3(-0.15, 0.32, -0.2), Vector3(0.15, 0.32, -0.2), Vector3(-0.14, 0.3, 0.26), Vector3(0.14, 0.3, 0.26)]
+	_szczeka.add_child(T.rura(Vector3(0, -0.012, 0.0), Vector3(0, -0.01, -0.24), func(v): return lerpf(0.042, 0.028, v), skora.darkened(0.08), opc, 0.45))
+	var dol := []
+	for i in 5:
+		for sx in [-1.0, 1.0]:
+			var z2 := -0.1 - i * 0.025
+			dol.append(B.walec(Vector3(sx * 0.024, 0.004, z2), Vector3(sx * 0.024, 0.026, z2), 0.005, 0.0, "bandaz", 5))
+	dol.append({"t": "box", "c": Vector3(0, 0.002, -0.15), "s": Vector3(0.04, 0.008, 0.16), "m": "czerwony", "k": Color(0.5, 0.1, 0.08), "f": 0.0})
+	_szczeka.add_child(B.instancja(dol, false))
+	# cztery długie kończyny: ramię (udo) w górę i na bok, przedramię (goleń) w dół, trzy pazury
+	var stawy := [Vector3(-0.13, 0.33, -0.2), Vector3(0.13, 0.33, -0.2), Vector3(-0.1, 0.31, 0.24), Vector3(0.1, 0.31, 0.24)]
 	for i in stawy.size():
 		var strona := -1.0 if i % 2 == 0 else 1.0
 		var udo := Node3D.new()
 		udo.position = stawy[i]
 		_model.add_child(udo)
-		udo.add_child(Kit.instancja([[Vector3(strona * 0.17, 0.08, 0), Vector3(0.36, 0.05, 0.06), skora, Vector3(0, 0, strona * 25)]]))
+		udo.add_child(T.rura(Vector3.ZERO, Vector3(strona * 0.33, 0.16, 0), func(v): return 0.03 + 0.012 * sin(v * PI) - 0.008 * v, skora, opc))
 		var golen := Node3D.new()
 		golen.position = Vector3(strona * 0.33, 0.16, 0)
 		udo.add_child(golen)
-		golen.add_child(Kit.instancja([
-			[Vector3(strona * 0.02, -0.22, 0), Vector3(0.045, 0.46, 0.045), skora, Vector3(0, 0, strona * 8)],
-			[Vector3(strona * 0.04, -0.45, 0), Vector3(0.07, 0.03, 0.09), ciemna],
-		]))
+		golen.add_child(T.rura(Vector3(0, 0.02, 0), Vector3(strona * 0.035, -0.43, 0), func(v): return lerpf(0.03, 0.017, v) + 0.008 * exp(-pow((v - 0.05) * 12.0, 2.0)), skora, opc))
+		var pazury := []
+		var kon := Vector3(strona * 0.035, -0.43, 0)
+		for kz in [-0.045, 0.0, 0.045]:
+			var srodkowy := absf(kz) < 0.01
+			pazury.append(B.walec(kon, kon + Vector3(strona * 0.02, -0.035, kz - 0.01), 0.012, 0.009, "skora_npc", 5))
+			pazury.append(B.walec(kon + Vector3(strona * 0.02, -0.035, kz - 0.01), kon + Vector3(strona * 0.03, -0.05 - (0.012 if srodkowy else 0.0), kz * 1.5 - 0.035), 0.008, 0.0, "czern", 5))
+		golen.add_child(B.instancja(pazury, false))
 		_konczyny.append([udo, golen, PI * float(i % 2) + (PI * 0.5 if i >= 2 else 0.0)])
 	for mi in _model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
