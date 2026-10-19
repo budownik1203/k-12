@@ -39,15 +39,13 @@ static func wezel(p: Przedmiot, vm := false) -> Node3D:
 		"pojemnik":
 			var d: Dictionary = p.defn()["pojemnik"]
 			var kam := String(d.get("slot", "")) == "kamizelka"
-			var wd := Vector2(0.34, 0.26) if not kam else Vector2(0.32, 0.36)
-			var m := ModeleOporzadzenia.zbuduj(p.id, wd.x, wd.y)
+			var m := ModeleOporzadzenia.zbuduj(p.id)
 			var w: Node3D = m["wezel"]
 			_bez_vm(w, vm)
 			piv.add_child(w)
 			if kam:
 				piv.rotation = Vector3(deg_to_rad(-90), 0, 0)   # kamizelka leży płasko
-			else:
-				piv.scale = Vector3(1, 1.6, 1)                    # plecak wypchany, nie płaski
+				piv.scale = Vector3.ONE * 1.8                     # model kamizelki budowany w skali „przy kamerze”
 			return _wysrodkuj(n, piv)
 		_:
 			cz = czesci(p)

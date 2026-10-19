@@ -60,27 +60,11 @@ func _zbuduj(co: String, s: Siatka) -> Dictionary:
 	var id := "kontener"
 	if co in ["plecak", "kamizelka"] and gracz.ekw.sloty.get(co) != null:
 		id = (gracz.ekw.sloty[co] as Przedmiot).id
-	if co == "kamizelka":
-		w = s.w * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
-		d = s.h * SiatkaUI.KOM * (1.0 / 1050.0) + 0.06
-	# osobny model dla każdego pojemnika; plecak i kontener – każda kieszeń ma własną klapę / zamek
-	var kz_m := []
-	var kz_def := []
-	if co == "kamizelka":
-		kz_def = ModeleOporzadzenia.kieszenie_dla(id, s)
-		var kv := SiatkaUI.KOM * (1.0 / 1050.0)
-		for e in kz_def:
-			var r: Rect2i = e["r"]
-			kz_m.append({"r": Rect2(Vector2(-s.w * kv * 0.5 + r.position.x * kv, s.h * kv * 0.5 - r.position.y * kv), Vector2(r.size.x * kv, r.size.y * kv)), "typ": "rzep"})
-	if co != "kamizelka":
-		kz_def = ModeleOporzadzenia.kieszenie_dla(id, s)
-		var kx := SiatkaUI.KOM * KOM_M
-		var kzz := kx / 0.82
-		var o := Vector2(-s.w * kx * 0.5, -s.h * kzz * 0.5)
-		for e in kz_def:
-			var r: Rect2i = e["r"]
-			var rr := Rect2(o + Vector2(r.position.x * kx, r.position.y * kzz), Vector2(r.size.x * kx, r.size.y * kzz)).grow(-0.004)
-			kz_m.append({"r": rr, "typ": e["typ"]})
+	var wd := ModeleOporzadzenia.wymiary(id, s)
+	w = wd.x
+	d = wd.y
+	# osobny model dla każdego pojemnika; każda kieszeń ma własne zamknięcie (klapa, zamek, rzep, ściągacz)
+	var kz_m := ModeleOporzadzenia.kieszenie_m(id, s)
 	var m := ModeleOporzadzenia.zbuduj(id, w, d, kz_m)
 	var wezel: Node3D = m["wezel"]
 	add_child(wezel)
