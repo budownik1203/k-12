@@ -59,6 +59,8 @@ skrzynie i szafki wyłamuje się (z kombinerkami lub kluczem nastawnym szybciej)
 plecaku – zrywasz się i plecak zostaje na ziemi (podejdź i **F**, żeby go założyć). Amunicję upuść na magazynek, żeby go napełnić
 (nabój po naboju, z kółkiem postępu), a magazynek na broń, żeby go włożyć. Lek upuszczony na część ciała
 w panelu zdrowia leczy właśnie ją.
+Broń ma bezwładność, przy ścianie lufa się cofa i opada (wtedy nie strzelisz). Celując w miejscu przy parapecie,
+meblu albo krawędzi ściany opierasz broń („podparta” pod celownikiem) – mniejszy odrzut i drżenie.
 Drzwi: **F** otwiera i zamyka (klamka, skrzypienie, słychać to z daleka); **kucając F** uchyla je cicho na szparę
 (i tak samo cicho zamyka). Zamknięte na klucz otwiera się wytrychem (cicho, kilka sekund) albo wyważa kopniakami –
 głośno, metalowe dłużej. Wrogowie otwierają drzwi po drodze, a zamknięte na klucz wyważają. Stań nieruchomo przy

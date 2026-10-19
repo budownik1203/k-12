@@ -1005,6 +1005,54 @@ func _test_drzwi_ai() -> void:
 	get_tree().quit()
 
 
+## Broń w ruchu: lufa przy ścianie (opuszczona, bez strzału), bezwładność przy obrocie, przechył w bok.
+func _test_ruchu_broni(katalog: String) -> void:
+	var bledy := 0
+	Gra.ekw.sloty["glowna"] = Gra.nowy_naladowany("kb47", "a_762")
+	gracz._wybierz_bron("glowna")
+	await get_tree().create_timer(1.5).timeout
+	var space := swiat.get_world_3d().direct_space_state
+	# najbliższa ściana: promienie wokół gracza
+	var best := 99.0
+	var kier_best := Vector3.FORWARD
+	for i in 16:
+		var k := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 16.0)
+		var q := PhysicsRayQueryParameters3D.create(gracz.global_position + Vector3.UP * 1.5, gracz.global_position + Vector3.UP * 1.5 + k * 6.0, Balistyka.WARSTWA_SWIAT)
+		q.exclude = [gracz.get_rid()]
+		var r := space.intersect_ray(q)
+		if not r.is_empty() and (r["position"] as Vector3).distance_to(gracz.global_position + Vector3.UP * 1.5) < best:
+			best = (r["position"] as Vector3).distance_to(gracz.global_position + Vector3.UP * 1.5)
+			kier_best = k
+	var cel := gracz.global_position + kier_best
+	gracz.look_at(Vector3(cel.x, gracz.global_position.y, cel.z), Vector3.UP)
+	gracz.kamera.rotation.x = 0.0
+	await get_tree().create_timer(0.4).timeout
+	await _zapisz(katalog, "rb_0_wolno")
+	# podejście pod ścianę na 0,35 m
+	gracz.global_position += kier_best * maxf(0.0, best - 0.45)
+	await get_tree().create_timer(1.0).timeout
+	await _zapisz(katalog, "rb_1_sciana")
+	print("  przy ścianie (%.2f m): sciana=%.2f" % [best, gracz.bron.sciana])
+	if gracz.bron.sciana < 0.6:
+		bledy += 1
+	gracz.global_position -= kier_best * 0.9
+	await get_tree().create_timer(1.0).timeout
+	print("  odsunięty: sciana=%.2f" % gracz.bron.sciana)
+	if gracz.bron.sciana > 0.2:
+		bledy += 1
+	# obrót głowy: bezwładność (broń zostaje z tyłu, potem wraca)
+	for i in 6:
+		gracz.bron.dodaj_sway(Vector2(40, 0))
+		await get_tree().process_frame
+	await _zapisz(katalog, "rb_2_obrot")
+	print("  sway po obrocie: %s" % gracz.bron._sway)
+	await get_tree().create_timer(0.8).timeout
+	print("  sway po 0,8 s: %s" % gracz.bron._sway)
+	if gracz.bron._sway.length() > 0.01:
+		bledy += 1
+	print("TEST RUCHU BRONI: błędów %d" % bledy)
+
+
 ## Test drzwi: otwieranie, uchylanie, zamykanie, wyważanie, wróg otwierający drzwi, podsłuch, przestrzał.
 func _test_drzwi(katalog: String) -> void:
 	var bledy := 0
@@ -1176,6 +1224,9 @@ func _zrzut_animacji(katalog: String) -> void:
 		return
 	if OS.get_cmdline_user_args().has("--drzwi"):
 		await _test_drzwi(katalog)
+		return
+	if OS.get_cmdline_user_args().has("--ruch_broni"):
+		await _test_ruchu_broni(katalog)
 		return
 	if OS.get_cmdline_user_args().has("--plecaki"):
 		for pid in ["worek", "plecak_turystyczny", "plecak_szturmowy", "chlebak", "plecak_wojskowy", "napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska"]:

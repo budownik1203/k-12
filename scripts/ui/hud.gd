@@ -444,6 +444,8 @@ class Kropka:
 		var c := get_viewport_rect().size * 0.5
 		if g.bron.ma_lunete() and g.bron.ads > 0.85:
 			_luneta(c, clampf((g.bron.ads - 0.85) / 0.15, 0.0, 1.0))
+		if g.bron.ads > 0.6 and g.bron.podparcie > 0.6 and not g.bron.ma_lunete():
+			draw_string(ThemeDB.fallback_font, c + Vector2(-34, 90), "podparta", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.82, 0.7, 0.55))
 		if g.bron.ads < 0.5 and g.bron.przedmiot != null:
 			draw_rect(Rect2(c - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.85, 0.82, 0.7, 0.7))
 		if hud._znacznik > 0.0:

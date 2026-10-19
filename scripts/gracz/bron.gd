@@ -663,7 +663,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	_bieg = move_toward(_bieg, 1.0 if we.get("bieg", false) else 0.0, delta * 5.0)
 	cooldown = maxf(0.0, cooldown - delta)
 	bloom = maxf(0.0, bloom - delta * 2.5)
-	var moze: bool = we.get("moze", true) and przedmiot != null
+	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6
 	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0 / (1.0 + (zoom() - 1.0) * 0.35))
 	if przedmiot == null:
 		# sama latarka: tylko animacja wyjmowania
@@ -783,7 +783,7 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 			kier = Balistyka.rozrzut(kier, float(bd.get("rozrzut_srutu", 3.0)))
 		_promien(space, od, kier, obr, float(ad["penetracja"]))
 	# odrzut
-	var sila: float = float(bd["odrzut"]) * przedmiot.mod("odrzut") * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0))
+	var sila: float = float(bd["odrzut"]) * przedmiot.mod("odrzut") * lerpf(1.0, 0.65, ads) * lerpf(1.0, 0.85, float(we.get("kucanie", 0.0))) * float(we.get("celnosc", 1.0)) * lerpf(1.0, 0.62, podparcie)
 	if gracz.has_method("dodaj_odrzut"):
 		gracz.dodaj_odrzut(Vector2(randf_range(-0.35, 0.35) * sila, sila))
 	if _tryb() == "auto":
@@ -1016,7 +1016,52 @@ func opis_amunicji() -> String:
 # ------------------------------------------------------------------ wygląd
 
 func dodaj_sway(mysz: Vector2) -> void:
-	_sway += mysz * 0.00035
+	# bezwładność: cięższa broń zostaje bardziej w tyle za ruchem głowy
+	_sway += mysz * 0.00035 / _bezwladnosc()
+	_sway = _sway.limit_length(0.07)
+
+
+var _sway_v := Vector2.ZERO
+var _lok := Vector3.ZERO        # wygładzona prędkość gracza w układzie postaci
+var _oddech_t := 0.0
+var sciana := 0.0               # 0..1 – lufa przy przeszkodzie (broń odsunięta / opuszczona)
+var podparcie := 0.0            # 0..1 – broń oparta o parapet, mebel, krawędź ściany (mniejszy odrzut)
+var _sciana_t := 0.0
+
+
+func _bezwladnosc() -> float:
+	return clampf(0.6 + (przedmiot.waga() if przedmiot else 0.5) * 0.15, 0.7, 1.5)
+
+
+## Lufa przy ścianie i podparcie broni (promienie z kamery).
+func _przeszkody(delta: float) -> void:
+	_sciana_t -= delta
+	if _sciana_t > 0.0 or gracz == null or kamera == null:
+		return
+	_sciana_t = 0.05
+	var space := gracz.get_world_3d().direct_space_state
+	var od := kamera.global_position
+	var przod := -kamera.global_basis.z
+	var dl := 0.5 if jest_pistolet() else 0.82
+	var q := PhysicsRayQueryParameters3D.create(od, od + przod * (dl + 0.1), Balistyka.WARSTWA_SWIAT)
+	q.exclude = [gracz.get_rid()]
+	var r := space.intersect_ray(q)
+	var cel_s := 0.0
+	if not r.is_empty():
+		cel_s = clampf((dl + 0.1 - od.distance_to(r["position"])) / (dl * 0.6), 0.0, 1.0)
+	sciana = move_toward(sciana, cel_s, 0.05 * (5.0 if cel_s > sciana else 3.0))
+	# podparcie: przy celowaniu, stojąc w miejscu – pod łożem albo z boku jest twarda krawędź
+	var cel_p := 0.0
+	if ads > 0.5 and Vector2(gracz.velocity.x, gracz.velocity.z).length() < 0.4 and sciana < 0.3:
+		var pp := od + przod * (0.42 if not jest_pistolet() else 0.3) - kamera.global_basis.y * 0.07
+		var prawo := kamera.global_basis.x
+		for k in [[pp, pp - Vector3.UP * 0.28], [pp, pp + prawo * 0.24], [pp, pp - prawo * 0.24]]:
+			var q2 := PhysicsRayQueryParameters3D.create(k[0], k[1], Balistyka.WARSTWA_SWIAT)
+			q2.exclude = [gracz.get_rid()]
+			if not space.intersect_ray(q2).is_empty():
+				cel_p = 1.0
+				break
+	podparcie = move_toward(podparcie, cel_p, 0.05 * 4.0)
 
 
 var _spust_t := 0.0
@@ -1089,11 +1134,46 @@ func _process(delta: float) -> void:
 	var t := ads * ads * (3.0 - 2.0 * ads)
 	_bob += delta * (6.0 * _ruch + 2.5 * _bieg)
 	var bob := Vector3(sin(_bob) * 0.011, absf(cos(_bob)) * -0.014, 0) * _ruch * (1.0 - t * 0.85) * (1.0 + _bieg * 0.8)
-	_sway = _sway.lerp(Vector2.ZERO, delta * 8.0)
+	# sprężyna bezwładności: broń dochodzi do środka z lekkim przestrzeleniem (cięższa wolniej)
+	var bz := _bezwladnosc()
+	var reszta := minf(delta, 0.1)
+	while reszta > 0.0:
+		var h := minf(reszta, 0.008)
+		_sway_v += (-_sway * 150.0 / bz - _sway_v * 15.0 / sqrt(bz)) * h
+		_sway += _sway_v * h
+		reszta -= h
+	_sway = _sway.limit_length(0.08)
 	_kick = _kick.lerp(Vector3.ZERO, delta * 14.0)
 	_kick_rot = _kick_rot.lerp(Vector3.ZERO, delta * 12.0)
+	_przeszkody(delta)
 	var poz := hip.lerp(ads_poz, t) + bob + _kick + Vector3(-_sway.x, _sway.y, 0) * (1.0 - t * 0.7)
 	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5) + Vector3(0, 0.05, 0) * (1.0 - t)
+	if gracz:
+		# ruch postaci: przechył przy kroku w bok, broń zostaje w tyle przy ruszaniu, unosi się/opada przy skoku
+		var lv: Vector3 = gracz.global_basis.inverse() * gracz.velocity
+		_lok = _lok.lerp(lv, minf(1.0, delta * 6.0 / bz))
+		var kt := 1.0 - t * 0.65
+		rot.z += clampf(-_lok.x * 0.035, -0.12, 0.12) * kt
+		poz.x += clampf(-_lok.x * 0.004, -0.015, 0.015) * kt
+		poz.z += clampf(-_lok.z * 0.005, -0.02, 0.02) * kt
+		poz.y += clampf(-_lok.y * 0.008, -0.035, 0.035)
+		rot.x += clampf(_lok.y * 0.02, -0.06, 0.06)
+		var lad: float = float(gracz.get("_ladowanie")) if gracz.get("_ladowanie") != null else 0.0
+		poz.y -= lad * 0.22
+		rot.x -= lad * 0.45
+		# oddech i drżenie: zmęczenie i rany powiększają, celowanie i podparcie zmniejszają
+		var wytrz: float = float(gracz.get("wytrzymalosc")) if gracz.get("wytrzymalosc") != null else 100.0
+		var zm := 1.0 - wytrz / 100.0
+		_oddech_t += delta * (1.0 + zm * 1.6)
+		var celn: float = gracz.cialo.mnoznik_celnosci() if gracz.get("cialo") else 1.0
+		var amp := 0.0022 * (1.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0) * (1.0 - t * 0.6) * (1.0 - podparcie * 0.75)
+		poz += Vector3(sin(_oddech_t * 1.1) * amp, sin(_oddech_t * 2.2) * amp * 0.7, 0.0)
+		rot += Vector3(sin(_oddech_t * 2.2 + 0.4) * amp * 1.4, sin(_oddech_t * 1.1 + 0.8) * amp * 1.2, 0.0)
+	# lufa przy przeszkodzie: broń cofnięta i opuszczona (nie przenika przez ścianę), strzał niemożliwy
+	if sciana > 0.0:
+		var es := sciana * sciana * (3.0 - 2.0 * sciana)
+		poz += Vector3(-0.015, -0.05, 0.11) * es
+		rot += Vector3(-0.55, 0.42, 0.28) * es
 	# animacje stanów
 	var f := 0.0
 	if stan != "gotowa" and stan_total > 0.0:
