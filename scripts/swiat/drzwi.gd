@@ -291,19 +291,25 @@ func interakcja(g) -> void:
 		, "otwieranie", 0, Callable(), {"id": "drzwi"})
 
 
+var _slodki_kat := randf_range(15.0, 165.0)
+
+
+## Wytrych: zbliżenie zamka i ręczne otwieranie (kąt haczyka + napięcie), nie automat.
 func _wytrych(g) -> void:
-	var czas := 7.0 if rodzaj != "metal" else 10.0
-	var dz := func(): Dzwiek.graj_3d("wytrych", srodek(), get_parent(), -10.0, randf_range(0.9, 1.1), 10.0)
-	dz.call()
-	for i in 3:
-		get_tree().create_timer(czas * (i + 1) / 4.0).timeout.connect(func():
-			if not g.akcja.is_empty() and String(g.akcja.get("nazwa", "")).begins_with("Wytrych"):
-				dz.call())
-	g.zacznij_akcje("Wytrych: zamek drzwi", czas, func():
-		na_klucz = false
-		Dzwiek.graj_3d("klik", srodek(), get_parent(), -6.0, 0.7)
-		g.komunikat.emit("Zamek puścił")
-		, "otwieranie", 0, Callable(), {"id": "drzwi"})
+	var w: Przedmiot = null
+	for p in g.ekw.wszystkie():
+		if (p as Przedmiot).id == "wytrych":
+			w = p
+			break
+	if g.has_method("patrz_na"):
+		g.patrz_na(global_transform * Vector3(szer * 0.5 - 0.14, 1.0, 0.0), 0.4, 0.3)
+	Dzwiek.graj_3d("wytrych", srodek(), get_parent(), -10.0, randf_range(0.9, 1.1), 10.0)
+	Gra.emituj_halas(srodek(), 3.0, g)
+	var ui := WytrychUI.new()
+	ui.drzwi = self
+	ui.gracz = g
+	ui.wytrych = w
+	get_tree().current_scene.add_child(ui)
 
 
 func _kopnij(g) -> void:

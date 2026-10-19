@@ -151,11 +151,36 @@ func odkryj_wszystko() -> void:
 
 ## Zamknięta na kłódkę skrzynia / szafka: klucz otwiera od razu, narzędziem (kombinerki, klucz nastawny)
 ## wyłamuje się szybciej, gołymi rękami i kolbą – długo; wyłamywanie słychać daleko.
+var _slodki_kat := randf_range(15.0, 165.0)
+
+
 func _wylam(g) -> void:
 	if g.ekw.ma_przedmiot(zamkniety_kluczem):
 		zamkniety_kluczem = ""
 		Dzwiek.graj_3d("klik", global_position, get_parent(), -6.0, 0.8)
 		interakcja(g)
+		return
+	# wytrych: kłódkę da się otworzyć po cichu (zbliżenie zamka)
+	var wy: Przedmiot = null
+	for p in g.ekw.wszystkie():
+		if (p as Przedmiot).id == "wytrych":
+			wy = p
+	if wy != null and g.ekw.ma_przedmiot("wytrych") and g.kucanie < 0.5:
+		var ui := WytrychUI.new()
+		ui.gracz = g
+		ui.wytrych = wy
+		ui.tolerancja = 14.0
+		ui.slodki = _slodki_kat
+		ui.zamkniete = func(): return is_instance_valid(self) and zamkniety_kluczem != ""
+		ui.odblokuj = func():
+			zamkniety_kluczem = ""
+			var kl = mebel.get("klodka")
+			if kl and is_instance_valid(kl):
+				var kn := kl as Node3D
+				var tk := kn.create_tween()
+				tk.tween_property(kn, "global_position", Vector3(kn.global_position.x, global_position.y + 0.02, kn.global_position.z) + global_basis.z * 0.12, 0.3).set_ease(Tween.EASE_IN)
+			g.komunikat.emit("Kłódka otwarta")
+		get_tree().current_scene.add_child(ui)
 		return
 	var narzedzie: bool = g.ekw.ma_przedmiot("kombinerki") or g.ekw.ma_przedmiot("klucz_nastawny")
 	var czas := 3.2 if narzedzie else 6.5
@@ -188,6 +213,8 @@ func _wylam(g) -> void:
 
 func tekst_interakcji(_g) -> String:
 	if zamkniety_kluczem != "":
+		if _g and _g.ekw.ma_przedmiot("wytrych"):
+			return "Kłódka: otwórz wytrychem (cicho)   [kucając – wyłam]"
 		return "Wyłam kłódkę: " + nazwa + (" (masz narzędzie)" if _g and (_g.ekw.ma_przedmiot("kombinerki") or _g.ekw.ma_przedmiot("klucz_nastawny")) else " (kolbą – głośno, długo)")
 	var stan := "" if not zaczety() else (" (przeszukane)" if przeszukany() else " (częściowo)")
 	if pusty() and zaczety():

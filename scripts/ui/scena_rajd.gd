@@ -1431,6 +1431,37 @@ func _test_drzwi(katalog: String) -> void:
 	print("  wyważone po %d kopnięciach: %s, kat %.2f" % [kopniecia, dr.wywazone, dr.kat])
 	if not dr.wywazone:
 		bledy += 1
+	# wytrych: zły kąt łamie haczyk, dobry otwiera
+	var dw: Drzwi = lista[1] if lista.size() > 1 else dr
+	dw.wywazone = false
+	dw.ustaw_kat(0.0)
+	dw.na_klucz = true
+	var wy := Przedmiot.nowy("wytrych")
+	Gra.ekw.kieszenie.dodaj(wy)
+	ustaw_przed.call(dw, 1.0)
+	dw._wytrych(gracz)
+	await get_tree().process_frame
+	var ui = get_tree().get_nodes_in_group("ekran_ekwipunku").filter(func(x): return x is WytrychUI)
+	if ui.is_empty():
+		print("  BŁĄD: brak okna wytrycha")
+		bledy += 1
+	else:
+		var u: WytrychUI = ui[0]
+		u._kat = fposmod(dw._slodki_kat + 90.0, 180.0)
+		u.test_napinaj = true
+		await get_tree().create_timer(2.5).timeout
+		await _zapisz(katalog, "wytrych_zly")
+		print("  wytrych zły kąt: pęknięte %d, zamknięte %s" % [int(wy.dane.get("zlamane", 0)), dw.na_klucz])
+		if int(wy.dane.get("zlamane", 0)) < 1:
+			bledy += 1
+		u.test_napinaj = false
+		await get_tree().create_timer(0.3).timeout
+		u._kat = dw._slodki_kat + 3.0
+		u.test_napinaj = true
+		await get_tree().create_timer(2.5).timeout
+		print("  wytrych dobry kąt: zamek otwarty %s" % (not dw.na_klucz))
+		if dw.na_klucz:
+			bledy += 1
 	# podsłuch: wróg za zamkniętymi drzwiami
 	var d2: Drzwi = null
 	for d in lista:
@@ -1444,6 +1475,7 @@ func _test_drzwi(katalog: String) -> void:
 		var za: Vector3 = d2.global_transform * Vector3(0, 0, 3.0)
 		w.global_position = w._najblizszy_na_siatce(za)
 		w.set_physics_process(false)
+		d2._podsluch_cd = 0.0
 		kom.clear()
 		await get_tree().create_timer(2.4).timeout
 		print("  podsłuch: %s" % [kom])
