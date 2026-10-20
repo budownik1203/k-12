@@ -83,6 +83,8 @@ func _ready() -> void:
 		_zrzuty.call_deferred(args[args.find("--zrzuty") + 1])
 	elif args.has("--test_kryjowki"):
 		_test_kryjowki.call_deferred()
+	elif args.has("--prezentacja"):
+		_prezentacja.call_deferred(args[args.find("--prezentacja") + 1])
 
 
 # ------------------------------------------------------------------ budowa placówki
@@ -875,4 +877,88 @@ func _test_kryjowki() -> void:
 		bl += 1
 	ekran_ekw.zamknij()
 	print("TEST KRYJÓWKI: błędów ", bl)
+	get_tree().quit()
+
+
+# ------------------------------------------------------------------ kadry do prezentacji
+
+const UKLAD_PREZENTACJI := [
+	{"id": "lozko", "x": 0.5, "z": 1.05, "r": 1}, {"id": "szafka_metalowa", "x": 0.25, "z": 3.0, "r": 1},
+	{"id": "szafka_metalowa", "x": 0.25, "z": 3.55, "r": 1}, {"id": "szafka_metalowa", "x": 0.25, "z": 4.1, "r": 1},
+	{"id": "stol_warsztatowy", "x": 5.5, "z": 0.38, "r": 0}, {"id": "kuchenka", "x": 2.8, "z": 0.33, "r": 0},
+	{"id": "dywan", "x": 4.5, "z": 3.6, "r": 0}, {"id": "stol", "x": 4.5, "z": 3.6, "r": 0},
+	{"id": "krzeslo", "x": 3.7, "z": 3.6, "r": 1}, {"id": "krzeslo", "x": 5.3, "z": 3.6, "r": 3},
+	{"id": "telewizor", "x": 7.65, "z": 5.6, "r": 3}, {"id": "regal_metalowy", "x": 6.4, "z": 6.75, "r": 2},
+	{"id": "zarowka", "x": 1.6, "z": 5.2, "r": 0},
+	{"id": "stojak_bron", "x": 12.78, "z": 3.4, "r": 3}, {"id": "skrzynia_wojskowa", "x": 10.2, "z": 0.3, "r": 0},
+	{"id": "skrzynia_wojskowa", "x": 11.4, "z": 0.3, "r": 0}, {"id": "szafa", "x": 12.68, "z": 6.0, "r": 3},
+	{"id": "worki_piasek", "x": 10.2, "z": 6.73, "r": 2}, {"id": "beczka", "x": 8.6, "z": 0.4, "r": 0},
+	{"id": "zarowka", "x": 10.5, "z": 5.0, "r": 0}]
+
+
+func _kadr(katalog: String, nazwa: String, poz: Vector3, cel: Vector3, klatek := 25) -> void:
+	gracz.global_position = poz
+	var d := cel - poz
+	gracz.rotation.y = atan2(-d.x, -d.z)
+	gracz.kamera.rotation.x = atan2(cel.y - (poz.y + 1.6), Vector2(d.x, d.z).length())
+	for f in klatek:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + ".png"))
+
+
+## Kadry do prezentacji: urządzona kryjówka (obie izby, stojak z bronią), recepcja, stragany, frakcje, śluza, budowa, ekrany.
+func _prezentacja(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	gracz.sterowanie = false
+	Gra.izby_kryjowki = 2
+	Gra.kryjowka = UKLAD_PREZENTACJI.duplicate(true)
+	for bid in ["kb47", "pm63", "obrzyn"]:
+		var b := Gra.nowy_naladowany(bid, "a_762" if bid == "kb47" else ("a_12" if bid == "obrzyn" else "a_9x18"))
+		Gra.skrytka.dodaj(b)
+	_ustaw_izby()
+	kryjowka.odbuduj()
+	# bez napisów HUD-u bazy w kadrach 3D
+	_hud_prompt.visible = false
+	_hud_info.visible = false
+	_komunikaty.visible = false
+	set_process(false)
+	await _kadr(katalog, "kryjowka_1", Vector3(7.2, 0.05, 6.2), Vector3(2.2, 0.7, 1.6))
+	await _kadr(katalog, "kryjowka_2", Vector3(1.6, 0.05, 6.3), Vector3(6.0, 0.6, 1.0))
+	await _kadr(katalog, "kryjowka_izba", Vector3(8.9, 0.05, 4.6), Vector3(12.7, 1.0, 3.4))
+	await _kadr(katalog, "recepcja_hala", Vector3(4.0, 0.05, 11.6), Vector3(4.0, 1.3, 22.0))
+	await _kadr(katalog, "recepcja_stragany", Vector3(5.5, 0.05, 15.8), Vector3(-3.8, 1.3, 15.0))
+	await _kadr(katalog, "recepcja_medyk", Vector3(0.0, 0.05, 21.6), Vector3(-4.0, 1.3, 20.0))
+	await _kadr(katalog, "recepcja_posrednik", Vector3(7.5, 0.05, 16.6), Vector3(12.0, 1.3, 14.8))
+	await _kadr(katalog, "frakcja_szabrownicy", Vector3(-1.4, 0.05, 20.6), Vector3(-3.6, 1.1, 23.6))
+	await _kadr(katalog, "frakcja_najemnicy", Vector3(9.4, 0.05, 20.8), Vector3(11.4, 1.1, 23.6))
+	await _kadr(katalog, "sluza_wojsko", Vector3(3.0, 0.05, 19.4), Vector3(5.6, 1.3, 24.6))
+	# tryb budowy: regał w ręce
+	gracz.global_position = Vector3(5.6, 0.05, 5.2)
+	gracz.rotation.y = 0.35
+	gracz.kamera.rotation.x = -0.55
+	Gra.meble_zapas["regal_metalowy"] = 1
+	kryjowka.zacznij_stawianie("regal_metalowy")
+	for f in 15:
+		await get_tree().physics_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("kryjowka_budowa.png"))
+	kryjowka.zamknij()
+	Gra.meble_zapas.erase("regal_metalowy")
+	# ekrany: handel, przedstawiciele, kwatermistrz, plan, rozkaz wyjścia
+	Gra.bony = 48500
+	Gra.reputacja = {"szabrownik": 18, "najemnik": 32, "wojskowy": 44}
+	for fid in ["zbrojmistrz", "wojskowy", "najemnik", "kwatermistrz", "medyk"]:
+		handel.otworz(fid)
+		for f in 8:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(katalog.path_join("ekran_%s.png" % fid))
+		handel.zamknij()
+	pokaz_wyjscie()
+	for f in 8:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("ekran_rozkaz.png"))
+	print("prezentacja bazy gotowa")
 	get_tree().quit()

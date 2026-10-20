@@ -1,0 +1,579 @@
+{
+ "atlas": 1024,
+ "elementy": {
+  "zaciek_0": {
+   "rect": [
+    0,
+    0,
+    96,
+    160
+   ],
+   "m": [
+    1.5,
+    2.5
+   ],
+   "miejsce": "sciana_gora",
+   "waga": 4
+  },
+  "zaciek_1": {
+   "rect": [
+    98,
+    0,
+    96,
+    160
+   ],
+   "m": [
+    1.5,
+    2.5
+   ],
+   "miejsce": "sciana_gora",
+   "waga": 4
+  },
+  "zaciek_2": {
+   "rect": [
+    196,
+    0,
+    96,
+    160
+   ],
+   "m": [
+    1.5,
+    2.5
+   ],
+   "miejsce": "sciana_gora",
+   "waga": 4
+  },
+  "pekniecie_0": {
+   "rect": [
+    294,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 6
+  },
+  "pekniecie_1": {
+   "rect": [
+    392,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 6
+  },
+  "pekniecie_2": {
+   "rect": [
+    490,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 6
+  },
+  "pekniecie_3": {
+   "rect": [
+    588,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 6
+  },
+  "sadza_0": {
+   "rect": [
+    686,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 2
+  },
+  "sadza_1": {
+   "rect": [
+    784,
+    0,
+    96,
+    128
+   ],
+   "m": [
+    1.5,
+    2.0
+   ],
+   "miejsce": "sciana_dol",
+   "waga": 2
+  },
+  "plama_0": {
+   "rect": [
+    882,
+    0,
+    112,
+    96
+   ],
+   "m": [
+    1.75,
+    1.5
+   ],
+   "miejsce": "podloga",
+   "waga": 3
+  },
+  "plama_1": {
+   "rect": [
+    0,
+    162,
+    112,
+    96
+   ],
+   "m": [
+    1.75,
+    1.5
+   ],
+   "miejsce": "podloga",
+   "waga": 3
+  },
+  "plama_2": {
+   "rect": [
+    114,
+    162,
+    112,
+    96
+   ],
+   "m": [
+    1.75,
+    1.5
+   ],
+   "miejsce": "podloga",
+   "waga": 3
+  },
+  "tynk_0": {
+   "rect": [
+    228,
+    162,
+    96,
+    72
+   ],
+   "m": [
+    1.5,
+    1.125
+   ],
+   "miejsce": "sciana",
+   "waga": 4
+  },
+  "tynk_1": {
+   "rect": [
+    326,
+    162,
+    96,
+    72
+   ],
+   "m": [
+    1.5,
+    1.125
+   ],
+   "miejsce": "sciana",
+   "waga": 4
+  },
+  "tynk_2": {
+   "rect": [
+    424,
+    162,
+    96,
+    72
+   ],
+   "m": [
+    1.5,
+    1.125
+   ],
+   "miejsce": "sciana",
+   "waga": 4
+  },
+  "znak_czaszka": {
+   "rect": [
+    522,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "znak_usmiech": {
+   "rect": [
+    588,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "znak_kreski": {
+   "rect": [
+    654,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "znak_oko": {
+   "rect": [
+    720,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "znak_radiacja": {
+   "rect": [
+    786,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "dziury_0": {
+   "rect": [
+    852,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "dziury_1": {
+   "rect": [
+    918,
+    162,
+    64,
+    64
+   ],
+   "m": [
+    1.0,
+    1.0
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "ogloszenie_0": {
+   "rect": [
+    0,
+    260,
+    44,
+    60
+   ],
+   "m": [
+    0.6875,
+    0.9375
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "ogloszenie_1": {
+   "rect": [
+    46,
+    260,
+    44,
+    60
+   ],
+   "m": [
+    0.6875,
+    0.9375
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "ogloszenie_2": {
+   "rect": [
+    92,
+    260,
+    44,
+    60
+   ],
+   "m": [
+    0.6875,
+    0.9375
+   ],
+   "miejsce": "sciana",
+   "waga": 2
+  },
+  "graffiti_0": {
+   "rect": [
+    138,
+    260,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_1": {
+   "rect": [
+    332,
+    260,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_2": {
+   "rect": [
+    526,
+    260,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_3": {
+   "rect": [
+    720,
+    260,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_4": {
+   "rect": [
+    0,
+    322,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_5": {
+   "rect": [
+    194,
+    322,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_6": {
+   "rect": [
+    388,
+    322,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_7": {
+   "rect": [
+    582,
+    322,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_8": {
+   "rect": [
+    776,
+    322,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "graffiti_9": {
+   "rect": [
+    0,
+    372,
+    192,
+    48
+   ],
+   "m": [
+    3.0,
+    0.75
+   ],
+   "miejsce": "sciana",
+   "waga": 3
+  },
+  "strzalka_brama_p": {
+   "rect": [
+    194,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  },
+  "strzalka_brama_l": {
+   "rect": [
+    324,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  },
+  "strzalka_piwnica_p": {
+   "rect": [
+    454,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  },
+  "strzalka_piwnica_l": {
+   "rect": [
+    584,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  },
+  "strzalka_okno_p": {
+   "rect": [
+    714,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  },
+  "strzalka_okno_l": {
+   "rect": [
+    844,
+    372,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "strzalka",
+   "waga": 0
+  }
+ }
+}

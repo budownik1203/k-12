@@ -467,7 +467,9 @@ static func sprawdz_magazynek(b) -> Choreografia:
 	ch.kanaly = {"raczka": 0.0}
 	okienka(b, b.przedmiot.dane.get("mag"))
 	var pistolet: bool = b.jest_pistolet()
-	var oglad := [Vector3(0.12, 0.62, -0.62), Vector3(-0.08, 0.1, 0.07)] if not pistolet else [Vector3(0.1, 0.75, -0.5), Vector3(-0.05, 0.1, 0.05)]
+	# broń długa: lekko przechylona lewym bokiem (okienka magazynka) i ledwie przysunięta – bez „obrotu do kamery”,
+	# który z bliska wyglądał jak podmiana broni; pistolet – bliżej i mocniej obrócony
+	var oglad := [Vector3(0.22, 0.12, -0.6), Vector3(-0.02, 0.045, -0.04)] if not pistolet else [Vector3(0.1, 0.75, -0.5), Vector3(-0.05, 0.1, 0.05)]
 	var chwyt: Transform3D
 	var wysun: Transform3D
 	if b.przedmiot.id == "kb47":
@@ -482,7 +484,7 @@ static func sprawdz_magazynek(b) -> Choreografia:
 		wysun = Transform3D(Basis(), os_dol * (0.075 if pistolet else 0.05))
 	ch.dodaj({"t": 0.28, "reka": chwyt, "bron": oglad, "chwyt": "otwarta", "chwyt_k": "magazynek", "lok": Vector3(-0.12, -0.32, 0.22)})
 	ch.dodaj({"t": 0.16, "ease": "hamuj", "obiekty": {"mag": wysun}, "reka_przy": "mag", "dzw": [["mag_wyjmij", -12.0]]})
-	ch.dodaj({"t": 0.9, "obiekty": {"mag": wysun}, "reka_przy": "mag", "bron": [oglad[0] + Vector3(0.05, 0.06, -0.05), oglad[1] + Vector3(0, 0.01, 0.01)]})
+	ch.dodaj({"t": 0.9, "obiekty": {"mag": wysun}, "reka_przy": "mag", "bron": [oglad[0] + Vector3(0.03, 0.04, -0.04), oglad[1] + Vector3(0, 0.008, 0.005)]})
 	ch.dodaj({"t": 0.1, "ease": "przysp", "obiekty": {"mag": Transform3D()}, "reka_przy": "mag", "dzw_k": [["mag_wloz", -8.0]],
 		"kop_k": [Vector3(0.02, 0, 0.01), Vector3.ZERO]})
 	ch.dodaj({"t": 0.26, "reka": b._reka_baza, "bron": [Vector3.ZERO, Vector3.ZERO], "chwyt": "pistolet" if (pistolet or b.md.has("chwyt_pionowy")) else "lozysko",

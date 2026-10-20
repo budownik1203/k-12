@@ -117,6 +117,10 @@ medykamenty – krzyż, żywność i picie – metka z ceną, narzędzia – blu
 2. **Rajd**: losowa sieć szerokich korytarzy z pomieszczeniami bloku oddzielonymi grubym murem (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
    szabrownicy i najemnicy z taktycznym AI, pełzacze (mutanty chodzące po ścianach), łup w szafkach i na zwłokach.
 3. **Wyjścia**: brama (zawsze), piwnica nr 7 (na klucz z rajdu), okno na rusztowanie (tylko w oknie czasowym).
+   Do wyjść prowadzą strzałki wymalowane sprayem przez poprzedników (BRAMA – białe, PIWNICA 7 – żółte, OKNO – czerwone),
+   co ok. 12 m wzdłuż prawdziwych ścieżek ze startu i z różnych części budynku – trzeba je wypatrzyć, nie ma znacznika na ekranie.
+   Ściany mają ślady życia strefy: pęknięcia, zacieki spod sufitu, graffiti, okopcenia, dziury po kulach, odpadający tynk
+   z cegłą, stare ogłoszenia, plamy na podłodze (`python3 narzedzia/generuj_naklejki.py` – atlas `naklejki.png`).
 4. **Raport urzędowy**: przeżycie albo zgon, z komunikatem zależnym od przyczyny i dopiskami z przebiegu rajdu.
 
 ## Struktura projektu

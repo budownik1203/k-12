@@ -36,6 +36,7 @@ func _ready() -> void:
 	swiat = widok["swiat"]
 	_generuj_kondygnacje()
 	await _nawigacja_ze_sprawdzeniem()
+	_naklejki()
 	_postaw_drzwi()
 	_zaplanuj_zdarzenia()
 	# duża mapa: geometria dalej niż ~45 m nie jest rysowana (i tak ginie w mgle)
@@ -74,6 +75,7 @@ func _ready() -> void:
 	Sterowanie.blokada = false
 	Sterowanie.menu_otwarte = false
 	Dzwiek.graj("start_rajdu", -6.0)
+	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). [O] – lista wyjść z kierunkiem.")
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
 	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
 	Dzwiek.podloze_fn = _podloze_dzw
@@ -122,6 +124,15 @@ func _ready() -> void:
 	elif args.has("--test_reputacji"):
 		_tryb_testu = "reputacja"
 		_test_reputacji.call_deferred()
+	elif args.has("--prezentacja"):
+		_tryb_testu = "prezentacja"
+		_prezentacja.call_deferred(args[args.find("--prezentacja") + 1])
+	elif args.has("--test_sprawdz"):
+		_tryb_testu = "sprawdz"
+		_test_sprawdz.call_deferred(args[args.find("--test_sprawdz") + 1])
+	elif args.has("--strzalki"):
+		_tryb_testu = "strzalki"
+		_zrzut_strzalek.call_deferred(args[args.find("--strzalki") + 1])
 	elif args.has("--ekonomia"):
 		_tryb_testu = "ekonomia"
 		_sonda_ekonomii.call_deferred()
@@ -173,6 +184,24 @@ func _generuj_kondygnacje() -> void:
 		(gi as GeometryInstance3D).layers = WARSTWA_PARTER
 	for gi in pn.find_children("*", "GeometryInstance3D", true, false):
 		(gi as GeometryInstance3D).layers = WARSTWA_PIETRO
+
+
+## Ślady na ścianach i podłogach obu kondygnacji (przed drzwiami – skrzydła nie zasłaniają promieni).
+func _naklejki() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = Gra.ziarno_rajdu + 4242
+	var sp := swiat.get_world_3d().direct_space_state
+	Naklejki.drzwi = (info["drzwi"] as Array).map(func(d): return d["p"])
+	# najpierw strzałki do wyjść (ze startu i z kilku rozrzuconych punktów, też z piętra), potem ślady wokół nich
+	var zrodla: Array = [info["start"]]
+	var sp_lista: Array = info["spawny"].duplicate()
+	for i in mini(8, sp_lista.size()):
+		zrodla.append((sp_lista[rng.randi() % sp_lista.size()] as Dictionary)["pos"])
+	var st := Naklejki.strzalki(swiat, sp, info["wyjscia"], zrodla, OFF_P.y, rng, [WARSTWA_PARTER, WARSTWA_PIETRO])
+	var m0 := Naklejki.rozmiesc(swiat.get_node("Parter"), sp, gen.komorki, 0.0, GeneratorBiomu.H, rng, WARSTWA_PARTER)
+	var m1 := Naklejki.rozmiesc(swiat.get_node("Pietro"), sp, gen_p.komorki, OFF_P.y, GeneratorBiomu.H, rng, WARSTWA_PIETRO)
+	print_verbose("naklejki: %d + %d, strzałki do wyjść: %d + %d" % [int(m0.get_meta("ile", 0)) if m0 else 0, int(m1.get_meta("ile", 0)) if m1 else 0,
+		int(st[0].get_meta("ile", 0)) if st[0] else 0, int(st[1].get_meta("ile", 0)) if st[1] else 0])
 
 
 ## Generator kondygnacji, na której jest punkt.
@@ -2926,4 +2955,200 @@ func _test_reputacji() -> void:
 		print("  BŁĄD: polowanie")
 		bl += 1
 	print("TEST REPUTACJI: błędów ", bl)
+	get_tree().quit()
+
+
+# ------------------------------------------------------------------ zrzuty do prezentacji
+
+func _zapisz_kadr(katalog: String, nazwa: String, klatek := 20) -> void:
+	for f in klatek:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join(nazwa + ".png"))
+
+
+func _widac(a: Vector3, b: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(a, b, Balistyka.WARSTWA_SWIAT)
+	return swiat.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
+## Punkt na podłodze w odległości ~odl od celu, z którego widać cel (na tym samym piętrze).
+func _stanowisko(cel: Vector3, odl: float) -> Variant:
+	var space := swiat.get_world_3d().direct_space_state
+	for d in [odl, odl * 0.8, odl * 1.25, odl * 0.6]:
+		for i in 16:
+			var a := TAU * i / 16.0
+			var p: Vector3 = cel + Vector3(cos(a), 0, sin(a)) * float(d)
+			var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 1.0, p - Vector3.UP * 1.0, Balistyka.WARSTWA_SWIAT)
+			var r := space.intersect_ray(q)
+			if r.is_empty() or absf((r["position"] as Vector3).y - cel.y) > 0.4:
+				continue
+			var stoi: Vector3 = r["position"]
+			if _widac(stoi + Vector3.UP * 1.6, cel + Vector3.UP * 1.5) and _widac(stoi + Vector3.UP * 0.6, cel + Vector3.UP * 0.6):
+				# miejsce na postać: nic tuż obok
+				var wolne := true
+				for k in 4:
+					var b := TAU * k / 4.0
+					if not _widac(stoi + Vector3.UP * 1.0, stoi + Vector3.UP * 1.0 + Vector3(cos(b), 0, sin(b)) * 0.45):
+						wolne = false
+				if wolne:
+					return stoi
+	return null
+
+
+func _patrz_na(cel: Vector3) -> void:
+	var d := cel - gracz.global_position
+	gracz.rotation.y = atan2(-d.x, -d.z)
+	var poz := Vector2(d.x, d.z).length()
+	gracz.kamera.rotation.x = atan2(cel.y - (gracz.global_position.y + 1.6), poz)
+
+
+func _ustaw_wroga(w: Wrog, pos: Vector3, na: Vector3, stan_w := "walka") -> void:
+	w.global_position = pos + Vector3(0, 0.05, 0)
+	var d := na - pos
+	w.rotation.y = atan2(-d.x, -d.z)
+	w.stan = stan_w
+	w.gracz = gracz
+	for i in 12:
+		w._animuj(0.05)
+
+
+## Kadry do prezentacji: Sęp z obstawą, ogień z KB-47, celowanie przez kolimator, upadek ciała.
+func _prezentacja(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	gracz.sterowanie = false
+	for f in 30:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+	# kadry „kinowe”: bez napisów i komunikatów
+	if hud:
+		hud.visible = false
+		for c in hud.get_children():
+			if c is CanvasItem:
+				(c as CanvasItem).visible = false
+			elif c is CanvasLayer:
+				(c as CanvasLayer).visible = false
+	var kb := Gra.nowy_naladowany("kb47", "a_762")
+	kb.dane["dod_celownik"] = Przedmiot.nowy("kolimator")
+	Gra.ekw.sloty["glowna"] = kb
+	gracz._wybierz_bron("glowna")
+	var mw = get_node("Wrogowie")
+	# 1. Sęp i dezerterzy
+	var s: Wrog = mw.boss
+	if s:
+		var st = _stanowisko(s.global_position, 4.5)
+		if st != null:
+			gracz.global_position = st + Vector3(0, 0.05, 0)
+			for o in mw.oddzialy:
+				if s in o.czlonkowie:
+					var j := 0
+					for w in o.czlonkowie:
+						if w == s:
+							_ustaw_wroga(w, s.global_position, gracz.global_position)
+						else:
+							var bok := (s.global_position - gracz.global_position).cross(Vector3.UP).normalized() * (1.3 if j % 2 == 0 else -1.3)
+							_ustaw_wroga(w, s.global_position + bok + (s.global_position - gracz.global_position).normalized() * 0.8, gracz.global_position)
+							j += 1
+			_patrz_na(s.global_position + Vector3.UP * 1.1)
+			await _zapisz_kadr(katalog, "boss_sep")
+		else:
+			print("  prezentacja: brak widoku na Sępa")
+	# 2. ogień i celowanie: szabrownik w korytarzu
+	var cel: Wrog = null
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w is Wrog and not w.boss and not w.dezerter and w.frakcja != "wojskowy":
+			cel = w
+			break
+	if cel:
+		var st2 = _stanowisko(cel.global_position, 5.5)
+		if st2 != null:
+			gracz.global_position = st2 + Vector3(0, 0.05, 0)
+			# nikt inny w kadrze tuż przed kamerą
+			for w in get_tree().get_nodes_in_group("wrogowie"):
+				if w != cel and (w as Node3D).global_position.distance_to(gracz.global_position) < 7.0:
+					(w as Node3D).visible = false
+					(w as Node3D).global_position += Vector3(0, -50, 0)
+			_ustaw_wroga(cel, cel.global_position, gracz.global_position)
+			_patrz_na(cel.global_position + Vector3.UP * 1.2)
+			await _zapisz_kadr(katalog, "walka_namierzanie")
+			gracz.sterowanie = true
+			Sterowanie.przechwyc(true)
+			Input.action_press("celuj")
+			await _zapisz_kadr(katalog, "walka_kolimator", 30)
+			Input.action_release("celuj")
+			for f in 20:
+				await get_tree().process_frame
+			Input.action_press("strzal")
+			for k in 8:
+				await _zapisz_kadr(katalog, "walka_ogien_%d" % k, 1)
+			Input.action_release("strzal")
+			# upadek: dobicie i kadr z boku
+			cel.set_physics_process(true)
+			cel._ost_kier = (cel.global_position - gracz.global_position).normalized()
+			while not cel.cialo.martwy:
+				cel.trafiony("klatka", 60.0, 40.0, gracz, cel.global_position + Vector3.UP * 1.3, cel._ost_kier)
+			for k in 3:
+				await _zapisz_kadr(katalog, "walka_upadek_%d" % k, 6)
+			gracz.sterowanie = false
+	print("zrzuty prezentacji gotowe")
+	get_tree().quit()
+
+
+## Sprawdzanie magazynka w czasie rzeczywistym (klawisz [T]): czy broń w rękach się nie zmienia.
+func _test_sprawdz(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	var kb := Gra.nowy_naladowany("kb47", "a_762")
+	Gra.ekw.sloty["glowna"] = kb
+	Gra.ekw.dodaj(Gra.magazynek("mag_kb47", "a_762", 20))
+	gracz._wybierz_bron("glowna")
+	for _i in 40:
+		await get_tree().physics_frame
+	var b := gracz.bron
+	var bl := 0
+	print("  przed: ", b.przedmiot.id if b.przedmiot else "brak", " slot ", gracz.get("aktywny_slot"))
+	Sterowanie.przechwyc(true)
+	var ev := InputEventAction.new()
+	ev.action = "sprawdz"
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	var ids := {}
+	for i in 150:
+		await get_tree().physics_frame
+		if i == 1:
+			var ev2 := InputEventAction.new()
+			ev2.action = "sprawdz"
+			ev2.pressed = false
+			Input.parse_input_event(ev2)
+		var id: String = b.przedmiot.id if b.przedmiot else "brak"
+		ids[id] = int(ids.get(id, 0)) + 1
+		if i % 15 == 0:
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(katalog.path_join("sp_%03d.png" % i))
+			print("  klatka %d: %s stan %s t %.2f/%.2f mag %s" % [i, id, b.stan, b.stan_t, b.stan_total, b.przedmiot.dane.get("mag") != null])
+	print("  bronie w trakcie: ", ids)
+	if ids.size() > 1:
+		bl += 1
+	print("TEST SPRAWDZ: błędów ", bl)
+	get_tree().quit()
+
+
+func _zrzut_strzalek(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	gracz.sterowanie = false
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+	print("  strzałek: ", Naklejki.pozycje.size())
+	var n := 0
+	for e in Naklejki.pozycje.slice(0, 6):
+		var p0: Vector3 = e[0]
+		var nrm: Vector3 = e[1]
+		gracz.global_position = Vector3(p0.x, p0.y - 1.45, p0.z) + nrm * 2.4 + nrm.cross(Vector3.UP) * 0.8
+		var d := p0 - gracz.global_position
+		gracz.rotation.y = atan2(-d.x, -d.z)
+		gracz.kamera.rotation.x = -0.05
+		await _zapisz_kadr(katalog, "strzalka_%d_%s" % [n, e[2]], 25)
+		n += 1
 	get_tree().quit()
