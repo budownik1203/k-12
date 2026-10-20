@@ -16,7 +16,7 @@ const DANE := {
 		"prog_rozejmu": 35,
 		"powitania": ["Towar z piwnic, ceny z księżyca. Bierzesz czy oglądasz?", "Nasi mówią, że strzelasz do swoich. Mam nadzieję, że kłamią.", "Wytrych to nie przestępstwo. To klucz uniwersalny."],
 		"wrogie": ["Spadaj. Chłopaki pamiętają twoją gębę.", "Z mordercami nie handlujemy. Chyba że za podwójną cenę. Nie, jednak nie."],
-		"oferta": [["wytrych", 1, 0], ["tasma", 1, 0], ["mapa", 1, 0], ["obrzyn", 1, 0], ["a_12", 20, 0], ["proch", 1, 0], ["farba_spray", 1, 0], ["maska_gazowa", 1, 10], ["prasa_elaboracyjna", 1, 10],
+		"oferta": [["wytrych", 1, 0], ["tasma", 1, 0], ["mapa", 1, 0], ["obrzyn", 1, 0], ["a_12", 20, 0], ["proch", 1, 0], ["farba_spray", 1, 0], ["drut", 1, 0], ["maska_gazowa", 1, 10], ["prasa_elaboracyjna", 1, 10],
 			["zestaw_czyszczacy", 1, 10], ["klucz_piwnica", 1, 15], ["lornetka", 1, 25], ["granat_f1", 1, 35]],
 		"zlecenia": [["eliminacja", "najemnik", 2, 6000, 12], ["eliminacja", "wojskowy", 2, 7000, 14], ["dostawa", "zegarek", 2, 7500, 10],
 			["dostawa", "wodka", 2, 3500, 8], ["dostawa", "lancuszek", 1, 7000, 10]],

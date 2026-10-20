@@ -870,6 +870,9 @@ func _odswiez() -> void:
 # ------------------------------------------------------------------ pętla
 
 func _process(delta: float) -> void:
+	# rozłożony plecak / worek / kontener przed sobą: świat słychać głucho (zerknięcie na kamizelkę – nie)
+	if not tryb_bazy:
+		Dzwiek.przytlum_ekwipunek(otwarty and otwarte.any(func(c): return c != "kamizelka"))
 	if _chowanie:
 		return
 	if not otwarty and gracz and not _ogl_ui.otwarty and not Sterowanie.blokada and Input.is_action_just_pressed("ogladaj") \
@@ -1852,6 +1855,18 @@ func _uchwyty_kieszeni() -> void:
 					e[kl] = _droga(co, i, k, float(pg[k]), rodz, e)
 					e[kl + "_t"] = t
 			var kier: Vector2 = e.get(kl, Vector2(0, -110))
+			if bool(e["otwarta"]):
+				# otwarta kieszeń: uchwyt zapinania nie może leżeć na jej slotach (brzeg torby / klapy wypadał
+				# w pierwszym rzędzie) – przesunięty tuż nad górną krawędź siatki
+				var rk := _rect_kieszeni(gui, e)
+				if rk.grow(-2.0).has_point(pe):
+					pe = Vector2(clampf((pe as Vector2).x, rk.position.x + 6.0, rk.end.x - 6.0), rk.position.y - 7.0)
+			# żaden uchwyt (też zapiętej sąsiedniej kieszeni) nie leży na slotach otwartej kieszeni
+			for _q in 4:
+				var pod_r := _otwarte_sloty_pod(pe)
+				if pod_r.size.x <= 0.0:
+					break
+				pe = Vector2((pe as Vector2).x, pod_r.position.y - 7.0)
 			e["uchwyt"] = pe
 			e["uchwyt_k"] = k
 			e["uchwyt_l"] = gui.get_global_transform().affine_inverse() * (pe as Vector2)
@@ -1888,6 +1903,7 @@ var _kursor := Input.CURSOR_ARROW
 func _uchwyt_pod(m: Vector2) -> Dictionary:
 	var best := {}
 	var bd := INF
+	var nad_slotami := _nad_otwartymi_slotami(m)
 	for co in _kieszenie:
 		var lst: Array = _kieszenie[co]
 		for i in lst.size():
@@ -1895,11 +1911,44 @@ func _uchwyt_pod(m: Vector2) -> Dictionary:
 			if not e.has("uchwyt"):
 				continue
 			var d := (e["uchwyt"] as Vector2).distance_to(m)
-			var w_obszarze: bool = (e.get("obszar", Rect2()) as Rect2).grow(5.0).has_point(m)
+			# obszar elementu (klapa, torba) chwyta tylko przy zapiętej kieszeni – przy otwartej obejmował całą
+			# torbę razem ze slotami i każde kliknięcie w przedmiot zaczynało zapinanie
+			var w_obszarze: bool = not bool(e["otwarta"]) and (e.get("obszar", Rect2()) as Rect2).grow(5.0).has_point(m)
+			# nad slotami otwartej kieszeni (tej albo sąsiedniej) uchwyt łapie tylko dokładne trafienie w pierścień
+			if nad_slotami:
+				continue
 			if (d < 26.0 or w_obszarze) and d < bd:
 				bd = d
 				best = {"co": co, "i": i}
 	return best
+
+
+## Prostokąt slotów kieszeni na ekranie.
+func _rect_kieszeni(gui: SiatkaUI, e: Dictionary) -> Rect2:
+	var rr: Rect2i = e["r"]
+	var r := Rect2(Vector2(rr.position) * SiatkaUI.KOM, Vector2(rr.size) * SiatkaUI.KOM)
+	var t := gui.get_global_transform()
+	return Rect2(t * r.position, t.basis_xform(r.size))
+
+
+## Czy kursor jest nad slotami którejś otwartej kieszeni (każdy pojemnik: plecaki, worek, kamizelki).
+func _nad_otwartymi_slotami(m: Vector2) -> bool:
+	return _otwarte_sloty_pod(m).size.x > 0.0
+
+
+## Prostokąt (ekran) slotów otwartej kieszeni pod punktem albo pusty.
+func _otwarte_sloty_pod(m: Vector2) -> Rect2:
+	for co in _kieszenie:
+		if not _ramki.has(co) or not is_instance_valid(_ramki[co]) or not (_ramki[co] as Control).visible:
+			continue
+		var gui: SiatkaUI = _ramki[co].get_meta("siatka_ui", null)
+		if gui == null:
+			continue
+		for e in _kieszenie[co]:
+			var rk := _rect_kieszeni(gui, e)
+			if bool(e["otwarta"]) and rk.grow(-1.0).has_point(m):
+				return rk
+	return Rect2()
 
 
 ## Droga uchwytu na ekranie dla kroku (zamknięte -> otwarte); gdy model jej nie pokazuje (worek, blend shape) –
@@ -2429,6 +2478,7 @@ const M_ELAB := 200          # + indeks przepisu
 const M_NAPRAW_PANC := 300
 const M_SPRAY := 400         # + rodzaj znaku
 const M_PULAPKA := 500
+const M_POTYKACZ := 510
 const ZNAKI_SPRAYU := [["Maluj na ścianie: strzałka →", "gracz_strzalka_p"], ["Maluj na ścianie: ← strzałka", "gracz_strzalka_l"],
 	["Maluj na ścianie: krzyżyk (tu byłem)", "gracz_krzyzyk"], ["Maluj na ścianie: wykrzyknik (uwaga)", "gracz_wykrzyknik"]]
 
@@ -2478,6 +2528,8 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 	if p.id == "granat_f1" and not tryb_bazy and gracz:
 		_menu.add_item("Zastaw pułapkę na drzwiach (szklanka)" if _znajdz_narzedzie("szklanka") != null else "Pułapka na drzwiach (brak szklanki)", M_PULAPKA)
 		_menu.set_item_disabled(_menu.item_count - 1, _znajdz_narzedzie("szklanka") == null)
+		_menu.add_item("Rozciągnij potykacz w poprzek przejścia (drut)" if _znajdz_narzedzie("drut") != null else "Potykacz (brak drutu)", M_POTYKACZ)
+		_menu.set_item_disabled(_menu.item_count - 1, _znajdz_narzedzie("drut") == null)
 	# puszka sprayu: znak na ścianie przed sobą (w rajdzie)
 	if p.id == "farba_spray" and not tryb_bazy and gracz:
 		for i in ZNAKI_SPRAYU.size():
@@ -2555,6 +2607,8 @@ func _zastaw_pulapke(granat: Przedmiot) -> void:
 		return
 	var strona := 1.0 if (gracz.global_position - d.global_position).dot(d.global_basis.z) > 0.0 else -1.0
 	zamknij()
+	# szkło o klamkę, zawleczka: cicho, ale słychać (kucając ciszej)
+	Gra.emituj_halas(gracz.global_position, 1.5 if gracz.kucanie > 0.5 else 3.0, gracz)
 	gracz.zacznij_akcje("Pułapka: granat w szklance", 5.0, func():
 		if d.pulapka != null or not d.zamkniete():
 			_komunikat("Drzwi się ruszyły – nie da się.")
@@ -2564,6 +2618,43 @@ func _zastaw_pulapke(granat: Przedmiot) -> void:
 		Dzwiek.graj_3d("zawleczka", d.global_position + Vector3.UP, gracz.get_parent(), -8.0)
 		Pulapka.zastaw(d, gracz, strona)
 		_komunikat("Zawleczka w kieszeni. Ktokolwiek otworzy te drzwi, zrzuci szklankę."), "otwieranie", 0, Callable(), {"id": "drzwi"})
+
+
+## Potykacz: drut w poprzek przejścia tuż przed graczem (kołki przy obu ścianach, do 4,5 m), granat przy lewym kołku.
+func _rozciagnij_potykacz(granat: Przedmiot) -> void:
+	var drut := _znajdz_narzedzie("drut")
+	if drut == null:
+		_komunikat("Drut z kołkami musi być pod ręką.")
+		return
+	if not gracz.akcja.is_empty() or _zajete():
+		return
+	var space := gracz.get_world_3d().direct_space_state
+	var przod := -gracz.global_basis.z
+	przod.y = 0.0
+	przod = przod.normalized()
+	var bok := przod.cross(Vector3.UP).normalized()
+	var o := gracz.global_position + przod * 0.7 + Vector3.UP * 0.15
+	var konce := []
+	for s in [-1.0, 1.0]:
+		var q := PhysicsRayQueryParameters3D.create(o, o + bok * s * 2.6, Balistyka.WARSTWA_SWIAT)
+		var r := space.intersect_ray(q)
+		if r.is_empty():
+			_komunikat("Potykacz rozciąga się między ścianami – tu nie ma o co zaczepić (najwyżej 5 m przejścia).")
+			return
+		konce.append((r["position"] as Vector3) + (r["normal"] as Vector3) * 0.04 + Vector3.DOWN * 0.15)
+	var a: Vector3 = konce[0]
+	var b: Vector3 = konce[1]
+	if a.distance_to(b) < 0.6:
+		_komunikat("Za ciasno na drut.")
+		return
+	zamknij()
+	Gra.emituj_halas(gracz.global_position, 2.0 if gracz.kucanie > 0.5 else 4.0, gracz)   # kołki wbijane w szczeliny
+	gracz.zacznij_akcje("Potykacz: kołki, drut, zawleczka", 7.0, func():
+		if not ekw.usun_przedmiot(granat) or not ekw.usun_przedmiot(drut):
+			return
+		Dzwiek.graj_3d("zawleczka", a + Vector3.UP * 0.1, gracz.get_parent(), -10.0)
+		Potykacz.rozciagnij(gracz.get_parent(), a, b, gracz)
+		_komunikat("Drut napięty na wysokości kostek – teraz uważaj, którędy wracasz."), "otwieranie", 0, Callable(), {"id": "drzwi"})
 
 
 ## Spray: ściana na wprost (do 2,6 m) – znak zostaje do końca rajdu. Trwa chwilę i syczy (słychać).
@@ -2645,6 +2736,9 @@ func _menu_akcja(id: int) -> void:
 	if id == M_PULAPKA:
 		_zastaw_pulapke(p)
 		return
+	if id == M_POTYKACZ:
+		_rozciagnij_potykacz(p)
+		return
 	if id >= M_SPRAY and id < M_SPRAY + ZNAKI_SPRAYU.size():
 		_maluj(String(ZNAKI_SPRAYU[id - M_SPRAY][1]))
 		return
@@ -2715,6 +2809,7 @@ func _menu_akcja(id: int) -> void:
 		M_CZYSC:
 			_uzyj_narzedzia(p, "zestaw_czyszczacy", 6.0, "Czyszczenie", func():
 				p.dane["stan"] = minf(100.0, float(p.dane.get("stan", 100.0)) + 45.0)
+				p.dane["brud"] = 0.0
 				p.dane["zaciecie"] = false
 				_komunikat("Broń wyczyszczona: %d%%" % int(p.dane["stan"])))
 			return
@@ -3042,6 +3137,8 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 			t += "Kaliber %s · %d strz./min · %s\n" % [b["kaliber"], b["rpm"], ", ".join(b["tryby"].map(func(x): return "ciągły" if x == "auto" else "pojedynczy"))]
 			if b.has("wewnetrzny"):
 				t += "Ładowana pojedynczo (%d)\n" % b["wewnetrzny"]
+			if float(p.dane.get("brud", 0.0)) >= 1.0:
+				t += "[color=#d9a35a]Zabrudzona po rajdzie (kurz, pył) – częściej się zacina; wyczyść zestawem[/color]\n"
 			var dozw: Dictionary = b.get("dodatki", {})
 			if not dozw.is_empty():
 				var linie := []
@@ -3266,3 +3363,7 @@ class Duch:
 				draw_rect(r, Color(0.8, 0.15, 0.1, 0.35))
 			draw_rect(r, Color(0.95, 0.3, 0.2), false, 2.0)
 			draw_string(Motyw.mono_b(), r.position + Vector2(0, -6), "WYRZUĆ NA ZIEMIĘ", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.45, 0.3))
+
+
+func _exit_tree() -> void:
+	Dzwiek.przytlum_ekwipunek(false)

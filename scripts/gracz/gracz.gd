@@ -357,6 +357,14 @@ func _physics_process(delta: float) -> void:
 			puls = 0.35
 		latarka.light_energy = 3.4 * puls
 		latarka_poswiata.light_energy = 0.9 * puls
+	# [O] z mapą w slocie wyposażenia: mapa wyjmowana do rąk (broń schowana, marsz powoli); drugie [O] chowa
+	if we_aktywne and not tryb_bazy and Input.is_action_just_pressed("wyjscia") and ekw.ma_wyposazenie("mapa"):
+		if akcja.get("mapa", false):
+			przerwij_akcje()
+			Dzwiek.graj("szelest_0", -14.0, 1.1)
+		elif akcja.is_empty():
+			zacznij_akcje("Mapa", 36000.0, func(): pass, "mapa", 0, Callable(), {"mapa": true})
+			Dzwiek.graj("szelest_0", -12.0, 0.9)
 	# przerwanie akcji: X, strzał, zmiana broni
 	if not akcja.is_empty():
 		var przerwij := Input.is_action_just_pressed("przerwij")
@@ -1084,6 +1092,13 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 	_odrzut_cel += Vector2(randf_range(-1.5, 1.5), randf_range(0.5, 2.0))
 	if wynik["pancerz"]:
 		Dzwiek.graj("trafienie_pancerz", -2.0)
+		if not wynik["przebity"] and not srut:
+			# stłuczenie pod płytą: ból i wybity oddech na kilka sekund
+			var nowy := cialo.siniak <= 0.0
+			cialo.siniak = maxf(cialo.siniak, 3.5 + obr * 0.08)
+			wytrzymalosc = maxf(0.0, wytrzymalosc - 18.0)
+			if nowy:
+				komunikat.emit("Kamizelka zatrzymała kulę – stłuczenie, brak tchu")
 	else:
 		Dzwiek.graj("trafienie_cialo", -1.0)
 	var kier := (punkt - global_position)

@@ -29,7 +29,9 @@ static func przez_pancerz(pancerze: Dictionary, czesc: String, obr: float, pen: 
 		if randf() < szansa:
 			p.dane["wytrz"] = maxf(0.0, wytrz - pen * 0.12)
 			return {"obr": obr * 0.82, "przebity": true, "pancerz": true}
-		p.dane["wytrz"] = maxf(0.0, wytrz - obr * 0.07)
+		# odłamek (pen ≤ 3) szarpie tkaninę i płyty mocniej niż kula, którą płyta zatrzymała
+		var zuzycie := obr * 0.07 if pen > 3.0 else obr * 0.35 + 1.0
+		p.dane["wytrz"] = maxf(0.0, wytrz - zuzycie)
 		return {"obr": obr * 0.12 + 1.0, "przebity": false, "pancerz": true}
 	return {"obr": obr, "przebity": true, "pancerz": false}
 

@@ -19,7 +19,7 @@ static var _mat_krew: StandardMaterial3D
 
 static var material_sciany_fn: Callable      # (pozycja) -> "tynk" / "cegla" / "kafelki" / "beton" (ustawia rajd)
 static var _otwory: Array = []
-const PYL := {"tynk": Color(0.78, 0.76, 0.7), "cegla": Color(0.6, 0.3, 0.22), "kafelki": Color(0.88, 0.88, 0.84), "beton": Color(0.5, 0.48, 0.44)}
+const PYL := {"tynk": Color(0.66, 0.63, 0.57), "cegla": Color(0.6, 0.3, 0.22), "kafelki": Color(0.76, 0.76, 0.72), "beton": Color(0.5, 0.48, 0.44)}
 
 
 ## Trafienie kulą w ścianę: dziura z odpryskiem i pył w kolorze materiału (tynk, cegła, kafelki, beton),
@@ -103,6 +103,35 @@ static func slad(rodzic: Node3D, pos: Vector3, normal: Vector3, krew := false) -
 			old.queue_free()
 
 
+static var _mesh_czastek := {}
+
+
+## Wspólna siatka drobinki na kolor (zamiast nowego materiału przy każdym trafieniu).
+static func _mesh_czastki(kolor: Color, iskra: bool) -> BoxMesh:
+	var k := kolor.to_html(false) + ("i" if iskra else "")
+	if _mesh_czastek.has(k):
+		return _mesh_czastek[k]
+	var box := BoxMesh.new()
+	var bok := 0.02 if iskra else 0.014
+	box.size = Vector3(bok, bok, bok)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = kolor if iskra else kolor.darkened(0.12)
+	m.roughness = 1.0
+	if iskra:
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box.material = m
+	_mesh_czastek[k] = box
+	return box
+
+
+## Zwolnienie zasobów współdzielonych (wyjście z gry).
+static func sprzataj() -> void:
+	_mesh_czastek.clear()
+	_slady.clear()
+	_otwory.clear()
+	material_sciany_fn = Callable()
+
+
 static func czastki(rodzic: Node3D, pos: Vector3, normal: Vector3, kolor: Color, ile := 10, predkosc := 2.2) -> void:
 	if rodzic == null or not rodzic.is_inside_tree():
 		return
@@ -119,13 +148,12 @@ static func czastki(rodzic: Node3D, pos: Vector3, normal: Vector3, kolor: Color,
 	p.gravity = Vector3(0, -6, 0)
 	p.scale_amount_min = 0.6
 	p.scale_amount_max = 1.2
-	var box := BoxMesh.new()
-	box.size = Vector3(0.02, 0.02, 0.02)
-	var m := StandardMaterial3D.new()
-	m.albedo_color = kolor
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	box.material = m
-	p.mesh = box
+	# iskry (ciepła żółć) świecą same; pył, drzazgi i krew biorą światło sceny – w ciemnym pokoju nie bieleją
+	var iskra := kolor.r > 0.95 and kolor.g > 0.7 and kolor.b < 0.5
+	if not iskra:
+		p.scale_amount_min = 0.45
+		p.scale_amount_max = 1.0
+	p.mesh = _mesh_czastki(kolor, iskra)
 	rodzic.add_child(p)
 	p.global_position = pos
 	p.emitting = true
@@ -479,3 +507,29 @@ static func iskry(rodzic: Node3D, pos: Vector3, kier: Vector3, ile := 14) -> voi
 		p.queue_free()
 		if is_instance_valid(sw):
 			sw.queue_free())
+
+
+## Zawiesina kurzu w powietrzu po serii w ciasnym pomieszczeniu: kilka dużych, bladych kłębów
+## na wysokości oczu, które powoli opadają i rzedną (chwilę gorzej widać).
+static func zawiesina(rodzic: Node3D, pos: Vector3, sila := 1.0) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	_przygotuj_plomien()
+	for i in 7:
+		var mi := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2.ONE * randf_range(1.4, 2.4)
+		mi.mesh = q
+		var m: StandardMaterial3D = _mat_dym.duplicate()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		m.albedo_color = Color(0.5, 0.47, 0.42, 0.0)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rodzic.add_child(mi)
+		mi.global_position = pos + Vector3(randf_range(-1.6, 1.6), randf_range(-0.5, 0.6), randf_range(-1.6, 1.6))
+		var dl := randf_range(6.0, 9.0)
+		var t := mi.create_tween().set_parallel(true)
+		t.tween_property(m, "albedo_color:a", 0.16 * sila, 1.2)
+		t.tween_property(mi, "global_position", mi.global_position + Vector3(randf_range(-0.3, 0.3), -0.5, randf_range(-0.3, 0.3)), dl)
+		t.tween_property(m, "albedo_color:a", 0.0, dl * 0.6).set_delay(dl * 0.4)
+		t.chain().tween_callback(mi.queue_free)

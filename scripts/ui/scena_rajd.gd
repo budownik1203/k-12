@@ -15,12 +15,14 @@ var hud: Node
 var ekran_ekw: Node
 var czas := 0.0
 var zabici: Array = []
+var _start_sprzet := {}        # id przedmiotu -> [nazwa, wartość] broni i pancerzy na starcie (raport: zużycie)
 var _start_zapas := {}         # id przedmiotu -> [wartość amunicji, wartość leków] na starcie (raport: zużycie)
 var zginieni_inni := 0           # polegli w walkach frakcji (bez udziału gracza)
 var zdarzenia: Array = []
 var wartosc_poczatkowa := 0
 var koniec := false
 var _tryb_testu := ""
+var _bledy_kieszeni := 0
 
 
 func _ready() -> void:
@@ -35,11 +37,18 @@ func _ready() -> void:
 	Widok3D.zastosuj(widok)
 	Gra.ustawienia_zmiana.connect(func(): Widok3D.zastosuj(widok))
 	swiat = widok["swiat"]
+	await get_tree().process_frame
 	_generuj_kondygnacje()
+	Gra.etap_ladowania(1)
+	await get_tree().process_frame
 	await _nawigacja_ze_sprawdzeniem()
+	Gra.etap_ladowania(2)
+	await get_tree().process_frame
 	_naklejki()
 	_postaw_drzwi()
 	_zaplanuj_zdarzenia()
+	Gra.etap_ladowania(3)
+	await get_tree().process_frame
 	# duża mapa: geometria dalej niż ~45 m nie jest rysowana (i tak ginie w mgle)
 	for mi in swiat.find_children("*", "GeometryInstance3D", true, false):
 		var gi := mi as GeometryInstance3D
@@ -57,11 +66,14 @@ func _ready() -> void:
 	for p in Gra.ekw.wszystkie():
 		_start_ids[(p as Przedmiot).get_instance_id()] = true
 		_start_zapas[(p as Przedmiot).get_instance_id()] = _zapas_przedmiotu(p)
+		if (p as Przedmiot).typ() in ["bron", "pancerz"]:
+			_start_sprzet[(p as Przedmiot).get_instance_id()] = [(p as Przedmiot).nazwa(), _wartosc_bez_zawartosci(p)]
 	if ResourceLoader.exists("res://scripts/ai/menedzer_wrogow.gd"):
 		var mw = load("res://scripts/ai/menedzer_wrogow.gd").new()
 		mw.name = "Wrogowie"
 		add_child(mw)
 		mw.rozstaw(self)
+	Gra.etap_ladowania(4)
 	if ResourceLoader.exists("res://scripts/ui/hud.gd"):
 		hud = load("res://scripts/ui/hud.gd").new()
 		hud.rajd = self
@@ -140,6 +152,9 @@ func _ready() -> void:
 	elif args.has("--test_mapa"):
 		_tryb_testu = "mapa"
 		_test_mapy.call_deferred(args[args.find("--test_mapa") + 1])
+	elif args.has("--test_v14"):
+		_tryb_testu = "v14"
+		_test_v14.call_deferred(args[args.find("--test_v14") + 1])
 	elif args.has("--test_pulapka"):
 		_tryb_testu = "pulapka"
 		_test_pulapki.call_deferred(args[args.find("--test_pulapka") + 1])
@@ -474,8 +489,7 @@ var _tlo_t := 10.0
 func _exit_tree() -> void:
 	Dzwiek.podloze_fn = Callable()
 	Dzwiek.akustyka_fn = Callable()
-	Efekty.material_sciany_fn = Callable()   # lambda z przechwyconym stanem sceny nie może przeżyć jej zwolnienia
-	Efekty._otwory.clear()
+	Efekty.sprzataj()   # lambda z przechwyconym stanem sceny nie może przeżyć jej zwolnienia
 
 
 ## Odgłosy strefy: kapanie, skrzypienie budynku, odległe strzelaniny i wycie – losowo, z różnych stron.
@@ -739,6 +753,17 @@ static func _zapas_przedmiotu(p: Przedmiot) -> Array:
 	return [am, med]
 
 
+## Wartość broni / pancerza bez magazynka i dodatków (same zużycie sprzętu).
+static func _wartosc_bez_zawartosci(p: Przedmiot) -> int:
+	var v := p.wartosc()
+	if p.typ() == "bron":
+		if p.dane.get("mag") != null:
+			v -= (p.dane["mag"] as Przedmiot).wartosc()
+		for dd in p.dodatki():
+			v -= (dd as Przedmiot).wartosc()
+	return v
+
+
 func _zakoncz(w: Dictionary) -> void:
 	w["czas"] = czas
 	# zużycie: amunicja i leki z przedmiotów wniesionych do strefy (zniknięte = zużyte)
@@ -754,6 +779,25 @@ func _zakoncz(w: Dictionary) -> void:
 		zu_med += maxf(0.0, float(s0[1]) - float(s1[1]))
 	w["zuzyte_amunicja"] = int(zu_am)
 	w["zuzyte_leki"] = int(zu_med)
+	# zużycie broni i pancerzy, które wróciły (strata wartości ze stanu, nagaru i łat)
+	if w.get("przezyl", false):
+		# kurz strefy: każda wyniesiona broń wraca brudna (więcej po dłuższym rajdzie) – do czyszczenia w kryjówce
+		var brud := clampf(czas / 60.0 * 0.5, 2.0, 14.0)
+		for p in Gra.ekw.wszystkie():
+			if (p as Przedmiot).typ() == "bron":
+				p.dane["brud"] = minf(30.0, float(p.dane.get("brud", 0.0)) + brud)
+	var zuz := []
+	var zuz_suma := 0
+	for p in Gra.ekw.wszystkie():
+		var iid := (p as Przedmiot).get_instance_id()
+		if not _start_sprzet.has(iid):
+			continue
+		var strata := int(_start_sprzet[iid][1]) - _wartosc_bez_zawartosci(p)
+		if strata >= 50:
+			zuz.append("%s −%d" % [_start_sprzet[iid][0], strata])
+			zuz_suma += strata
+	w["zuzycie_sprzetu"] = zuz
+	w["zuzycie_suma"] = zuz_suma
 	w["zabici"] = zabici
 	w["zdarzenia"] = zdarzenia
 	w["odwiedzone"] = odwiedzone.keys()
@@ -1126,11 +1170,13 @@ func _test_mechanik() -> void:
 		var p0: Przedmiot = zost[0]
 		ekran_ekw._szybkie_przeniesienie(p0, {"typ": "siatka", "siatka": pj.siatka})
 		await get_tree().create_timer(0.6).timeout
+		# gdy w kieszeniach nie ma już miejsca, dłoń niczego nie bierze – wtedy nie ma czego upuścić
+		var w_dloni: bool = not ekran_ekw._przekl.is_empty() and ekran_ekw._przekl["p"] == p0
 		gracz.trafiony(gracz.global_position + Vector3.UP * 0.3, 1.0, 0.0, null)
 		await _klatki(5)
 		var na_ziemi := swiat.get_children().any(func(n): return n is LupNaZiemi and n.przedmiot == p0)
-		ok = na_ziemi and not pj.siatka.zawiera(p0) and not ekran_ekw.otwarty
-		print("B trafienie w trakcie: na ziemi %s %s" % [na_ziemi, "OK" if ok else "BLAD"])
+		ok = (na_ziemi and not pj.siatka.zawiera(p0) if w_dloni else pj.siatka.zawiera(p0)) and not ekran_ekw.otwarty
+		print("B trafienie w trakcie: w dłoni %s, na ziemi %s %s" % [w_dloni, na_ziemi, "OK" if ok else "BLAD"])
 		bledy += 0 if ok else 1
 	# C: rosnący stos nie nachodzi na sąsiada
 	ek.ograniczony = true
@@ -1944,9 +1990,33 @@ func _zrzut_animacji(katalog: String) -> void:
 					await get_tree().create_timer(0.1).timeout
 				await get_tree().create_timer(0.4).timeout
 				await _zapisz(katalog, "pl_%s_d" % pid)
+				# sloty otwartych kieszeni nie mogą chwytać uchwytu zapinania (kliknięcie w przedmiot ≠ zapinanie)
+				ekran_ekw._uchwyty_kieszeni()
+				var zabl := 0
+				var wszystkie := 0
+				for e in ekran_ekw._kieszenie[slot]:
+					if not bool(e["otwarta"]):
+						continue
+					var rr: Rect2i = e["r"]
+					for yy in range(rr.position.y, rr.end.y):
+						for xx in range(rr.position.x, rr.end.x):
+							for off in [Vector2(0.5, 0.5), Vector2(0.15, 0.15), Vector2(0.85, 0.15)]:
+								var pkt: Vector2 = gui.get_global_transform() * ((Vector2(xx, yy) + off) * SiatkaUI.KOM)
+								wszystkie += 1
+								if not ekran_ekw._uchwyt_pod(pkt).is_empty():
+									zabl += 1
+				# a uchwyt zapinania nadal da się chwycić (pierścień poza slotami)
+				var bez_uchwytu := 0
+				for e in ekran_ekw._kieszenie[slot]:
+					if e.has("uchwyt") and ekran_ekw._uchwyt_pod(e["uchwyt"]).is_empty():
+						bez_uchwytu += 1
+				zabl += bez_uchwytu
+				print("KIESZENIE %s: punktów slotów %d, przechwyconych przez zapinanie %d, uchwytów nie do chwycenia %d" % [pid, wszystkie, zabl - bez_uchwytu, bez_uchwytu])
+				_bledy_kieszeni += zabl
 				print("%s kieszenie: %s" % [pid, (ekran_ekw._kieszenie[slot] as Array).map(func(e): return "%s=%s" % [e["nazwa"], e["otwarta"]])])
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(1.0).timeout
+		print("TEST KIESZENI: błędów %d" % _bledy_kieszeni)
 		return
 	if OS.get_cmdline_user_args().has("--mechaniki"):
 		await _test_mechanik()
@@ -3419,4 +3489,241 @@ func _test_pulapki(katalog: String) -> void:
 		print("  BŁĄD: pułapka nie zadziałała")
 		bl += 1
 	print("TEST PUŁAPKI: błędów ", bl)
+	get_tree().quit()
+
+
+
+## Test v0.14: potykacz (zastawienie, wyzwolenie, zauważenie i rozbrojenie przez wroga), pułapka na drzwiach
+## zdjęta przez wroga, ciało swojego alarmuje, ranny woła oddział, mapa w rękach, przytłumienie przy plecaku.
+func _test_v14(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	var bl := 0
+	var wszyscy: Array = get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog and not w.cialo.martwy)
+	for w in wszyscy:
+		w.set_physics_process(false)
+	# --- 1. potykacz: miejsce w wąskim przejściu (ściany po obu stronach do 2,5 m)
+	var space := swiat.get_world_3d().direct_space_state
+	var mapa_n := swiat.get_world_3d().navigation_map
+	var miejsce := Vector3.INF
+	var kat := 0.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for proba in 400:
+		var p := NavigationServer3D.map_get_closest_point(mapa_n, info["start"] + Vector3(rng.randf_range(-25, 25), 0, rng.randf_range(-25, 25)))
+		if absf(p.y - info["start"].y) > 0.5:
+			continue
+		for k in 4:
+			var a := k * PI * 0.5
+			var przod := Vector3(-sin(a), 0, -cos(a))
+			var bok := przod.cross(Vector3.UP)
+			var o := p + przod * 0.7 + Vector3.UP * 0.15
+			var r1 := space.intersect_ray(PhysicsRayQueryParameters3D.create(o, o + bok * 2.6, Balistyka.WARSTWA_SWIAT))
+			var r2 := space.intersect_ray(PhysicsRayQueryParameters3D.create(o, o - bok * 2.6, Balistyka.WARSTWA_SWIAT))
+			var r3 := space.intersect_ray(PhysicsRayQueryParameters3D.create(o, o + przod * 4.0, Balistyka.WARSTWA_SWIAT))
+			if not r1.is_empty() and not r2.is_empty() and r3.is_empty() and (r1["position"] as Vector3).distance_to(r2["position"]) > 1.5:
+				miejsce = p
+				kat = a
+				break
+		if miejsce != Vector3.INF:
+			break
+	if miejsce == Vector3.INF:
+		print("  BŁĄD: brak przejścia na potykacz")
+		print("TEST V14: błędów 1")
+		get_tree().quit()
+		return
+	gracz.global_position = miejsce
+	gracz.rotation.y = kat
+	gracz.kamera.rotation.x = -0.6
+	var granat := Przedmiot.nowy("granat_f1")
+	Gra.ekw.kieszenie.dodaj(granat)
+	Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("drut"))
+	for _i in 3:
+		await get_tree().physics_frame
+	ekran_ekw._rozciagnij_potykacz(granat)
+	for _i in 460:
+		await get_tree().physics_frame
+	var pots := get_tree().get_nodes_in_group("potykacze")
+	print("  potykacz rozciągnięty: %s" % (pots.size() == 1))
+	if pots.size() != 1:
+		bl += 1
+		print("TEST V14: błędów ", bl)
+		get_tree().quit()
+		return
+	var pot: Potykacz = pots[0]
+	print("  drut %.2f m, kołki %s / %s" % [pot.a.distance_to(pot.b), pot.a, pot.b])
+	gracz.latarka_w_rece = true
+	gracz.latarka_wlaczona = true
+	gracz._odswiez_latarke()
+	gracz.global_position = miejsce - Vector3(-sin(kat), 0, -cos(kat)) * 1.4
+	gracz.kamera.rotation.x = -0.5
+	await _zapisz_kadr(katalog, "potykacz_latarka", 12)
+	print("  błysk drutu w latarce: %.2f" % pot._mat_drut.emission_energy_multiplier)
+	if pot._mat_drut.emission_energy_multiplier <= 0.0:
+		print("  BŁĄD: drut nie łapie światła latarki")
+		bl += 1
+	# wróg bez pancerza przechodzi przez drut (nie zauważył)
+	var wr: Wrog = null
+	for w in wszyscy:
+		if w.pancerz == null and w.helm == null:
+			wr = w
+			break
+	if wr == null:
+		wr = wszyscy[0]
+		wr.pancerz = null
+		wr.helm = null
+	var srodek := (pot.a + pot.b) * 0.5
+	var przod2 := Vector3(-sin(kat), 0, -cos(kat))
+	gracz.global_position = miejsce - przod2 * 12.0
+	gracz.global_position = NavigationServer3D.map_get_closest_point(mapa_n, gracz.global_position)
+	pot._zauwazyli[wr] = false
+	var zab0 := zabici.size()
+	for k in 12:
+		wr.global_position = srodek + przod2 * (1.2 - k * 0.2)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+	wr.global_position = srodek - przod2 * 0.4
+	for _i in 200:
+		await get_tree().physics_frame
+	print("  wróg na drucie: martwy %s, zabici gracza %d → %d, potykacz zniknął %s" % [wr.cialo.martwy, zab0, zabici.size(), not is_instance_valid(pot)])
+	if not wr.cialo.martwy or zabici.size() != zab0 + 1:
+		print("  BŁĄD: potykacz nie zadziałał")
+		bl += 1
+	# --- 2. drugi potykacz – wróg go zauważa i rozbraja (granat do łupu)
+	var zywi: Array = wszyscy.filter(func(w): return is_instance_valid(w) and not w.cialo.martwy)
+	var wr2: Wrog = zywi[0]
+	var pot2 := Potykacz.rozciagnij(swiat, srodek + Vector3(0, 0, 0) - przod2.cross(Vector3.UP) * 0.8, srodek + przod2.cross(Vector3.UP) * 0.8, gracz)
+	gracz.global_position += Vector3(0, 40, 0)
+	gracz.set_physics_process(false)
+	wr2.global_position = NavigationServer3D.map_get_closest_point(mapa_n, srodek + przod2 * 2.0)
+	wr2.stan = "patrol"
+	wr2.set_physics_process(true)
+	print("  szansa zauważenia drutu (patrol): %.2f" % Pulapka.szansa_zauwazenia(wr2, srodek, 0.0))
+	pot2._zauwazyli[wr2] = true
+	pot2._rozbraja = wr2
+	wr2.rozbroj_pulapke(pot2)
+	var lup0: int = wr2.lup.size()
+	for _i in 520:
+		await get_tree().physics_frame
+	print("  wróg rozbroił drut: %s, łup %d → %d" % [not is_instance_valid(pot2), lup0, wr2.lup.size()])
+	if is_instance_valid(pot2) or wr2.lup.size() < lup0 + 2:
+		print("  BŁĄD: wróg nie rozbroił potykacza")
+		bl += 1
+	# --- 3. pułapka na drzwiach zdjęta przez wroga
+	var drz: Drzwi = null
+	var najb := INF
+	for n in swiat.find_children("*", "", true, false):
+		if n is Drzwi and not (n as Drzwi).na_klucz and (n as Drzwi).zamkniete() and absf((n as Drzwi).global_position.y - info["start"].y) < 1.0:
+			var dd := (n as Node3D).global_position.distance_to(wr2.global_position)
+			if dd < najb:
+				najb = dd
+				drz = n
+	# pozostali (zamrożeni) daleko od drzwi – stojący tuż przy skrzydle otworzyłby je i zrzucił szklankę
+	for w in wszyscy:
+		if is_instance_valid(w) and w != wr2 and not w.cialo.martwy and (w as Node3D).global_position.distance_to(drz.global_position) < 4.0:
+			(w as Node3D).global_position += Vector3(0, 30, 0)
+	var pul := Pulapka.zastaw(drz, gracz, -1.0)
+	await get_tree().physics_frame
+	wr2.global_position = NavigationServer3D.map_get_closest_point(mapa_n, drz.global_transform * Vector3(drz.szer * 0.3, 0.05, -1.0))
+	var lup1: int = wr2.lup.size()
+	wr2.stan = "patrol"
+	wr2.rozbroj_pulapke(pul)
+	for _i in 600:
+		await get_tree().physics_frame
+	print("  wróg zdjął szklankę z klamki: %s, drzwi zamknięte %s, łup %d → %d" % [drz.pulapka == null and not is_instance_valid(pul), drz.zamkniete(), lup1, wr2.lup.size()])
+	if drz.pulapka != null or wr2.lup.size() < lup1 + 2:
+		print("  BŁĄD: wróg nie zdjął pułapki")
+		bl += 1
+	wr2.set_physics_process(false)     # dalej nie strzela do gracza (trafienie przerywa czynności)
+	# --- 4. ciało swojego: alarm i poszukiwania
+	var para := []
+	for a in zywi:
+		for b in zywi:
+			if a != b and a.frakcja == b.frakcja and is_instance_valid(a) and is_instance_valid(b) and not a.cialo.martwy and not b.cialo.martwy and a != wr2 and b != wr2:
+				para = [a, b]
+				break
+		if not para.is_empty():
+			break
+	if para.is_empty():
+		print("  (pominięto test ciała – brak pary z jednej frakcji)")
+	else:
+		var ofiara: Wrog = para[0]
+		var swiadek: Wrog = para[1]
+		var pp := NavigationServer3D.map_get_closest_point(mapa_n, srodek + przod2 * 3.0)
+		ofiara.global_position = pp
+		swiadek.global_position = NavigationServer3D.map_get_closest_point(mapa_n, srodek - przod2 * 1.5)
+		swiadek.look_at(Vector3(pp.x, swiadek.global_position.y, pp.z), Vector3.UP)
+		swiadek.rotate_y(PI)
+		swiadek.look_at(Vector3(pp.x, swiadek.global_position.y, pp.z), Vector3.UP)
+		swiadek.stan = "patrol"
+		swiadek._ciala_t = 0.0
+		ofiara._ost_kier = przod2
+		ofiara.cialo.obrazenia("glowa", 999.0, "pocisk")
+		for _i in 30:
+			await get_tree().physics_frame
+		swiadek.set_physics_process(true)
+		for _i in 120:
+			await get_tree().physics_frame
+		print("  świadek ciała: stan %s, widział %s" % [swiadek.stan, swiadek._widziane_ciala.has(ofiara)])
+		if not swiadek._widziane_ciala.has(ofiara) or swiadek.stan != "szukanie":
+			print("  BŁĄD: ciało nie zaalarmowało świadka")
+			bl += 1
+		swiadek.set_physics_process(false)
+	# --- 5. ranny woła oddział
+	var ranny: Wrog = null
+	for w in zywi:
+		if is_instance_valid(w) and not w.cialo.martwy and w.oddzial and (w.oddzial.czlonkowie as Array).filter(func(x): return is_instance_valid(x) and x != w and not x.cialo.martwy).size() > 0:
+			ranny = w
+			break
+	if ranny:
+		var kolega: Wrog = (ranny.oddzial.czlonkowie as Array).filter(func(x): return is_instance_valid(x) and x != ranny and not x.cialo.martwy)[0]
+		kolega.stan = "patrol"
+		ranny.pancerz = null
+		ranny._wolanie_cd = 0.0
+		print("  (ranny przed: martwy %s, procent %.2f)" % [ranny.cialo.martwy, ranny.cialo.procent()])
+		ranny.cialo.krwawienie["nogi"] = 2
+		for _q in 8:
+			if ranny._wolanie_cd > 0.0:
+				break
+			ranny.trafiony("nogi", 1.0, 30.0, wr2, ranny.global_position + Vector3.UP, Vector3.FORWARD)
+		print("  (ranny martwy %s, procent %.2f, krwawi %d, stan %s)" % [ranny.cialo.martwy, ranny.cialo.procent(), ranny.cialo.krwawi(), ranny.stan])
+		print("  ranny woła: cd %.1f, kolega stan %s, cel %s (ranny %s)" % [ranny._wolanie_cd, kolega.stan, kolega.ostatnia_pozycja, ranny.global_position])
+		if ranny._wolanie_cd <= 0.0 or kolega.stan != "szukanie" or kolega.ostatnia_pozycja.distance_to(ranny.global_position) > 0.5:
+			print("  BŁĄD: oddział nie usłyszał rannego")
+			bl += 1
+	# --- 6. mapa w rękach i przytłumienie przy plecaku
+	gracz.set_physics_process(true)
+	gracz.global_position = miejsce
+	await get_tree().physics_frame
+	var mp := Przedmiot.nowy("mapa")
+	Gra.ekw.sloty["util0"] = mp
+	gracz.zacznij_akcje("Mapa", 36000.0, func(): pass, "mapa", 0, Callable(), {"mapa": true})
+	for _i in 30:
+		await get_tree().physics_frame
+	var widac_wczesnie: bool = hud._mapa.visible
+	for _i in 40:
+		await get_tree().physics_frame
+	await _zapisz_kadr(katalog, "mapa_w_rekach", 6)
+	print("  mapa: po 0,5 s widać %s, po 1,2 s widać %s" % [widac_wczesnie, hud._mapa.visible])
+	if widac_wczesnie or not hud._mapa.visible:
+		print("  BŁĄD: mapa w rękach")
+		bl += 1
+	gracz.przerwij_akcje()
+	if Gra.ekw.sloty["plecak"] == null:
+		Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")
+	ekran_ekw.otworz(null)
+	await _klatki(5)
+	ekran_ekw.przelacz_pojemnik("plecak")
+	await get_tree().create_timer(2.5).timeout
+	print("  przytłumienie przy plecaku: %.2f (filtr %.0f Hz)" % [Dzwiek._ekw, Dzwiek._lp.cutoff_hz if Dzwiek._lp else 0.0])
+	if Dzwiek._ekw < 0.9:
+		print("  BŁĄD: świat nie jest przytłumiony")
+		bl += 1
+	ekran_ekw.zamknij()
+	await get_tree().create_timer(1.5).timeout
+	if Dzwiek._ekw > 0.1:
+		print("  BŁĄD: przytłumienie zostało po zamknięciu")
+		bl += 1
+	print("TEST V14: błędów ", bl)
 	get_tree().quit()

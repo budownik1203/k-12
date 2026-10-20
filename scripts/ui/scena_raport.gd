@@ -58,6 +58,12 @@ func _ready() -> void:
 		v.add_child(Motyw.etykieta("Bilans wyposażenia: %+d bonów" % zysk, 15, ciem, Motyw.mono()))
 		if int(r.get("zuzyte_amunicja", 0)) + int(r.get("zuzyte_leki", 0)) > 0:
 			v.add_child(Motyw.etykieta("  w tym zużyte: amunicja ok. %d, leki ok. %d bonów" % [int(r.get("zuzyte_amunicja", 0)), int(r.get("zuzyte_leki", 0))], 13, szary, Motyw.mono()))
+		if int(r.get("zuzycie_suma", 0)) > 0:
+			var zl := Motyw.etykieta("  zużycie sprzętu: %s (razem ok. %d bonów utraty wartości)" % [", ".join(r.get("zuzycie_sprzetu", [])), int(r.get("zuzycie_suma", 0))], 13, szary, Motyw.mono())
+			zl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			v.add_child(zl)
+		if bool(r.get("przezyl", false)):
+			v.add_child(Motyw.etykieta("  Broń wróciła zakurzona – przed kolejnym wyjściem wyczyść ją zestawem (częściej się zacina).", 13, szary))
 		if zysk <= 0:
 			v.add_child(Motyw.etykieta("Uwaga komisji: rajd bez zysku. Obecność odnotowano, entuzjazmu nie.", 13, szary))
 		else:

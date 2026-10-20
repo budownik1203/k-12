@@ -441,6 +441,16 @@ static func _lup(id: String) -> Array:
 			return [_b(Vector3(0, 0.015, 0), Vector3(0.14, 0.03, 0.07), "metal_jasny", 0.006, Color(0.45, 0.5, 0.35)),
 				_w(Vector3(-0.1, 0.006, 0.05), Vector3(0.14, 0.006, 0.05), 0.003, 0.003, "metal_jasny", 6),
 				_w(Vector3(0.06, 0.0, -0.06), Vector3(0.06, 0.03, -0.06), 0.015, 0.015, "mosiadz", 10)]
+		"drut":
+			var cz5 := [_w(Vector3(-0.025, 0.004, -0.05), Vector3(-0.025, 0.004, 0.06), 0.006, 0.003, "drewno", 6),
+				_w(Vector3(0.025, 0.004, -0.05), Vector3(0.025, 0.004, 0.06), 0.006, 0.003, "drewno", 6)]
+			for i in 12:
+				var a1 := float(i) / 12.0 * TAU
+				var a2 := float(i + 1) / 12.0 * TAU
+				for warstwa in 2:
+					var rr := 0.028 + warstwa * 0.004
+					cz5.append(_w(Vector3(cos(a1) * rr, 0.006 + warstwa * 0.003, sin(a1) * rr), Vector3(cos(a2) * rr, 0.006 + warstwa * 0.003, sin(a2) * rr), 0.0016, 0.0016, "metal_jasny", 4, Color(0.5, 0.5, 0.48)))
+			return cz5
 		"szklanka":
 			var szk := Color(0.75, 0.85, 0.85)
 			return [_w(Vector3(0, 0.0, 0), Vector3(0, 0.004, 0), 0.032, 0.032, "metal_jasny", 14, szk),

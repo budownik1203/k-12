@@ -315,7 +315,7 @@ func _odswiez(delta: float) -> void:
 	# interakcja
 	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	# akcja: kółko pod celownikiem (w ekwipunku kółko jest przy kursorze)
-	if not Sterowanie.blokada:
+	if not Sterowanie.blokada and not gracz.akcja.get("mapa", false):
 		_kolko.ustaw_z_gracza(gracz)
 	else:
 		_kolko.visible = false
@@ -334,7 +334,10 @@ func _odswiez(delta: float) -> void:
 		_wyjscia_t -= delta
 		_czas.visible = _wyjscia_t > 0.0
 		if _mapa:
-			_mapa.visible = _wyjscia_t > 0.0 and gracz.ekw.ma_wyposazenie("mapa")
+			# plan widać tylko z mapą w rękach (wyjęcie trwa; z bronią w rękach nic nie widać)
+			_mapa.visible = bool(gracz.akcja.get("mapa", false)) and float(gracz.akcja.get("t", 0.0)) > 0.75
+			if _mapa.visible:
+				_wyjscia_t = maxf(_wyjscia_t, 0.2)
 			if _mapa.visible:
 				_mapa.queue_redraw()
 		if _wyjscia_t > 0.0:

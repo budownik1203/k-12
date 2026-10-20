@@ -145,6 +145,12 @@ def znak(rodzaj, n, kolor, seed):
         d.ellipse([W * 0.08, W * 0.3, W * 0.92, W * 0.7], outline=255, width=lw)
         d.ellipse([W * 0.38, W * 0.36, W * 0.62, W * 0.64], fill=255)
         d.line([(W * 0.5, W * 0.05), (W * 0.5, W * 0.25)], fill=255, width=lw // 2)
+    elif rodzaj == "stopka":
+        # „kurza łapka” szabrowników: trzy palce z jednego punktu i ostroga – podpis ich (fałszywych) strzałek
+        c = (W * 0.5, W * 0.72)
+        for kx, ky in [(0.2, 0.15), (0.5, 0.08), (0.8, 0.15)]:
+            d.line([c, (W * kx, W * ky)], fill=255, width=lw)
+        d.line([c, (W * 0.5, W * 0.95)], fill=255, width=lw)
     elif rodzaj == "radiacja":
         c = W / 2
         for k in range(3):
@@ -318,6 +324,7 @@ def main():
     for i, (rd, k) in enumerate([("czaszka", (25, 22, 20)), ("usmiech", (190, 185, 170)), ("kreski", (25, 22, 20)),
                                   ("oko", (150, 30, 25)), ("radiacja", (180, 150, 30))]):
         elementy.append(("znak_%s" % rd, znak(rd, 64, k, 60 + i), "sciana", 2))
+    elementy.append(("znak_szabrownikow", znak("stopka", 20, (25, 22, 20), 66), "podpis", 0))
     for i in range(2):
         elementy.append(("dziury_%d" % i, dziury(64, 64, 70 + i), "sciana", 3))
     for i in range(2):

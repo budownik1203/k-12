@@ -295,7 +295,7 @@ static func _klamra_cz(c: Vector3, meska := false) -> Dictionary:
 ## Kieszeń przyszyta (plecak albo kamizelka): torba o dnie w `dno`, wylot do góry, przód do +Z.
 ## typ: rzep / zatrzask / guzik (klapa w dwóch częściach nad wylotem i na przodzie), zamek (płaska kieszeń,
 ## suwak w poprzek wylotu), sciagacz (siatka/elastyk ze sznurkiem). Zwraca {"kroki", "dzwieki"}.
-static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k: Color, typ: String, ziarno := 0, odchyl := -2.3) -> Dictionary:
+static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k: Color, typ: String, ziarno := 0, odchyl := -2.3, rolowana := false) -> Dictionary:
 	match typ:
 		"zamek":
 			var tb := torba(a, b, h, k, {"zx": 1.0, "zz": 0.18, "grudy": 0.05, "ziarno": ziarno, "opad": 0.03})
@@ -342,6 +342,23 @@ static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k:
 		_:
 			# rzep: szorstka łata pod klapą (widać po odchyleniu)
 			_mi(n, [_t(Vector3(dno.x, top - dl2 * 0.5, dno.z + b * 0.55 + 0.002), Vector3(a * 1.0, dl2 * 0.6, 0.003), k.darkened(0.35), 0.0)])
+	if rolowana:
+		# kamizelka: klapa nie odchyla się za płytę (znikała), tylko zwija w rulon nad wylotem, tuż nad górną
+		# krawędzią kieszeni i przy płycie – widać, że ładownica jest otwarta, a rulon nie wchodzi na sloty
+		var r := clampf(g * 1.5 + (dl1 + dl2) * 0.08, 0.006, 0.011)
+		var rul := _wezel(n, Vector3(dno.x, top + r + 0.001, dno.z - b + r + 0.001))
+		var kr := k.lightened(0.04)
+		_mi(rul, [{"t": "walec", "a": Vector3(-a - 0.004, 0, 0), "b": Vector3(a + 0.004, 0, 0), "r0": r, "r1": r, "m": "tkanina", "k": kr, "n": 10},
+			# brzeg zwiniętego materiału i szew na rulonie
+			{"t": "walec", "a": Vector3(-a - 0.005, 0, 0), "b": Vector3(-a + 0.002, 0, 0), "r0": r * 0.55, "r1": r * 0.55, "m": "tkanina", "k": kr.darkened(0.3), "n": 8},
+			{"t": "walec", "a": Vector3(a - 0.002, 0, 0), "b": Vector3(a + 0.005, 0, 0), "r0": r * 0.55, "r1": r * 0.55, "m": "tkanina", "k": kr.darkened(0.3), "n": 8},
+			_t(Vector3(0, r * 0.2, r * 0.98), Vector3(a * 1.9, r * 0.5, 0.0015), kr.darkened(0.25), 0.0)])
+		rul.scale = Vector3(1.0, 0.05, 0.05)
+		# zwijanie: klapa idzie w górę i skraca się ku zawiasowi, rulon rośnie
+		return {"kroki": [[[przod, "rotation:x", 0.25, 0.16]],
+			[[zaw, "rotation:x", -1.45, 0.3], [zaw, "scale", Vector3(1.0, 1.0, 0.04), 0.3], [rul, "scale", Vector3.ONE, 0.3]],
+			[[tb3, "blend_shapes/otw", 1.0, 0.3]]],
+			"dzwieki": [dz, "plecak", "plecak"]}
 	return {"kroki": [[[przod, "rotation:x", 0.25, 0.16]], [[zaw, "rotation:x", odchyl, 0.3]], [[tb3, "blend_shapes/otw", 1.0, 0.3]]],
 		"dzwieki": [dz, "plecak", "plecak"]}
 
@@ -613,5 +630,5 @@ static func _kamizelka(id: String, w: float, d: float, kieszenie: Array) -> Dict
 		var a := r.size.x * 0.5 - 0.002
 		var bz := clampf(a * 0.35, 0.008, 0.016) if TYP_LADOWNIC.get(id, "rzep") != "zamek" else 0.006
 		# dno ładownicy: środek dolnej krawędzi; ładownica stoi na płycie (przód +Z)
-		kz.append(_ladownica(n, Vector3(r.get_center().x, r.position.y - r.size.y + 0.002, bz + 0.002), a, bz, hh, k.lightened(0.02), String(e["typ"]), i * 3 + 1, -1.75))
+		kz.append(_ladownica(n, Vector3(r.get_center().x, r.position.y - r.size.y + 0.002, bz + 0.002), a, bz, hh, k.lightened(0.02), String(e["typ"]), i * 3 + 1, -1.75, true))
 	return {"wezel": n, "gora": Vector3(0, 0, 0.01), "kroki": [], "kieszenie": kz}

@@ -42,6 +42,8 @@ var _kick_v := Vector3.ZERO          # sprężyna odrzutu: prędkości (broń sz
 var _kick_rot_v := Vector3.ZERO
 var _seria := 0                      # strzały w bieżącej serii (wzór odrzutu)
 var _seria_t := 0.0
+var _kurz_strzaly := 0.0        # strzały w ostatnich sekundach (zanika) – seria w ciasnym pokoju wzbija kurz
+var _kurz_cd := 0.0
 var _sway := Vector2.ZERO
 var _bob := 0.0
 var _ruch := 0.0
@@ -677,6 +679,8 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	bloom = maxf(0.0, bloom - delta * 2.5)
 	_seria_t += delta
+	_kurz_strzaly = maxf(0.0, _kurz_strzaly - delta * 1.2)
+	_kurz_cd = maxf(0.0, _kurz_cd - delta)
 	if _seria_t > 0.32:
 		_seria = 0
 	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6 and _bieg < 0.35
@@ -834,6 +838,13 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 		gracz.dodaj_odrzut(Vector2((bok + randf_range(-0.18, 0.18)) * sila, sila * (1.0 + minf(_seria, 6) * 0.04)))
 	_seria += 1
 	_seria_t = 0.0
+	_kurz_strzaly += 1.0 if not _bez_plomienia else 0.6
+	if _kurz_strzaly > 7.0 and _kurz_cd <= 0.0 and Dzwiek.akustyka_fn.is_valid():
+		var ak: Dictionary = Dzwiek.akustyka_fn.call(gracz.global_position)
+		var pole := float(ak.get("pole", 400.0))
+		if String(ak.get("typ", "")) != "zewnatrz" and pole < 70.0:
+			_kurz_cd = 4.0
+			Efekty.zawiesina(gracz.get_parent(), gracz.global_position + Vector3.UP * 1.3 - gracz.global_basis.z * 1.2, clampf(1.6 - pole / 70.0, 0.6, 1.4))
 	if _tryb() == "auto":
 		bloom = minf(bloom + 0.35, 3.0)
 	# szarpnięcie broni w widoku (sprężyna): pistolet podbija lufę, karabin wchodzi w ramię, obrzyn – jedno i drugie
@@ -866,7 +877,7 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	# zacięcie: rzadkie, częstsze przy długich seriach (gorąca broń) i w brudnej broni
 	if not bd.has("wewnetrzny") and przedmiot.dane.get("komora", "") != "":
 		var stan_b := float(przedmiot.dane.get("stan", 100.0))
-		var szansa := (0.0035 + bloom * 0.002) * (1.0 + (100.0 - stan_b) / 35.0)
+		var szansa := (0.0035 + bloom * 0.002) * (1.0 + (100.0 - stan_b) / 35.0) * (1.0 + float(przedmiot.dane.get("brud", 0.0)) / 20.0)
 		if randf() < szansa:
 			przedmiot.dane["zaciecie"] = true
 	if ads < 0.5:
@@ -1165,6 +1176,7 @@ var _sway_v := Vector2.ZERO
 var _lok := Vector3.ZERO        # wygładzona prędkość gracza w układzie postaci
 var _oddech_t := 0.0
 var sciana := 0.0               # 0..1 – lufa przy przeszkodzie (broń odsunięta / opuszczona)
+var zmecz_rak := 0.0            # 0..1 – ręce mdleją przy długim celowaniu (stojąc szybciej, podparcie prawie nie męczy)
 var podparcie := 0.0            # 0..1 – broń oparta o parapet, mebel, krawędź ściany (mniejszy odrzut)
 var _sciana_t := 0.0
 
@@ -1324,7 +1336,15 @@ func _process(delta: float) -> void:
 		var celn: float = gracz.cialo.mnoznik_celnosci() if gracz.get("cialo") else 1.0
 		var alk: float = float(gracz.get("alkohol")) if gracz.get("alkohol") != null else 0.0
 		var prz: float = float(gracz.get("przygniecenie")) if gracz.get("przygniecenie") != null else 0.0
-		var amp := 0.0022 * (1.0 + prz * 3.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0 + minf(2.5, alk / 40.0)) * (1.0 - t * 0.6) * (1.0 - podparcie * 0.75)
+		# zmęczenie rąk: przy przyrządach rośnie (ciężka broń, stanie, wychylenie, zadyszka), opada po opuszczeniu
+		if t > 0.6:
+			var ciez := clampf(przedmiot.waga() / 3.5, 0.4, 1.6) if przedmiot else 1.0
+			var poza := lerpf(1.0, 0.55, float(gracz.get("kucanie"))) * (1.0 + absf(float(gracz.get("wychylenie"))) * 0.4)
+			zmecz_rak = minf(1.0, zmecz_rak + delta / 16.0 * ciez * poza * (1.0 + zm) * (1.0 - podparcie * 0.9))
+		else:
+			zmecz_rak = maxf(0.0, zmecz_rak - delta * 0.22)
+		var rece := maxf(0.0, zmecz_rak - 0.3) / 0.7
+		var amp := 0.0022 * (1.0 + prz * 3.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0 + minf(2.5, alk / 40.0) + rece * 2.2) * (1.0 - t * 0.6 * (1.0 - rece * 0.5)) * (1.0 - podparcie * 0.75)
 		poz += Vector3(sin(_oddech_t * 1.1) * amp, sin(_oddech_t * 2.2) * amp * 0.7, 0.0)
 		rot += Vector3(sin(_oddech_t * 2.2 + 0.4) * amp * 1.4, sin(_oddech_t * 1.1 + 0.8) * amp * 1.2, 0.0)
 	# lufa przy przeszkodzie: broń cofnięta i opuszczona (nie przenika przez ścianę), strzał niemożliwy

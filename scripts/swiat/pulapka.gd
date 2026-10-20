@@ -62,8 +62,45 @@ func spust() -> void:
 		queue_free())
 
 
+## Szansa, że wróg zauważy pułapkę: światło przy niej (lampy, latarki najemników), czujność (idzie ostrożnie,
+## szuka) kontra pośpiech walki; wojsko szkolone. Rozstrzygane raz przy podejściu.
+static func szansa_zauwazenia(w, punkt: Vector3, premia := 0.0) -> float:
+	var s := 0.18 + premia
+	var rajd = w.get_tree().get_first_node_in_group("ui_rajdu")
+	if rajd and rajd.has_method("oswietlenie"):
+		s += clampf(float(rajd.oswietlenie(punkt)) - 0.12, 0.0, 1.0) * 0.45
+	match str(w.get("stan")):
+		"czujny", "szukanie":
+			s += 0.15
+		"walka", "ucieczka":
+			s -= 0.15
+	match str(w.get("frakcja")):
+		"wojskowy":
+			s += 0.1
+		"najemnik":
+			s += 0.12          # latarki na broni
+	return clampf(s, 0.05, 0.85)
+
+
+## Wróg skończył rozbrajanie: granat i szklanka w jego łupie.
+func rozbrojony_przez(w) -> void:
+	if _spuszczona:
+		return
+	_spuszczona = true
+	if drzwi:
+		drzwi.pulapka = null
+	w.lup.append(Przedmiot.nowy("granat_f1"))
+	w.lup.append(Przedmiot.nowy("szklanka"))
+	queue_free()
+
+
+func punkt_rozbrajania() -> Vector3:
+	return global_position
+
+
 ## Rozbrojenie (ze strony pułapki): powoli zdjąć szklankę, przytrzymując łyżkę, wsunąć zawleczkę.
 func rozbroj(g) -> void:
+	Gra.emituj_halas(g.global_position, 1.5 if float(g.get("kucanie")) > 0.5 else 3.0, g)
 	g.zacznij_akcje("Rozbrajanie pułapki", 4.5, func():
 		if _spuszczona:
 			return

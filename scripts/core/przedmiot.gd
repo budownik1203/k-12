@@ -158,6 +158,7 @@ func wartosc() -> int:
 		"bron":
 			# zużyta broń jest warta mniej (czyszczenie podnosi wartość)
 			v *= 0.55 + 0.45 * clampf(float(dane.get("stan", 100.0)) / 100.0, 0.0, 1.0)
+			v *= 1.0 - clampf(float(dane.get("brud", 0.0)), 0.0, 30.0) * 0.006   # brudna broń – skupujący to widzą
 			if dane["mag"] != null:
 				v += (dane["mag"] as Przedmiot).wartosc()
 			for dd in dodatki():

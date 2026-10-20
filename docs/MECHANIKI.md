@@ -62,3 +62,16 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Meldunki | stół z mapą w kryjówce pokazuje Sępa i zdarzenia następnego rajdu | ziarno rajdu losowane z wyprzedzeniem i zapisywane |
 | Zaginięcie w akcji | wyjście z gry w trakcie rajdu = utrata sprzętu z rajdu | zamyka exploit „zamknij grę, zachowaj ekwipunek” |
 | Bez „weź wszystko” | celowo pominięte: zarządzanie ekwipunkiem ma być ciężkie i odsłaniać gracza | — |
+
+## Pułapki, ciała i ciężar ekwipunku (v0.14.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Potykacz | granat + drut w poprzek przejścia | ten sam zapalnik co pułapka na drzwiach; wrogowie mogą go zauważyć i zabrać granat – pułapka nie jest pewna |
+| Zauważanie pułapek | szansa wg światła, czujności i frakcji | korzysta z oświetlenia (jak wykrywanie gracza) i stanu AI |
+| Stłuczenie | zatrzymana kula boli kilka sekund | wpięte w ból ciała (drżenie celownika), przeciwbólowe znoszą |
+| Zmęczenie rąk | długie celowanie przez przyrządy | zachęca do podparcia i kucania |
+| Ciała i ranni | alarm przy ciele, wołanie o pomoc | korzysta z alarmu oddziału; ranny to przynęta dla obu stron |
+| Mapa w rękach | plan tylko z kartką w dłoniach | jak inne czynności: odsłania gracza (broń schowana) |
+| Brudna broń | kurz po rajdzie: zacięcia i cena | zestaw czyszczący ma sens także po krótkich rajdach |
+| Niepewne meldunki | przekłamania wg reputacji u Wojska | daje reputacji Wojska wartość poza sklepem |

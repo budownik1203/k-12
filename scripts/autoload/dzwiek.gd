@@ -63,12 +63,26 @@ func _sluchacz() -> Camera3D:
 	return vp.get_camera_3d() if vp else null
 
 
-## Przytłumienie wszystkich dźwięków (ogłuszenie): filtr dolnoprzepustowy na szynie głównej, powoli wraca.
-func przytlum(czas: float, sila: float) -> void:
+var _ekw_cel := 0.0
+var _ekw := 0.0
+
+
+## Głowa w plecaku: przy rozłożonym ekwipunku świat słychać głucho (szelest własnego sprzętu zagłusza resztę).
+func przytlum_ekwipunek(wlacz: bool) -> void:
+	_lp_gotowy()
+	_ekw_cel = 1.0 if wlacz else 0.0
+
+
+func _lp_gotowy() -> void:
 	if _lp == null:
 		_lp = AudioEffectLowPassFilter.new()
 		_lp.cutoff_hz = 20000.0
 		AudioServer.add_bus_effect(0, _lp)
+
+
+## Przytłumienie wszystkich dźwięków (ogłuszenie): filtr dolnoprzepustowy na szynie głównej, powoli wraca.
+func przytlum(czas: float, sila: float) -> void:
+	_lp_gotowy()
 	_przytl_t = maxf(_przytl_t, czas)
 	_przytl_sila = maxf(_przytl_sila, sila)
 
@@ -93,13 +107,15 @@ func _process(delta: float) -> void:
 		_reverb.damping = lerpf(_reverb.damping, _ak_cel["damping"], k)
 	if _lp == null:
 		return
+	_ekw = move_toward(_ekw, _ekw_cel, delta * 2.5)
+	var odc := lerpf(20000.0, 2600.0, _ekw * _ekw)
 	if _przytl_t > 0.0:
 		_przytl_t -= delta
 		var f := clampf(_przytl_t / 1.5, 0.0, 1.0) * _przytl_sila
-		_lp.cutoff_hz = lerpf(20000.0, 500.0, f)
+		_lp.cutoff_hz = minf(odc, lerpf(20000.0, 500.0, f))
 	else:
 		_przytl_sila = 0.0
-		_lp.cutoff_hz = 20000.0
+		_lp.cutoff_hz = odc
 
 
 func _strumien(nazwa: String) -> AudioStream:
@@ -225,3 +241,17 @@ func petla_3d(nazwa: String, rodzic: Node, glosnosc_db := -10.0, zasieg := 8.0) 
 	rodzic.add_child(p)
 	p.play()
 	return p
+
+
+func _exit_tree() -> void:
+	for p in _pula_3d:
+		if is_instance_valid(p):
+			p.stop()
+	for p in _pula_2d:
+		if is_instance_valid(p):
+			p.stop()
+	_pula_3d.clear()
+	_pula_2d.clear()
+	_cache.clear()
+	podloze_fn = Callable()
+	akustyka_fn = Callable()

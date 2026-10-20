@@ -33,7 +33,7 @@ var przerwany_rajd := false   # gra zamknięta w trakcie rajdu: przy wczytaniu �
 func _ready() -> void:
 	# testy automatyczne nie nadpisują zapisu gracza
 	var a := OS.get_cmdline_user_args()
-	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja"):
+	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja") or a.has("--test_v14"):
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
@@ -180,7 +180,8 @@ func rozpocznij_rajd() -> void:
 var _ladowanie: CanvasLayer
 const PRZEMARSZ := ["Przemarsz kanałem burzowym. Szczury salutują.", "Wartownik sprawdza przepustkę dłużej niż zwykle. Też nie wierzy, że wrócisz.",
 	"Mgła nad blokowiskiem gęstnieje. Instrukcja przewiduje mgłę „umiarkowaną”.", "Ostatni papieros przed bramą. Regulamin zabrania, nikt nie pilnuje.",
-	"Licznik Geigera trzeszczy. Zgodnie z normą – w zaokrągleniu.", "Za ogrodzeniem cisza. Nie ta dobra cisza."]
+	"Licznik Geigera trzeszczy. Zgodnie z normą – w zaokrągleniu.", "Za ogrodzeniem cisza. Nie ta dobra cisza.",
+	"Stara prawda strefy: strzałka z kurzą łapką pod spodem prowadzi tam, gdzie czekają szabrownicy."]
 
 
 func pokaz_ladowanie() -> void:
@@ -203,11 +204,31 @@ func pokaz_ladowanie() -> void:
 	v.offset_bottom = 60
 	v.add_theme_constant_override("separation", 10)
 	tlo.add_child(v)
-	v.add_child(Motyw.etykieta("PRZEMARSZ DO STREFY K-12 · ROZKAZ NR %d" % (int(statystyki.get("rajdy", 0))), 20, Motyw.TEKST, Motyw.mono_b()))
+	var t := Motyw.etykieta("PRZEMARSZ DO STREFY K-12 · ROZKAZ NR %d" % maxi(1, int(statystyki.get("rajdy", 0))), 20, Motyw.TEKST, Motyw.mono_b())
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
 	var l := Motyw.etykieta(PRZEMARSZ[randi() % PRZEMARSZ.size()], 15, Motyw.TEKST_CIEMNY)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(l)
-	v.add_child(Motyw.etykieta("…", 15, Motyw.TEKST_CIEMNY, Motyw.mono()))
+	_trasa_l = Motyw.etykieta("", 15, Motyw.TEKST_CIEMNY, Motyw.mono())
+	_trasa_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_trasa_l)
+	etap_ladowania(0)
+
+
+var _trasa_l: Label
+const TRASA := ["Śluza", "Kanał", "Ogrodzenie", "Podwórze", "Strefa"]
+
+
+## Postęp przemarszu: kolejne punkty trasy odpowiadają etapom budowy rajdu.
+func etap_ladowania(n: int) -> void:
+	if _trasa_l == null or not is_instance_valid(_trasa_l):
+		return
+	var cz := []
+	for i in TRASA.size():
+		cz.append(("■ " if i <= n else "□ ") + TRASA[i])
+	_trasa_l.text = "  ─  ".join(cz)
 
 
 ## Rajd gotowy: ekran przemarszu gaśnie.
@@ -250,19 +271,41 @@ static func plan_zdarzen(ziarno: int) -> Array:
 func meldunki() -> Array:
 	var out := []
 	var z := nastepne_ziarno
+	# nasłuch nie zawsze mówi prawdę: wiarygodność rośnie z reputacją u Wojska (to ich radiostacja);
+	# przekłamania są stałe dla danego rajdu (to samo ziarno – ten sam meldunek)
+	var rw := clampf(float(reputacja.get("wojskowy", 0)) / 60.0, 0.0, 1.0)
+	var wiar := 0.55 + 0.4 * rw
+	var rng := RandomNumberGenerator.new()
+	rng.seed = z * 7 + 3
+	out.append("Wiarygodność nasłuchu: %s (reputacja u Wojska)" % ("wysoka" if wiar > 0.85 else ("średnia" if wiar > 0.68 else "niska")))
 	var zlec := false
 	for k in kontrakty.get("aktywne", []):
 		if String(k.get("cel", "")) in ["boss", "niesmiertelnik"]:
 			zlec = true
+	var sep := sep_w_rajdzie(z)
+	if not zlec and rng.randf() > wiar:
+		sep = not sep
 	if zlec:
 		out.append("Masz zlecenie na Sępa – pośrednicy pilnują, żeby był w strefie.")
-	elif sep_w_rajdzie(z):
+	elif sep:
 		out.append("Nasłuch: Sęp i jego ludzie siedzą w strefie.")
 	else:
 		out.append("O Sępie cisza – albo go nie ma, albo siedzi bardzo cicho.")
 	var plan := plan_zdarzen(z)
 	plan.sort_custom(func(a, b): return float(a["t"]) < float(b["t"]))
+	var wpisy := []
 	for e in plan:
+		if rng.randf() > wiar:
+			# przekłamanie: zdarzenie przemilczane albo pora pomylona o kilka minut
+			if rng.randf() < 0.5:
+				continue
+			e = e.duplicate()
+			e["t"] = maxf(60.0, float(e["t"]) + rng.randf_range(-5.0, 5.0) * 60.0)
+		wpisy.append(e)
+	if rng.randf() > wiar + 0.15:
+		# plotka o zdarzeniu, którego nie będzie
+		wpisy.append({"typ": ["awaria", "oblawa", "zrzut"][rng.randi() % 3], "t": rng.randf_range(5.0, 20.0) * 60.0})
+	for e in wpisy:
 		var m := int(float(e["t"]) / 60.0)
 		match String(e["typ"]):
 			"awaria":
@@ -271,7 +314,7 @@ func meldunki() -> Array:
 				out.append("Wojsko szykuje obławę w strefie (ok. %d. minuty)." % m)
 			"zrzut":
 				out.append("Mówią o zrzucie zaopatrzenia (ok. %d. minuty) – samolot nisko nad blokami." % m)
-	if plan.is_empty():
+	if wpisy.is_empty():
 		out.append("Poza tym spokojna noc – bez zapowiedzi.")
 	return out
 
@@ -614,3 +657,8 @@ func odbierz_poczte() -> Array:
 	if not odebrane.is_empty():
 		zapisz()
 	return odebrane
+
+
+## Wyjście z gry: zatrzymanie dźwięków i zwolnienie zasobów współdzielonych (bez wycieków przy zamykaniu).
+func _exit_tree() -> void:
+	Efekty.sprzataj()

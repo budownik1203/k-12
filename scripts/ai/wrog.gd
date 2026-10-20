@@ -640,6 +640,7 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 		rozejm = false
 	var swiat := get_parent() as Node3D
 	if wynik["pancerz"] and not wynik["przebity"]:
+		cialo.siniak = maxf(cialo.siniak, 3.0 + obr * 0.06)   # stłuczenie pod płytą: gorzej celuje
 		Efekty.czastki(swiat, punkt, -kier, Color(0.9, 0.8, 0.5), 6, 3.0)
 		Dzwiek.graj_3d("trafienie_pancerz", punkt, swiat, -2.0)
 	else:
@@ -657,6 +658,16 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 					w.rozejm = false
 		rozejm = false
 	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.8)
+	# ciężko ranny woła o pomoc: swoi biegną do niego (i każdy w okolicy słyszy, gdzie leży)
+	if _wolanie_cd <= 0.0 and (cialo.krwawi() == 2 or cialo.procent() < 0.45) and randf() < 0.7:
+		_wolanie_cd = randf_range(9.0, 14.0)
+		_napis_t = 0.0
+		_napis(["Dostałem! Pomocy!", "Sanitariusz! Tutaj!", "Trafili mnie! Do mnie!", "Krwawię, chłopaki!"].pick_random())
+		Gra.emituj_halas(global_position, 16.0, self)
+		if oddzial:
+			for w in oddzial.czlonkowie:
+				if is_instance_valid(w) and w != self and not w.cialo.martwy and w.stan != "walka":
+					w.alarm_od_oddzialu(global_position)
 	# zachwianie po trafieniu, ale nie w kółko: po nim chwila odporności (inaczej seria = paraliż)
 	if _zachwianie_cd <= 0.0:
 		_zachwianie = minf(0.7, 0.35 + wynik["obr"] * 0.008)
@@ -782,6 +793,11 @@ func _physics_process(delta: float) -> void:
 		_sprawdz_wzrok()
 		_aktualizuj_wykrycie(0.15)
 	_napis_t = maxf(0.0, _napis_t - delta)
+	_wolanie_cd = maxf(0.0, _wolanie_cd - delta)
+	_ciala_t -= delta
+	if _ciala_t <= 0.0:
+		_ciala_t = 0.8
+		_sprawdz_ciala()
 	_przygwozdzenie = maxf(0.0, _przygwozdzenie - delta * 0.6)
 	_zachwianie = maxf(0.0, _zachwianie - delta)
 	_zachwianie_cd = maxf(0.0, _zachwianie_cd - delta)
@@ -922,9 +938,23 @@ func _patrol(delta: float) -> void:
 		_idz(_najblizszy_na_siatce(p))
 
 
-func _szukaj_lupu() -> Node3D:
+## Zauważona pułapka (szklanka na klamce, drut przy ziemi): ostrzega swoich i ją rozbraja – granat zabiera.
+func rozbroj_pulapke(p: Node3D) -> void:
+	if cialo.martwy or stan == "szaber":
+		return
+	_szaber_cel = p
+	_szaber_t = randf_range(4.0, 5.5)
+	stan = "szaber"
+	_napis(["Stój! Granat na klamce!", "Uwaga, drut!", "Pułapka. Nikt nie rusza."].pick_random() if p is Pulapka else ["Uwaga, drut!", "Stać – potykacz.", "Drut przy ziemi!"].pick_random())
+	if oddzial:
+		for w in oddzial.czlonkowie:
+			if is_instance_valid(w) and w != self:
+				w.wykrycie = maxf(float(w.wykrycie), 0.3)
+
+
+func _szukaj_lupu(zasieg := 9.0) -> Node3D:
 	var best: Node3D = null
-	var bd := 9.0
+	var bd := zasieg
 	for n in get_tree().get_nodes_in_group("lup_swiat"):
 		var w := n as Node3D
 		if w == null or not is_instance_valid(w) or w == self or w.is_ancestor_of(self) or self.is_ancestor_of(w):
@@ -949,7 +979,7 @@ func _szaber(delta: float) -> void:
 	if _szaber_cel == null or not is_instance_valid(_szaber_cel):
 		stan = "patrol"
 		return
-	var cel := _szaber_cel.global_position
+	var cel: Vector3 = _szaber_cel.global_position if not _szaber_cel.has_method("punkt_rozbrajania") else _szaber_cel.punkt_rozbrajania()
 	if global_position.distance_to(cel) > 1.1:
 		_kucanie_cel = 0.0
 		_idz(_najblizszy_na_siatce(cel))
@@ -962,6 +992,14 @@ func _szaber(delta: float) -> void:
 	if int(przed * 1.4) != int(_szaber_t * 1.4):
 		Dzwiek.graj_3d("szukanie", global_position + Vector3.UP * 0.4, get_parent(), -8.0, randf_range(0.9, 1.1), 14.0)
 	if _szaber_t > 0.0:
+		return
+	if _szaber_cel is Pulapka or _szaber_cel is Potykacz:
+		_szaber_cel.rozbrojony_przez(self)
+		_napis(["Zawleczka z powrotem. Ktoś tu na nas czekał.", "Granat jest mój.", "Mało brakowało."].pick_random())
+		_szaber_cel = null
+		_kucanie_cel = 0.0
+		stan = "czujny"
+		czas_bez_kontaktu = 0.0
 		return
 	if _szaber_cel is LupNaZiemi:
 		lup.append((_szaber_cel as LupNaZiemi).przedmiot)
@@ -991,8 +1029,70 @@ func _szaber(delta: float) -> void:
 	stan = "patrol"
 
 
+## Po strzelaninie, gdy ucichło: szabrownik idzie obszukać świeże ciała w okolicy (do 14 m).
+func _szaber_po_walce(delta: float) -> bool:
+	if frakcja != "szabrownik" or widzi or czas_bez_kontaktu < 10.0:
+		return false
+	_szaber_skan -= delta
+	if _szaber_skan > 0.0:
+		return false
+	_szaber_skan = randf_range(2.0, 3.5)
+	var cel := _szukaj_lupu(14.0)
+	if cel == null or not (cel is Pojemnik):
+		return false
+	_szaber_cel = cel
+	_szaber_cel.set_meta("szabrowany", self)
+	_szaber_t = randf_range(3.0, 5.0)
+	stan = "szaber"
+	_napis(["Ucichło. Zobaczmy, co mieli.", "Trupom już się nie przyda.", "Szybko, zanim ktoś przyjdzie."].pick_random())
+	return true
+
+
+## Ciało swojego w zasięgu wzroku: alarm oddziału i poszukiwania w stronę, z której padł strzał.
+func _sprawdz_ciala() -> void:
+	if stan not in ["patrol", "czujny", "szukanie"] or poddany:
+		return
+	var oko := _oko()
+	var space := get_world_3d().direct_space_state
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if not (w is Wrog) or w == self or _widziane_ciala.has(w) or str(w.stan) != "martwy" or w.frakcja != frakcja:
+			continue
+		var cp: Vector3 = (w as Node3D).global_position + Vector3.UP * 0.3
+		if w._ragdoll and is_instance_valid(w._ragdoll):
+			cp = w._ragdoll.srodek()
+		var d := oko.distance_to(cp)
+		if d > 14.0:
+			continue
+		var do_ciala := (cp - oko).normalized()
+		if do_ciala.dot(-global_basis.z) < 0.2:
+			continue
+		var q := PhysicsRayQueryParameters3D.create(oko, cp, Balistyka.WARSTWA_SWIAT)
+		if not space.intersect_ray(q).is_empty():
+			continue
+		_widziane_ciala[w] = true
+		var kier: Vector3 = w._ost_kier
+		kier.y = 0.0
+		var skad := cp - (kier.normalized() * randf_range(6.0, 11.0) if kier.length() > 0.01 else Vector3.ZERO)
+		ostatnia_pozycja = _najblizszy_na_siatce(skad)
+		_napis(["Mają naszego!", "Leży... ktoś go sprzątnął.", "Trup! Kryć się!", "To %s! Nie żyje!" % w.nazwa_jednostki.get_slice(" ", 0)].pick_random())
+		stan = "szukanie"
+		_nasluch = false
+		czas_bez_kontaktu = 0.0
+		_trzymaj_t = randf_range(1.5, 3.0)
+		if oddzial:
+			oddzial.alarm(ostatnia_pozycja, self)
+		return
+
+
+var _widziane_ciala := {}
+var _ciala_t := 0.0
+var _wolanie_cd := 0.0
+
+
 func _czujny(delta: float) -> void:
 	biegnie = false
+	if _szaber_po_walce(delta):
+		return
 	_kucanie_cel = 0.3 if cecha == "ostrozny" else 0.0
 	czas_bez_kontaktu += delta
 	if _nasluch:
@@ -1014,6 +1114,8 @@ func _czujny(delta: float) -> void:
 func _szukanie(delta: float) -> void:
 	biegnie = false
 	czas_bez_kontaktu += delta
+	if _szaber_po_walce(delta):
+		return
 	if widzi and wykrycie > 0.6:
 		_wejdz_w_walke()
 		return

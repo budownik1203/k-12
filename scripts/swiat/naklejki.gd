@@ -289,6 +289,20 @@ static func _trasa(space: PhysicsDirectSpaceState3D, sciezka: PackedVector3Array
 				var uv := [Vector2(u0, v1), Vector2(u1, v1), Vector2(u1, v0), Vector2(u0, v0)]
 				var gorne := p0.y > pietro_y - 0.6
 				(kub[1 if gorne else 0] as Kubelki).quad(pts, uv, nrm)
+				if falszywa and el.has("znak_szabrownikow"):
+					# podpis szabrowników przy fałszywej strzałce: mała „kurza łapka” pod końcem drzewca
+					var es: Dictionary = el["znak_szabrownikow"]
+					var ss := Vector2(float(es["m"][0]), float(es["m"][1]))
+					var tyl := -1.0 if id.ends_with("_p") else 1.0
+					var ps: Vector3 = p0 + prawo * tyl * (sz.x * 0.5 - ss.x * 0.5) - Vector3.UP * (sz.y * 0.5 + ss.y * 0.6) + nrm * 0.001
+					var rs: Array = es["rect"]
+					var su0 := float(rs[0]) / A
+					var sv0 := float(rs[1]) / A
+					var su1 := (float(rs[0]) + float(rs[2])) / A
+					var sv1 := (float(rs[1]) + float(rs[3])) / A
+					(kub[1 if gorne else 0] as Kubelki).quad([ps - prawo * ss.x * 0.5 - Vector3.UP * ss.y * 0.5, ps + prawo * ss.x * 0.5 - Vector3.UP * ss.y * 0.5,
+						ps + prawo * ss.x * 0.5 + Vector3.UP * ss.y * 0.5, ps - prawo * ss.x * 0.5 + Vector3.UP * ss.y * 0.5],
+						[Vector2(su0, sv1), Vector2(su1, sv1), Vector2(su1, sv0), Vector2(su0, sv0)], nrm)
 				stan["ile"][1 if gorne else 0] += 1
 				postawione += 1
 				break

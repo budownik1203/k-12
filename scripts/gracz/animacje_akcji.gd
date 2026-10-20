@@ -103,6 +103,17 @@ func zbuduj(p_typ: String, p_id: String, p_amun := "") -> void:
 			_rek["model"] = piv
 			lewa.ustaw_chwyt("magazynek")
 			prawa.ustaw_chwyt("szczypta" if typ == "jedzenie" else "piesc")
+		"mapa":
+			# złożona na pół kartka planu: dwie połówki, linie korytarzy ołówkiem
+			var cz := [Bryly.box(Vector3(-0.06, 0, 0), Vector3(0.12, 0.002, 0.16), "bandaz", 0.0),
+				Bryly.box(Vector3(0.06, 0, 0), Vector3(0.12, 0.002, 0.16), "bandaz", 0.0)]
+			var lin := []
+			for i in 7:
+				lin.append(Bryly.box(Vector3(randf_range(-0.1, 0.1), 0.0015, randf_range(-0.065, 0.065)), Vector3(randf_range(0.02, 0.07), 0.0008, 0.0014), "czern", 0.0))
+				lin.append(Bryly.box(Vector3(randf_range(-0.1, 0.1), 0.0015, randf_range(-0.065, 0.065)), Vector3(0.0014, 0.0008, randf_range(0.02, 0.06)), "czern", 0.0))
+			_rek["mapa"] = _wezel(cz + lin)
+			lewa.ustaw_chwyt("szczypta")
+			prawa.ustaw_chwyt("szczypta")
 		"bolostop":
 			_rek["strzykawka"] = _wezel([
 				Bryly.walec(Vector3(0, 0, 0.05), Vector3(0, 0, -0.06), 0.011, 0.011, "opakowanie", 10),
@@ -202,6 +213,8 @@ func aktualizuj(t: float, czas: float, kroki: int, zrobione: int, wejscie: float
 			_picie(t, f, dol)
 		"bolostop":
 			_bolostop(t, f, dol)
+		"mapa":
+			_mapa(t, dol)
 		_:
 			_apteczka(t, f, dol)
 
@@ -527,6 +540,21 @@ func _ogladaj(t: float, f: float, dol: Vector3) -> void:
 	_uloz(prawa, sr + Vector3(o + 0.06, -0.01 + sin(t * 3.0) * 0.008, 0.02), Vector3(-0.75, 0.15, -0.55), Vector3(0.2, 1.0, 0.3))
 	lewa.celuj_lokiec(Vector3(-0.28, -0.5, 0.0), self)
 	prawa.celuj_lokiec(Vector3(0.28, -0.5, 0.0), self)
+
+
+func _mapa(t: float, dol: Vector3) -> void:
+	# kartka rozkładana w obu dłoniach nisko przed sobą (wzrok w dół na plan); lekko drży w rękach
+	var m: Node3D = _rek["mapa"]
+	var rozl := smoothstep(0.0, 0.7, t)
+	var sr := Vector3(0.0, -0.19 + sin(t * 1.1) * 0.003, -0.36) + dol
+	m.position = sr
+	m.rotation = Vector3(1.05, sin(t * 0.7) * 0.03, sin(t * 0.9) * 0.015)
+	m.scale = Vector3(lerpf(0.5, 1.0, rozl), 1.0, 1.0)
+	var o := 0.12 * lerpf(0.5, 1.0, rozl)
+	_uloz(lewa, sr + Vector3(-o - 0.01, -0.02, 0.03), Vector3(0.9, 0.2, -0.3), Vector3(-0.3, -1.0, 0.1))
+	_uloz(prawa, sr + Vector3(o + 0.01, -0.02, 0.03), Vector3(0.9, -0.2, 0.3), Vector3(0.3, 1.0, 0.1))
+	lewa.celuj_lokiec(Vector3(-0.3, -0.5, 0.05), self)
+	prawa.celuj_lokiec(Vector3(0.3, -0.5, 0.05), self)
 
 
 func _zdejmowanie(t: float, f: float, dol: Vector3) -> void:

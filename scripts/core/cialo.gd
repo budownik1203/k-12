@@ -15,6 +15,7 @@ var hp := {}
 var krwawienie := {}     # część -> 0/1/2
 var zlamanie := {}       # część -> bool
 var przeciwbol := 0.0    # sekundy działania środka przeciwbólowego
+var siniak := 0.0        # sekundy bólu po kuli zatrzymanej przez pancerz (stłuczenie)
 var martwy := false
 var przyczyna := ""
 ## Przeciwnik (NPC): częściej krwawi, pada od szoku przy dużej utracie krwi, zniszczony brzuch zabija.
@@ -125,6 +126,8 @@ func tick(delta: float) -> void:
 			zm = true
 	if przeciwbol > 0.0:
 		przeciwbol = maxf(0.0, przeciwbol - delta)
+	if siniak > 0.0:
+		siniak = maxf(0.0, siniak - delta)
 	if zm:
 		_sprawdz_smierc("wykrwawienie")
 		zmiana.emit()
@@ -140,6 +143,8 @@ func krwawi() -> int:
 func bol() -> bool:
 	if przeciwbol > 0.0:
 		return false
+	if siniak > 0.0:
+		return true
 	for c in MAX:
 		if zlamanie[c] or krwawienie[c] == 2 or hp[c] < MAX[c] * 0.45:
 			return true

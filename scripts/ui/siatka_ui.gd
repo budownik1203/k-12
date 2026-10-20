@@ -312,7 +312,9 @@ func _gui_input(event: InputEvent) -> void:
 		var k := komorka_pod(event.position)
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			for ki in kieszenie.size():
-				if bool(kieszenie[ki]["otwarta"]) and uchwyt_kieszeni(ki).has_point(event.position):
+				# uchwyt „zapnij” w rogu tylko w trybie prostym i tylko na pustej komórce (nie zabiera kliknięć slotom)
+				if proste_kieszenie and bool(kieszenie[ki]["otwarta"]) and uchwyt_kieszeni(ki).has_point(event.position) \
+						and siatka.przedmiot_w(k.x, k.y) == null:
 					_gest = ki
 					gest_start.emit(self, ki, true)
 					accept_event()

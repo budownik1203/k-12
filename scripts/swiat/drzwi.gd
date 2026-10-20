@@ -32,7 +32,8 @@ var _ai_kop_t := 0.0
 var _podsluch_t := 0.0
 var _podsluch_cd := 0.0
 var _szer_skrzydla := 1.1
-var pulapka: Node = null         # Pulapka: granat w szklance na klamce
+var pulapka: Node = null
+var _spr_pulapki := {}           # wróg -> czy zauważył pułapkę (raz przy podejściu)         # Pulapka: granat w szklance na klamce
 
 
 ## Ustawia drzwi w miejscu z generatora: {"p", "n", "w", "h"}.
@@ -401,6 +402,19 @@ func _wrogowie(dt: float) -> void:
 				_ai_kop_t = 1.1
 				_uderzenie(w)
 			continue
+		# pułapka po stronie wroga: może zauważyć szklankę na klamce – wtedy ją zdejmuje zamiast otwierać
+		if pulapka and is_instance_valid(pulapka) and not w.is_in_group("fauna") and w.has_method("rozbroj_pulapke"):
+			if w.get("_szaber_cel") == pulapka and str(w.get("stan")) == "szaber":
+				_ai_czeka.erase(w)
+				continue
+			var ps := 1.0 if (wp - global_position).dot(global_basis.z) > 0.0 else -1.0
+			if ps == float(pulapka.strona):
+				if not _spr_pulapki.has(w):
+					_spr_pulapki[w] = randf() < Pulapka.szansa_zauwazenia(w, pulapka.global_position)
+				if _spr_pulapki[w]:
+					w.rozbroj_pulapke(pulapka)
+					_ai_czeka.erase(w)
+					continue
 		if _ai_czeka[w] > 0.3:
 			var po_stronie := (wp - global_position).dot(global_basis.z) > 0.0
 			_otworz(max_kat, 2.0 if not po_stronie else 1.5, false, w)
