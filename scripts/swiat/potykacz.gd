@@ -80,8 +80,15 @@ func tekst_interakcji(_g) -> String:
 func interakcja(g) -> void:
 	if _spuszczony or g == null:
 		return
-	g.zacznij_akcje("Zdejmowanie potykacza", 4.0, func():
+	var ciemno := Pulapka.swiatlo(self, a + Vector3.UP * 0.1) < 0.3
+	if ciemno:
+		g.komunikat.emit("Po ciemku – zawleczkę trzeba znaleźć palcami. Poświeć latarką, będzie pewniej.")
+	g.zacznij_akcje("Zdejmowanie potykacza" + (" (po ciemku)" if ciemno else ""), 4.0 * (1.8 if ciemno else 1.0), func():
 		if _spuszczony:
+			return
+		if ciemno and randf() < 0.12:
+			g.komunikat.emit("Drut szarpnął – zawleczka wyskoczyła!")
+			spust()
 			return
 		_spuszczony = true
 		for pid in ["granat_f1", "drut"]:

@@ -155,6 +155,9 @@ func _ready() -> void:
 	elif args.has("--soak"):
 		_tryb_testu = "soak"
 		_test_soak.call_deferred(float(args[args.find("--soak") + 1]))
+	elif args.has("--test_v15"):
+		_tryb_testu = "v15"
+		_test_v15.call_deferred(args[args.find("--test_v15") + 1])
 	elif args.has("--test_v14"):
 		_tryb_testu = "v14"
 		_test_v14.call_deferred(args[args.find("--test_v14") + 1])
@@ -782,14 +785,7 @@ func _zakoncz(w: Dictionary) -> void:
 		zu_med += maxf(0.0, float(s0[1]) - float(s1[1]))
 	w["zuzyte_amunicja"] = int(zu_am)
 	w["zuzyte_leki"] = int(zu_med)
-	# zużycie broni i pancerzy, które wróciły (strata wartości ze stanu, nagaru i łat)
-	if w.get("przezyl", false):
-		# kurz strefy: każda wyniesiona broń wraca brudna (więcej po dłuższym rajdzie) – do czyszczenia w kryjówce
-		var brud := clampf(czas / 60.0 * 0.5, 2.0, 14.0)
-		for p in Gra.ekw.wszystkie():
-			if (p as Przedmiot).typ() == "bron":
-				p.dane["brud"] = minf(30.0, float(p.dane.get("brud", 0.0)) + brud)
-				w["brudna_bron"] = true
+	# zużycie broni i pancerzy, które wróciły (strata wartości ze stanu, nagaru i łat – bez kurzu)
 	var zuz := []
 	var zuz_suma := 0
 	for p in Gra.ekw.wszystkie():
@@ -802,6 +798,21 @@ func _zakoncz(w: Dictionary) -> void:
 			zuz_suma += strata
 	w["zuzycie_sprzetu"] = zuz
 	w["zuzycie_suma"] = zuz_suma
+	if w.get("przezyl", false):
+		# kurz strefy: każda wyniesiona broń wraca brudna (więcej po dłuższym rajdzie) – do czyszczenia w kryjówce
+		# kurz: trochę z samego marszu, reszta ze strzelania i pyłu walki (osobno w raporcie – znika po czyszczeniu)
+		var brud := clampf(czas / 60.0 * 0.25, 1.0, 6.0)
+		var przed := 0
+		var po := 0
+		for p in Gra.ekw.wszystkie():
+			if (p as Przedmiot).typ() == "bron":
+				przed += (p as Przedmiot).wartosc()
+				var b := brud + minf(12.0, float(p.dane.get("brud_rajd", 0.0)))
+				p.dane["brud"] = minf(30.0, float(p.dane.get("brud", 0.0)) + b)
+				p.dane.erase("brud_rajd")
+				po += (p as Przedmiot).wartosc()
+				w["brudna_bron"] = true
+		w["strata_kurz"] = przed - po
 	w["zabici"] = zabici
 	w["zdarzenia"] = zdarzenia
 	w["odwiedzone"] = odwiedzone.keys()
@@ -1179,7 +1190,8 @@ func _test_mechanik() -> void:
 		gracz.trafiony(gracz.global_position + Vector3.UP * 0.3, 1.0, 0.0, null)
 		await _klatki(5)
 		var na_ziemi := swiat.get_children().any(func(n): return n is LupNaZiemi and n.przedmiot == p0)
-		ok = (na_ziemi and not pj.siatka.zawiera(p0) if w_dloni else pj.siatka.zawiera(p0)) and not ekran_ekw.otwarty
+		# w dłoni – ląduje na ziemi; już przełożony albo jeszcze nie wzięty – zostaje tam, gdzie był (nie na ziemi)
+		ok = (na_ziemi and not pj.siatka.zawiera(p0) if w_dloni else not na_ziemi) and not ekran_ekw.otwarty
 		print("B trafienie w trakcie: w dłoni %s, na ziemi %s %s" % [w_dloni, na_ziemi, "OK" if ok else "BLAD"])
 		bledy += 0 if ok else 1
 	# C: rosnący stos nie nachodzi na sąsiada
@@ -3755,7 +3767,7 @@ func _test_soak(sek: float) -> void:
 			zywi += 1
 			st[w.stan] = int(st.get(w.stan, 0)) + 1
 			var p: Vector3 = w.global_position
-			if poz.has(w) and (poz[w] as Vector3).distance_to(p) < 0.05 and w.stan in ["szukanie", "szaber", "czujny"]:
+			if poz.has(w) and (poz[w] as Vector3).distance_to(p) < 0.05 and w.stan in ["szukanie", "szaber", "czujny", "patrol"]:
 				stoi[w] = int(stoi.get(w, 0)) + 1
 			else:
 				stoi[w] = 0
@@ -3763,6 +3775,177 @@ func _test_soak(sek: float) -> void:
 		var zawieszeni := stoi.keys().filter(func(k): return is_instance_valid(k) and int(stoi[k]) >= 3)
 		print("SOAK t=%d s: żywi %d, stany %s, stoją w miejscu ≥30 s w ruchliwym stanie: %s, pułapki %d, łup gracza zabici %d" % [int(t), zywi, st,
 			zawieszeni.map(func(k): return "%s/%s/%s" % [k.frakcja, k.stan, k._szaber_cel]), get_tree().get_nodes_in_group("potykacze").size(), zabici.size()])
+	var otw := 0
+	var wszystkie_d := 0
+	for n in swiat.find_children("*", "", true, false):
+		if n is Drzwi:
+			wszystkie_d += 1
+			if not (n as Drzwi).zamkniete():
+				otw += 1
+	print("SOAK drzwi otwarte %d / %d" % [otw, wszystkie_d])
 	print("SOAK KONIEC")
 	Engine.time_scale = 1.0
+	get_tree().quit()
+
+
+
+## Test v0.15: tempo marszu, ciągnięcie zwłok, opatrywanie rannego, pęknięte żebro, kurz a wzrok AI,
+## strącenie pułapki wybuchem, potwierdzony meldunek, hałas zapięć.
+func _test_v15(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	var bl := 0
+	var wszyscy: Array = get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog and not w.cialo.martwy)
+	for w in wszyscy:
+		w.set_physics_process(false)
+		(w as Node3D).global_position += Vector3(0, 50, 0)
+	var mapa_n := swiat.get_world_3d().navigation_map
+	# --- 1. tempo: 3 s marszu przodem (symulowane wejście)
+	gracz.global_position = info["start"]
+	await get_tree().physics_frame
+	Input.action_press("przod")
+	var p0 := gracz.global_position
+	await get_tree().create_timer(3.0).timeout
+	Input.action_release("przod")
+	var dl := Vector2(gracz.global_position.x - p0.x, gracz.global_position.z - p0.z).length()
+	print("  marsz 3 s: %.2f m (%.2f m/s, stała chodu %.2f)" % [dl, dl / 3.0, Gracz.PREDKOSC_CHOD])
+	if dl / 3.0 > Gracz.PREDKOSC_CHOD + 0.05:
+		print("  BŁĄD: za szybki marsz")
+		bl += 1
+	await get_tree().create_timer(0.8).timeout
+	# --- 2. ciągnięcie zwłok
+	var ofiara: Wrog = wszyscy[0]
+	var rng := RandomNumberGenerator.new()
+	ofiara.global_position = NavigationServer3D.map_get_closest_point(mapa_n, gracz.global_position - gracz.global_basis.z * 1.6)
+	ofiara.set_physics_process(true)
+	ofiara.cialo.obrazenia("glowa", 999.0, "pocisk")
+	for _i in 300:
+		await get_tree().physics_frame
+	var pj: Node = null
+	for n in get_tree().get_nodes_in_group("lup_swiat"):
+		if n is Pojemnik and String(n.nazwa).begins_with("Zwłoki") and n.has_meta("ragdoll"):
+			pj = n
+	if pj == null:
+		print("  BŁĄD: brak zwłok z ragdollem")
+		bl += 1
+	else:
+		var rd: Ragdoll = pj.get_meta("ragdoll")
+		var c0 := rd.srodek()
+		gracz.look_at(Vector3(c0.x, gracz.global_position.y, c0.z), Vector3.UP)
+		gracz._zacznij_ciagnac(pj)
+		Input.action_press("tyl")
+		await get_tree().create_timer(0.5).timeout
+		print("  (po 0,5 s: akcja %s, ciągnięte %s, odl %.2f)" % [gracz.akcja.get("nazwa", "-"), gracz._ciagniete, Vector2(rd.srodek().x - gracz.global_position.x, rd.srodek().z - gracz.global_position.z).length()])
+		await get_tree().create_timer(4.0).timeout
+		Input.action_release("tyl")
+		await get_tree().create_timer(0.3).timeout
+		var c1 := rd.srodek()
+		print("  ciągnięcie 4 s: ciało przesunięte o %.2f m, pojemnik za ciałem %.2f m, akcja %s" % [c0.distance_to(c1), (pj as Node3D).global_position.distance_to(c1), gracz.akcja.get("nazwa", "-")])
+		await _zapisz_kadr(katalog, "ciagniecie", 4)
+		if c0.distance_to(c1) < 0.8 or (pj as Node3D).global_position.distance_to(c1) > 0.5:
+			print("  BŁĄD: ciało nie idzie za graczem")
+			bl += 1
+		gracz.przerwij_akcje()
+		await get_tree().create_timer(0.3).timeout
+		if gracz._ciagniete != null:
+			print("  BŁĄD: ciało nie puszczone")
+			bl += 1
+	# --- 3. ranny i kolega z bandażem
+	var para := []
+	for a in wszyscy:
+		if a == ofiara or a.cialo.martwy or not a.oddzial or not a.posterunek.is_empty():
+			continue
+		for b in a.oddzial.czlonkowie:
+			if is_instance_valid(b) and b != a and b != ofiara and not b.cialo.martwy and b.posterunek.is_empty():
+				para = [a, b]
+				break
+		if not para.is_empty():
+			break
+	if para.is_empty():
+		print("  (pominięto opatrywanie – brak oddziału)")
+	else:
+		var ranny: Wrog = para[0]
+		var kol: Wrog = para[1]
+		var gdzie := NavigationServer3D.map_get_closest_point(mapa_n, info["start"] + Vector3(4, 0, 0))
+		ranny.global_position = gdzie
+		kol.global_position = NavigationServer3D.map_get_closest_point(mapa_n, gdzie + Vector3(3, 0, 0))
+		for w in para:
+			w.stan = "patrol"
+		gracz.global_position += Vector3(0, 40, 0)
+		gracz.set_physics_process(false)
+		ranny.cialo.krwawienie["nogi"] = 2
+		ranny._wolanie_cd = 0.0
+		for _q in 8:
+			if ranny._wolanie_cd > 0.0:
+				break
+			ranny.trafiony("nogi", 1.0, 30.0, kol, ranny.global_position + Vector3.UP, Vector3.FORWARD)
+		kol.set_physics_process(true)
+		var pom := kol._pomoc_dla == ranny
+		for _i in 600:
+			await get_tree().physics_frame
+			if ranny.cialo.krwawienie["nogi"] < 2:
+				break
+		print("  (kolega: stan %s, pomoc %s, odl %.1f, pomoc_t %.1f)" % [kol.stan, kol._pomoc_dla, kol.global_position.distance_to(ranny.global_position), kol._pomoc_t])
+		print("  kolega przydzielony %s, krwawienie rannego po opatrzeniu %d" % [pom, ranny.cialo.krwawienie["nogi"]])
+		if not pom or ranny.cialo.krwawienie["nogi"] >= 2:
+			print("  BŁĄD: kolega nie opatrzył rannego")
+			bl += 1
+		kol.set_physics_process(false)
+		gracz.global_position -= Vector3(0, 40, 0)
+		gracz.set_physics_process(true)
+	# --- 4. pęknięte żebro po 3 kulach w płytę
+	Gra.ekw.sloty["pancerz"] = Przedmiot.nowy("kamizelka_kl4")
+	for k in 8:
+		if gracz.cialo.zlamanie["klatka"]:
+			break
+		gracz.trafiony(gracz.global_position + Vector3.UP * 1.3, 40.0, 5.0, null)
+		await get_tree().physics_frame
+	print("  (płyta: trafienia %d, siniak %.1f, pancerz %s wytrz %s)" % [gracz._plyta_t.size(), gracz.cialo.siniak, gracz.ekw.sloty["pancerz"], gracz.ekw.sloty["pancerz"].dane.get("wytrz") if gracz.ekw.sloty["pancerz"] else -1])
+	print("  żebro po 3 zatrzymanych kulach: złamane %s" % gracz.cialo.zlamanie["klatka"])
+	if not gracz.cialo.zlamanie["klatka"]:
+		print("  BŁĄD: brak złamania żebra")
+		bl += 1
+	var szyna := Przedmiot.nowy("szyna")
+	var op := gracz.cialo.lecz("zlamanie", szyna.defn()["med"], szyna, "klatka")
+	print("  szyna na klatkę: %s → złamane %s" % [op, gracz.cialo.zlamanie["klatka"]])
+	if gracz.cialo.zlamanie["klatka"]:
+		bl += 1
+	# --- 5. kurz zasłania wzrok
+	Efekty.zawiesina(swiat, info["start"] + Vector3.UP * 1.3, 1.0)
+	var z := Efekty.zaslona_kurzu(info["start"] + Vector3(-4, 1.5, 0), info["start"] + Vector3(4, 1.3, 0))
+	print("  kurz na linii wzroku: %.2f" % z)
+	if z < 0.3:
+		print("  BŁĄD: kurz nie zasłania")
+		bl += 1
+	# --- 6. wybuch strąca szklankę z pobliskiej klamki
+	var drz: Drzwi = null
+	for n in swiat.find_children("*", "", true, false):
+		if n is Drzwi and (n as Drzwi).zamkniete() and not (n as Drzwi).na_klucz:
+			drz = n
+			break
+	var pul := Pulapka.zastaw(drz, gracz, 1.0)
+	await get_tree().physics_frame
+	gracz.global_position = drz.global_position + Vector3(0, 40, 0)
+	var gr := Granat.rzuc(swiat, pul.global_position + Vector3(1.0, 0.3, 0), Vector3.ZERO, null, Dane.def("granat_f1"))
+	gr.zapalnik = 0.2
+	for _i in 60:
+		await get_tree().physics_frame
+	print("  wybuch obok pułapki: szklanka spadła %s" % (not is_instance_valid(pul) or pul._spuszczona))
+	if is_instance_valid(pul) and not pul._spuszczona:
+		print("  BŁĄD: pułapka nie zareagowała na wybuch")
+		bl += 1
+	# --- 7. meldunek potwierdzony i hałas zapięć
+	Gra.potwierdzone_ziarno = Gra.nastepne_ziarno if Gra.nastepne_ziarno != 0 else 7
+	Gra.nastepne_ziarno = Gra.potwierdzone_ziarno
+	var m := Gra.meldunki()
+	print("  meldunek po sprawdzeniu: %s" % m[0])
+	if not String(m[0]).contains("Pośrednika"):
+		bl += 1
+	var hr: float = ekran_ekw._halas_zapiecia("rzep", 300.0)
+	var hz: float = ekran_ekw._halas_zapiecia("zamek", 300.0)
+	print("  hałas zapięcia (ten sam ruch): rzep %.1f m, zamek %.1f m" % [hr, hz])
+	if hr < hz * 2.5:
+		bl += 1
+	print("TEST V15: błędów ", bl)
 	get_tree().quit()

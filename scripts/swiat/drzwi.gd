@@ -228,6 +228,10 @@ func _physics_process(delta: float) -> void:
 			Dzwiek.graj_3d("drzwi_zamknij", srodek(), get_parent(), -18.0 if _cichy else -4.0, randf_range(0.95, 1.05), 12.0 if _cichy else 30.0)
 			if not _cichy:
 				Gra.emituj_halas(srodek(), 10.0, null)
+				# trzaśnięcie wstrząsa futryną: szklanka na sąsiednich drzwiach może spaść
+				for pu in get_tree().get_nodes_in_group("pulapki"):
+					if is_instance_valid(pu) and pu.drzwi != self and (pu as Node3D).global_position.distance_to(srodek()) < 3.0 and randf() < 0.35:
+						pu.spust()
 	_ai_t -= delta
 	if _ai_t <= 0.0:
 		_ai_t = 0.15
@@ -390,7 +394,12 @@ func _wrogowie(dt: float) -> void:
 			continue
 		var v: Vector3 = w.get("velocity") if w.get("velocity") != null else Vector3.ZERO
 		var stoi_pod := float(_ai_czeka.get(w, 0.0))
-		if v.length() < 0.15 and stoi_pod <= 0.0 and d > 0.9:
+		if w.has_method("chce_przez"):
+			# człowiek otwiera tylko drzwi na swojej drodze (stojąc obok, nie szarpie klamki)
+			if not w.chce_przez(self):
+				_ai_czeka.erase(w)
+				continue
+		elif v.length() < 0.15 and stoi_pod <= 0.0 and d > 0.9:
 			continue
 		_ai_czeka[w] = stoi_pod + dt
 		if na_klucz and zamkniete():

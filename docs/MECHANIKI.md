@@ -75,3 +75,14 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Mapa w rękach | plan tylko z kartką w dłoniach | jak inne czynności: odsłania gracza (broń schowana) |
 | Brudna broń | kurz po rajdzie: zacięcia i cena | zestaw czyszczący ma sens także po krótkich rajdach |
 | Niepewne meldunki | przekłamania wg reputacji u Wojska | daje reputacji Wojska wartość poza sklepem |
+
+## Tempo i ciężar (v0.15.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Wolniejszy marsz | gracz i wrogowie wolniej, ciężkie rozpędzanie | mapy i okna czasowe bez zmian – rajd trwa dłużej, każde przejście korytarza kosztuje |
+| Ciągnięcie zwłok | ukrywanie ciał przed alarmem | korzysta z oświetlenia (ciemny kąt) i drzwi (zasłaniają) |
+| Opatrywanie kolegi | ranny jako przynęta | oddział i wołanie rannego z v0.14 |
+| Impas posterunku | odpuszczenie gniazda | wojna frakcji nie zamraża się na posterunkach |
+| Głośność zapięć | rzep vs zamek | wybór kamizelki = szybkość kontra cisza |
+| Pewny meldunek | Pośrednik za bony | alternatywa dla reputacji u Wojska |

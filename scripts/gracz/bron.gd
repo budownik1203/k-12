@@ -159,8 +159,8 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			(mi as MeshInstance3D).material_override = Kit.material_kolor_vm()
 	_odswiez_mag()
 	stan = "wyciaganie"
-	stan_t = -0.2 if chowaj else 0.0
-	stan_total = 0.45
+	stan_t = -0.35 if chowaj else 0.0
+	stan_total = 0.75 if p and p.defn().get("bron", {}).get("slot", "") == "glowna" else 0.55
 	if ogladanie:
 		stan = "gotowa"
 	zmiana.emit()
@@ -684,7 +684,9 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	if _seria_t > 0.32:
 		_seria = 0
 	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6 and _bieg < 0.35
-	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 6.0 / (1.0 + (zoom() - 1.0) * 0.35))
+	# złożenie do strzału: ciężka broń wolniej (ok. 0,3 s pistolet, 0,4 s karabin z dodatkami)
+	var ciez_ads := clampf(przedmiot.waga() / 3.0, 0.6, 1.5) if przedmiot else 1.0
+	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 4.2 / (ciez_ads * (1.0 + (zoom() - 1.0) * 0.35)))
 	if przedmiot == null:
 		# sama latarka: tylko animacja wyjmowania
 		if stan != "gotowa":
@@ -839,11 +841,14 @@ func _sprobuj_strzal(we: Dictionary) -> void:
 	_seria += 1
 	_seria_t = 0.0
 	_kurz_strzaly += 1.0 if not _bez_plomienia else 0.6
+	# nagar i pył osiadają w mechanizmie: im więcej strzałów w rajdzie, tym brudniejsza wraca
+	przedmiot.dane["brud_rajd"] = float(przedmiot.dane.get("brud_rajd", 0.0)) + 0.05
 	if _kurz_strzaly > 7.0 and _kurz_cd <= 0.0 and Dzwiek.akustyka_fn.is_valid():
 		var ak: Dictionary = Dzwiek.akustyka_fn.call(gracz.global_position)
 		var pole := float(ak.get("pole", 400.0))
 		if String(ak.get("typ", "")) != "zewnatrz" and pole < 70.0:
 			_kurz_cd = 4.0
+			przedmiot.dane["brud_rajd"] = float(przedmiot.dane.get("brud_rajd", 0.0)) + 1.0
 			Efekty.zawiesina(gracz.get_parent(), gracz.global_position + Vector3.UP * 1.3 - gracz.global_basis.z * 1.2, clampf(1.6 - pole / 70.0, 0.6, 1.4))
 	if _tryb() == "auto":
 		bloom = minf(bloom + 0.35, 3.0)

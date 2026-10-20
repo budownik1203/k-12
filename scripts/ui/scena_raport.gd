@@ -34,14 +34,27 @@ func _ready() -> void:
 	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(cc)
 	var kartka := PanelContainer.new()
-	kartka.custom_minimum_size = Vector2(760, 600)
 	var st := Motyw.panel(Color(0.8, 0.76, 0.64), Color(0.35, 0.3, 0.22), 2)
 	st.set_content_margin_all(26)
 	kartka.add_theme_stylebox_override("panel", st)
 	cc.add_child(kartka)
+	# kartka mieści się w oknie: treść przewijana (kółko / pasek), przycisk podpisu zawsze widoczny na dole
+	var dopasuj := func():
+		var wys := root.get_viewport_rect().size.y / maxf(0.01, root.get_global_transform_with_canvas().get_scale().y)
+		kartka.custom_minimum_size = Vector2(760, clampf(wys - 40.0, 360.0, 900.0))
+	dopasuj.call()
+	root.get_viewport().size_changed.connect(dopasuj)
+	var zew := VBoxContainer.new()
+	zew.add_theme_constant_override("separation", 8)
+	kartka.add_child(zew)
+	var przew := ScrollContainer.new()
+	przew.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	przew.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	zew.add_child(przew)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
-	kartka.add_child(v)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	przew.add_child(v)
 	var ciem := Color(0.14, 0.12, 0.09)
 	var szary := Color(0.35, 0.31, 0.25)
 	var przezyl: bool = r.get("przezyl", false)
@@ -54,7 +67,8 @@ func _ready() -> void:
 	v.add_child(Motyw.etykieta("Czas w strefie: %d min %02d s" % [int(czas) / 60, int(czas) % 60], 15, ciem, Motyw.mono()))
 	if przezyl:
 		v.add_child(Motyw.etykieta("Wyjście: %s" % r.get("wyjscie", "?"), 15, ciem, Motyw.mono()))
-		var zysk := int(r.get("zysk", 0))
+		var kurz := int(r.get("strata_kurz", 0))
+		var zysk := int(r.get("zysk", 0)) + kurz
 		v.add_child(Motyw.etykieta("Bilans wyposażenia: %+d bonów" % zysk, 15, ciem, Motyw.mono()))
 		if int(r.get("zuzyte_amunicja", 0)) + int(r.get("zuzyte_leki", 0)) > 0:
 			v.add_child(Motyw.etykieta("  w tym zużyte: amunicja ok. %d, leki ok. %d bonów" % [int(r.get("zuzyte_amunicja", 0)), int(r.get("zuzyte_leki", 0))], 13, szary, Motyw.mono()))
@@ -62,6 +76,8 @@ func _ready() -> void:
 			var zl := Motyw.etykieta("  zużycie sprzętu: %s (razem ok. %d bonów utraty wartości)" % [", ".join(r.get("zuzycie_sprzetu", [])), int(r.get("zuzycie_suma", 0))], 13, szary, Motyw.mono())
 			zl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			v.add_child(zl)
+		if kurz > 0:
+			v.add_child(Motyw.etykieta("  osobno: kurz na broni −%d (wraca po czyszczeniu)" % kurz, 13, szary, Motyw.mono()))
 		if bool(r.get("brudna_bron", false)):
 			v.add_child(Motyw.etykieta("  Broń wróciła zakurzona – przed kolejnym wyjściem wyczyść ją zestawem (częściej się zacina).", 13, szary))
 		if zysk <= 0:
@@ -100,8 +116,15 @@ func _ready() -> void:
 			v.add_child(l)
 	# dopiski z przebiegu rajdu
 	v.add_child(Motyw.etykieta("DOPISKI:", 13, szary, Motyw.mono_b()))
+	# powtarzające się wpisy (kolejne grupy, hałas zwabił faunę) zbite w jeden z licznikiem
+	var zbite := []
+	var ile := {}
 	for d in dopiski(r):
-		var l2 := Motyw.etykieta("— " + d, 14, ciem)
+		if not ile.has(d):
+			zbite.append(d)
+		ile[d] = int(ile.get(d, 0)) + 1
+	for d in zbite:
+		var l2 := Motyw.etykieta("— " + d + (" (×%d)" % int(ile[d]) if int(ile[d]) > 1 else ""), 14, ciem)
 		l2.autowrap_mode = TextServer.AUTOWRAP_WORD
 		v.add_child(l2)
 	var sp := Control.new()
@@ -127,7 +150,7 @@ func _ready() -> void:
 	var b := Button.new()
 	b.text = "Podpisz i wróć do bazy"
 	b.pressed.connect(func(): Gra.idz_do_bazy())
-	v.add_child(b)
+	zew.add_child(b)
 	Dzwiek.graj("pieczatka", 0.0)
 	var args := OS.get_cmdline_user_args()
 	for flaga in ["--zrzuty", "--zrzuty_raport"]:

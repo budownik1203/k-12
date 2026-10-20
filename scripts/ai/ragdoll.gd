@@ -131,6 +131,19 @@ static func z_postaci(swiat: Node3D, czesci: Dictionary, predkosc: Vector3, kier
 func _physics_process(delta: float) -> void:
 	if zamrozony:
 		return
+	if ciagnie_do != Vector3.INF and bryly.has("tulow"):
+		# kołnierz w dłoni: tułów (górą) ciągnięty do punktu za graczem, nogi wloką się po podłodze
+		var t: RigidBody3D = bryly["tulow"]
+		var d := ciagnie_do - t.global_position
+		var v := (d * 6.0).limit_length(1.8)
+		# całe ciało sunie za tułowiem (inaczej nogi tarciem kotwiczą je w miejscu); kończyny lżej
+		for k in bryly:
+			var rb: RigidBody3D = bryly[k]
+			var w := 1.0 if k in ["tulow", "biodra", "glowa"] else 0.75
+			rb.linear_velocity = rb.linear_velocity.lerp(Vector3(v.x, minf(v.y, 0.5) if k == "tulow" else rb.linear_velocity.y, v.z) * w, 0.5)
+		if pojemnik and is_instance_valid(pojemnik):
+			pojemnik.global_position = t.global_position
+		return
 	_t += delta
 	var ruch := 0.0
 	for b in bryly.values():
@@ -159,8 +172,35 @@ func srodek() -> Vector3:
 	return global_position
 
 
+## Ciągnięcie za kołnierz: ciało odmarza, tułów idzie za dłonią gracza (reszta ciągnie się na przegubach).
+var ciagnie_do := Vector3.INF
+
+
+func ciagnij(cel: Vector3) -> void:
+	if zamrozony:
+		zamrozony = false
+		for b in bryly.values():
+			(b as RigidBody3D).freeze = false
+		set_physics_process(true)
+	if ciagnie_do == Vector3.INF:
+		for b in bryly.values():
+			((b as RigidBody3D).physics_material_override as PhysicsMaterial).friction = 0.3
+	ciagnie_do = cel
+	_t = 0.0
+	_spokoj = 0.0
+
+
+func pusc() -> void:
+	for b in bryly.values():
+		((b as RigidBody3D).physics_material_override as PhysicsMaterial).friction = 0.9
+	ciagnie_do = Vector3.INF
+	_t = 0.0
+	_spokoj = 0.0
+
+
 ## Pola interakcji: każda bryła prowadzi do zwłok.
 func ustaw_pojemnik(pj: Node3D) -> void:
 	pojemnik = pj
+	pj.set_meta("ragdoll", self)
 	for b in bryly.values():
 		(b as Node).set_meta("interakcja", pj)

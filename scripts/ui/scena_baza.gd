@@ -562,11 +562,29 @@ func pokaz_wyjscie() -> void:
 	_wyjscie_ui.add_child(cc)
 	var p := PanelContainer.new()
 	p.custom_minimum_size = Vector2(560, 0)
-	p.add_theme_stylebox_override("panel", Motyw.panel(Color(0.78, 0.74, 0.62), Color(0.3, 0.26, 0.2), 2))
+	var stp := Motyw.panel(Color(0.78, 0.74, 0.62), Color(0.3, 0.26, 0.2), 2)
+	stp.set_content_margin_all(18)
+	p.add_theme_stylebox_override("panel", stp)
 	cc.add_child(p)
+	# rozkaz przewijany (zlecenia, ostrzeżenia, meldunki potrafią zająć więcej niż okno); przyciski zawsze na dole
+	var zew := VBoxContainer.new()
+	zew.add_theme_constant_override("separation", 8)
+	p.add_child(zew)
+	var przew := ScrollContainer.new()
+	przew.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	zew.add_child(przew)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
-	p.add_child(v)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	przew.add_child(v)
+	var dopasuj := func():
+		if not is_instance_valid(przew):
+			return
+		var skala := maxf(0.01, przew.get_global_transform_with_canvas().get_scale().y)
+		var maks := przew.get_viewport_rect().size.y / skala - 140.0
+		przew.custom_minimum_size = Vector2(0, clampf(v.get_combined_minimum_size().y, 120.0, maxf(200.0, maks)))
+	v.minimum_size_changed.connect(dopasuj)
+	dopasuj.call_deferred()
 	var ciemny := Color(0.15, 0.13, 0.1)
 	v.add_child(Motyw.etykieta("ROZKAZ WYJŚCIA DO STREFY NR %d/K-12" % (Gra.statystyki["rajdy"] + 1), 20, ciemny, Motyw.mono_b()))
 	v.add_child(Motyw.etykieta("Obszar: Biom 1 – Blokowisko (przedmieścia, osiedle z wielkiej płyty)", 14, ciemny))
@@ -606,7 +624,10 @@ func pokaz_wyjscie() -> void:
 		v.add_child(Motyw.etykieta("Rozejm (nie strzelają pierwsi): " + ", ".join(rozejmy), 13, ciemny, Motyw.mono()))
 	var akt: Array = Gra.kontrakty.get("aktywne", [])
 	for k in akt:
-		v.add_child(Motyw.etykieta("Zlecenie: " + String(k["opis"]), 13, ciemny, Motyw.mono()))
+		var lz := Motyw.etykieta("Zlecenie: " + String(k["opis"]), 13, ciemny, Motyw.mono())
+		lz.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lz.custom_minimum_size = Vector2(520, 0)
+		v.add_child(lz)
 	if MebleKryjowki.ma_funkcje(Gra.kryjowka, "meldunki"):
 		for linia in Gra.meldunki():
 			var lm := Motyw.etykieta("Meldunek: " + linia, 13, Color(0.2, 0.3, 0.45), Motyw.mono())
@@ -616,7 +637,7 @@ func pokaz_wyjscie() -> void:
 	v.add_child(Motyw.etykieta("Wszystko, co masz przy sobie, możesz stracić.", 13, Color(0.35, 0.3, 0.25)))
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
-	v.add_child(h)
+	zew.add_child(h)
 	var go := Button.new()
 	go.text = "Wejdź do strefy"
 	go.pressed.connect(func():

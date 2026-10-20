@@ -315,7 +315,7 @@ func _odswiez(delta: float) -> void:
 	# interakcja
 	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	# akcja: kółko pod celownikiem (w ekwipunku kółko jest przy kursorze)
-	if not Sterowanie.blokada and not gracz.akcja.get("mapa", false):
+	if not Sterowanie.blokada and not gracz.akcja.get("mapa", false) and not gracz.akcja.get("ciagniecie", false):
 		_kolko.ustaw_z_gracza(gracz)
 	else:
 		_kolko.visible = false

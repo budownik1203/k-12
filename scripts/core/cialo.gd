@@ -172,6 +172,8 @@ func mnoznik_celnosci() -> float:
 		m *= 2.0
 	elif zlamanie["rece"] and przeciwbol <= 0.0:
 		m *= 1.5
+	if zlamanie["klatka"] and przeciwbol <= 0.0:
+		m *= 1.15          # pęknięte żebro: każdy oddech szarpie celownikiem
 	if bol():
 		m *= 1.35
 	return m
@@ -196,10 +198,12 @@ func lecz(efekt: String, dane: Dictionary, med: Przedmiot, czesc := "") -> Strin
 						zmiana.emit()
 						return "Zatamowano krwawienie (%s)" % NAZWY[c].to_lower()
 		"zlamanie":
-			for c in ["nogi", "rece"]:
+			for c in ["nogi", "rece", "klatka"]:
 				if zlamanie[c] and c in czesci:
 					zlamanie[c] = false
 					zmiana.emit()
+					if c == "klatka":
+						return "Żebra usztywnione – oddech wraca"
 					return "Unieruchomiono złamanie (%s)" % NAZWY[c].to_lower()
 		"bol":
 			przeciwbol = float(dane.get("trwanie", 180))

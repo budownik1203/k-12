@@ -14,7 +14,7 @@ const AKCJE := {
 	"bron1": [KEY_1], "bron2": [KEY_2], "bron3": [KEY_3], "tryb": [KEY_B], "sprawdz": [KEY_T], "skok": [KEY_SPACE],
 	"pasek1": [KEY_4], "pasek2": [KEY_5], "pasek3": [KEY_6], "pasek4": [KEY_7], "pasek5": [KEY_8], "pasek6": [KEY_9],
 	"przerwij": [KEY_X], "wyrzuc": [KEY_DELETE, KEY_BACKSPACE], "zegarek": [KEY_H], "ogladaj": [KEY_J],
-	"pauza": [KEY_ESCAPE], "pomoc": [KEY_F1], "napelnij": [KEY_G], "granat": [KEY_G], "wyjscia": [KEY_O],
+	"pauza": [KEY_ESCAPE], "pomoc": [KEY_F1], "napelnij": [KEY_G], "granat": [KEY_G], "wyjscia": [KEY_O], "ciagnij": [KEY_Z],
 }
 
 

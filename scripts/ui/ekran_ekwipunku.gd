@@ -1923,6 +1923,14 @@ func _uchwyt_pod(m: Vector2) -> Dictionary:
 	return best
 
 
+## Zasięg hałasu zapięcia (m): rzep drze się głośno nawet powoli (słychać przez pokój), zamek i guzik cicho.
+## Wybór kamizelki to wybór między szybkim rzepem a cichym zamkiem.
+static func _halas_zapiecia(dz: String, szybkosc: float) -> float:
+	var baza: float = {"rzep": 4.5, "zamek": 1.2, "klik": 1.0}.get(dz, 1.4)
+	var szyb: float = {"rzep": 1.0 / 200.0, "zamek": 1.0 / 500.0, "klik": 1.0 / 600.0}.get(dz, 1.0 / 400.0)
+	return baza * (1.0 + szybkosc * szyb)
+
+
 ## Prostokąt slotów kieszeni na ekranie.
 func _rect_kieszeni(gui: SiatkaUI, e: Dictionary) -> Rect2:
 	var rr: Rect2i = e["r"]
@@ -2040,11 +2048,11 @@ func _ciagnij_uchwyt(m: Vector2) -> void:
 			"zamek":
 				Dzwiek.graj("zamek", gl, randf_range(0.9, 1.15))
 			"rzep":
-				Dzwiek.graj("rzep", gl + 2.0, randf_range(0.9, 1.1))
+				Dzwiek.graj("rzep", maxf(gl, -12.0) + 4.0, randf_range(0.9, 1.1))
 			_:
 				Dzwiek.graj("plecak", gl - 4.0, randf_range(1.1, 1.4))
 		if gracz:
-			Gra.emituj_halas(gracz.global_position, (1.0 + szybkosc / 300.0) * (1.6 if dz == "rzep" else 1.0), gracz)
+			Gra.emituj_halas(gracz.global_position, _halas_zapiecia(dz, szybkosc), gracz)
 	var koniec := (f >= 1.0 and not zam) or (f <= 0.0 and zam)
 	if koniec:
 		# krok domknięty: wyraźny dźwięk końca (suwak dojechał, klapa przylgnęła), chwyt puszczony
@@ -2198,11 +2206,11 @@ func _gest_ruch(ui: SiatkaUI, i: int, rel: Vector2, co: String) -> void:
 			"zamek":
 				Dzwiek.graj("zamek", gl, randf_range(0.9, 1.15))
 			"rzep":
-				Dzwiek.graj("rzep", gl + 2.0, randf_range(0.9, 1.1))
+				Dzwiek.graj("rzep", maxf(gl, -12.0) + 4.0, randf_range(0.9, 1.1))
 			_:
 				Dzwiek.graj("plecak", gl - 4.0, randf_range(1.1, 1.4))
 		if gracz:
-			Gra.emituj_halas(gracz.global_position, (1.0 + szybkosc / 300.0) * (1.6 if dz == "rzep" else 1.0), gracz)
+			Gra.emituj_halas(gracz.global_position, _halas_zapiecia(dz, szybkosc), gracz)
 	_sprawdz_koniec(ui, e, co, i)
 	_podpowiedz(e, co, i)
 	ui.queue_redraw()

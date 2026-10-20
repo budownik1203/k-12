@@ -602,6 +602,8 @@ func _wybierz_cel() -> void:
 	for n in kandydaci:
 		if not (n is Node3D) or not wrogi(n) or not _zywy(n):
 			continue
+		if float(_odpuszczone.get(n, 0.0)) > Time.get_ticks_msec() / 1000.0:
+			continue          # odpuścił ten posterunek – na razie go omija
 		var d := global_position.distance_to((n as Node3D).global_position)
 		if d > 32.0:
 			continue
@@ -665,9 +667,18 @@ func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vecto
 		_napis(["Dostałem! Pomocy!", "Sanitariusz! Tutaj!", "Trafili mnie! Do mnie!", "Krwawię, chłopaki!"].pick_random())
 		Gra.emituj_halas(global_position, 16.0, self)
 		if oddzial:
+			var najb: Node = null
+			var nd := INF
 			for w in oddzial.czlonkowie:
 				if is_instance_valid(w) and w != self and not w.cialo.martwy and w.stan != "walka":
 					w.alarm_od_oddzialu(global_position)
+					var dw: float = (w as Node3D).global_position.distance_to(global_position)
+					if w._pomoc_dla == null and dw < nd:
+						nd = dw
+						najb = w
+			if najb:
+				najb._pomoc_dla = self      # najbliższy wolny kolega idzie opatrzyć
+				najb._pomoc_t = 0.0
 	# zachwianie po trafieniu, ale nie w kółko: po nim chwila odporności (inaczej seria = paraliż)
 	if _zachwianie_cd <= 0.0:
 		_zachwianie = minf(0.7, 0.35 + wynik["obr"] * 0.008)
@@ -867,6 +878,8 @@ func _aktualizuj_wykrycie(dt: float) -> void:
 			tempo *= 1.6     # obcy w walce są głośni i nie kryją się
 		if stan in ["walka", "szukanie"]:
 			tempo *= 3.0
+		# kurz w powietrzu (seria w ciasnym pokoju) zasłania sylwetkę
+		tempo *= 1.0 - 0.65 * Efekty.zaslona_kurzu(_oko(), gracz.global_position + Vector3.UP * 1.2)
 		wykrycie = minf(1.0, wykrycie + tempo * dt)
 		if wykrycie >= 1.0:
 			ostatnia_pozycja = gracz.global_position
@@ -955,6 +968,19 @@ func rozbroj_pulapke(p: Node3D) -> void:
 				w.wykrycie = maxf(float(w.wykrycie), 0.3)
 
 
+## Czy droga prowadzi przez te drzwi (otwiera tylko te, przez które naprawdę idzie – nie każde, przy których stoi).
+func chce_przez(d: Node3D) -> bool:
+	if _agent == null or _agent.is_navigation_finished() or cel_ruchu == Vector3.ZERO:
+		return false
+	var z := d.global_basis.z
+	var moja := signf((global_position - d.global_position).dot(z))
+	var nast := _agent.get_next_path_position()
+	if signf((nast - d.global_position).dot(z)) != moja and absf((nast - d.global_position).dot(z)) > 0.05:
+		return true
+	return signf((cel_ruchu - d.global_position).dot(z)) != moja and cel_ruchu.distance_to(d.global_position) < 25.0 \
+		and nast.distance_to(d.global_position) < 1.6
+
+
 func _szukaj_lupu(zasieg := 9.0) -> Node3D:
 	var best: Node3D = null
 	var bd := zasieg
@@ -1015,12 +1041,18 @@ func _szaber(delta: float) -> void:
 	if _szaber_t > 0.0:
 		return
 	if _szaber_cel is Pulapka or _szaber_cel is Potykacz:
+		var gdzie: Vector3 = _szaber_cel.punkt_rozbrajania()
 		_szaber_cel.rozbrojony_przez(self)
 		_napis(["Zawleczka z powrotem. Ktoś tu na nas czekał.", "Granat jest mój.", "Mało brakowało."].pick_random())
 		_szaber_cel = null
 		_kucanie_cel = 0.0
-		stan = "czujny"
+		# ktoś zastawił pułapkę niedawno – jest gdzieś w okolicy: oddział przeczesuje teren
+		ostatnia_pozycja = _najblizszy_na_siatce(gdzie + Vector3(randf_range(-6, 6), 0, randf_range(-6, 6)))
+		stan = "szukanie"
+		_trzymaj_t = 1.5
 		czas_bez_kontaktu = 0.0
+		if oddzial:
+			oddzial.alarm(ostatnia_pozycja, self)
 		return
 	if _szaber_cel is LupNaZiemi:
 		lup.append((_szaber_cel as LupNaZiemi).przedmiot)
@@ -1090,6 +1122,13 @@ func _sprawdz_ciala() -> void:
 		var q := PhysicsRayQueryParameters3D.create(oko, cp, Balistyka.WARSTWA_SWIAT)
 		if not space.intersect_ray(q).is_empty():
 			continue
+		# ciało w ciemnym kącie widać tylko z bliska (albo w świetle latarki na broni)
+		if menedzer and menedzer.rajd and menedzer.rajd.has_method("oswietlenie"):
+			var sw: float = menedzer.rajd.oswietlenie(cp)
+			if _latarka and _latarka.visible:
+				sw = maxf(sw, 0.8)
+			if d > lerpf(2.5, 14.0, clampf((sw - 0.1) / 0.5, 0.0, 1.0)):
+				continue
 		_widziane_ciala[w] = true
 		var kier: Vector3 = w._ost_kier
 		kier.y = 0.0
@@ -1132,9 +1171,52 @@ func _czujny(delta: float) -> void:
 		_napis(["Pewnie szczury.", "Nic tu nie ma."].pick_random())
 
 
+var _odpuszczone := {}          # posterunek -> czas (s), do którego go nie atakuje (impas)
+var _pomoc_dla: Node = null      # ranny kolega, którego idzie opatrzyć
+var _pomoc_t := 0.0
+
+
+## Kolega przy rannym: przyklęka i opatruje go (kilka sekund bez strzelania – okazja dla przeciwnika).
+func _pomagaj(delta: float) -> bool:
+	if _pomoc_dla == null:
+		return false
+	var r = _pomoc_dla
+	if not is_instance_valid(r) or r.cialo.martwy or r.cialo.krwawi() == 0 or (widzi and wykrycie > 0.6):
+		_pomoc_dla = null
+		_pomoc_t = 0.0
+		_kucanie_cel = 0.0
+		return false
+	var rp: Vector3 = (r as Node3D).global_position
+	if Vector2(rp.x - global_position.x, rp.z - global_position.z).length() > 1.2:
+		_idz(_najblizszy_na_siatce(rp))
+		biegnie = true
+		_pomoc_t += delta * 0.2
+		if _pomoc_t > 6.0:
+			_pomoc_dla = null    # nie dojdzie
+		return true
+	_idz(global_position)
+	biegnie = false
+	_kucanie_cel = 1.0
+	_obroc_do(rp, delta, 3.0)
+	if _pomoc_t < 1.0:
+		_pomoc_t = 1.0
+		_napis(["Trzymaj się, opatrzę!", "Leż, nie ruszaj się!", "Bandaż! Uciskaj tu!"].pick_random())
+	_pomoc_t += delta
+	if _pomoc_t > 6.5:
+		for c in r.cialo.krwawienie:
+			r.cialo.krwawienie[c] = maxi(0, int(r.cialo.krwawienie[c]) - 1)
+		Dzwiek.graj_3d("plecak", rp + Vector3.UP * 0.4, get_parent(), -12.0, 1.3, 10.0)
+		_pomoc_dla = null
+		_pomoc_t = 0.0
+		_kucanie_cel = 0.0
+	return true
+
+
 func _szukanie(delta: float) -> void:
 	biegnie = false
 	czas_bez_kontaktu += delta
+	if _pomagaj(delta):
+		return
 	if _szaber_po_walce(delta):
 		return
 	if widzi and wykrycie > 0.6:
@@ -1490,6 +1572,24 @@ func _walka(delta: float) -> void:
 		czas_bez_kontaktu = 0.0
 		_napis(["Spadam stąd!", "Odwrót!", "Nie płacą mi za to!"].pick_random())
 		return
+	# impas: długa wymiana ognia z okopanym posterunkiem nic nie daje – oddział odpuszcza i odchodzi
+	if gracz is Wrog and not (gracz as Wrog).posterunek.is_empty() and posterunek.is_empty() and _czas_walki > 75.0:
+		_odpuszczone[gracz] = Time.get_ticks_msec() / 1000.0 + 120.0
+		_napis(["Nie przejdziemy tędy. Odwrót!", "Okopali się. Szkoda ludzi – wycofać się!", "Obchodzimy to gniazdo!"].pick_random())
+		if oddzial:
+			for w in oddzial.czlonkowie:
+				if is_instance_valid(w) and w != self and not w.cialo.martwy:
+					w._odpuszczone[gracz] = _odpuszczone[gracz]
+					if w.gracz == gracz:
+						w.gracz = null
+						w.stan = "patrol"
+		var od: Vector3 = global_position + (global_position - (gracz as Node3D).global_position).normalized() * 14.0
+		gracz = null
+		_czas_walki = 0.0
+		stan = "patrol"
+		_idz(_najblizszy_na_siatce(od))
+		_patrol_t = 8.0
+		return
 	_obroc_do(ostatnia_pozycja, delta, 4.5)
 	# przeładowanie za osłoną
 	if _przeladowanie > 0.0:
@@ -1719,6 +1819,7 @@ func _strzelaj(delta: float) -> void:
 	kat *= cialo.mnoznik_celnosci()
 	# pierwsze strzały są nerwowe i niecelne, potem przeciwnik się "wstrzeliwuje"
 	kat *= lerpf(2.2, 1.0, clampf(_czas_walki / 3.5, 0.0, 1.0)) * (1.0 + _przygwozdzenie)
+	kat *= 1.0 + 1.5 * Efekty.zaslona_kurzu(_oko(), gracz.global_position + Vector3.UP * 1.2)   # strzela w kurz
 	if _kuc(gracz) > 0.5:
 		kat *= 1.15
 	var srut := int(ad.get("srut", 1))
@@ -1791,7 +1892,7 @@ func _obroc_do(p: Vector3, delta: float, szybkosc: float) -> void:
 
 func _ruch(delta: float) -> void:
 	var v := Vector3.ZERO
-	var predkosc := (3.7 if biegnie else 1.55) * cialo.mnoznik_ruchu() * lerpf(1.0, 0.5, kucanie)
+	var predkosc := (3.1 if biegnie else 1.2) * cialo.mnoznik_ruchu() * lerpf(1.0, 0.5, kucanie)
 	if not _agent.is_navigation_finished() and cel_ruchu != Vector3.ZERO:
 		var nast := _agent.get_next_path_position()
 		var d := nast - global_position
@@ -1799,7 +1900,7 @@ func _ruch(delta: float) -> void:
 		if d.length() > 0.05:
 			v = d.normalized() * predkosc
 			if stan != "walka" or not widzi:
-				_obroc_do(global_position + d, delta, 3.2)
+				_obroc_do(global_position + d, delta, 2.4)
 	elif _w_oslonie == false and stan == "walka" and not _oslona.is_empty():
 		if global_position.distance_to(_oslona["pos"]) < 0.9:
 			_w_oslonie = true
@@ -1807,7 +1908,7 @@ func _ruch(delta: float) -> void:
 	if not _oslona.is_empty() and global_position.distance_to(_oslona["pos"]) < 0.9:
 		_w_oslonie = true
 	# ciężki ruch: powolne rozpędzanie i hamowanie z wyposażeniem na plecach
-	var przysp := 9.0 if v.length() > Vector2(velocity.x, velocity.z).length() else 14.0
+	var przysp := 5.0 if v.length() > Vector2(velocity.x, velocity.z).length() else 9.0
 	velocity.x = move_toward(velocity.x, v.x, delta * przysp)
 	velocity.z = move_toward(velocity.z, v.z, delta * przysp)
 	if not is_on_floor():

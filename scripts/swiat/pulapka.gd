@@ -17,6 +17,7 @@ static func zastaw(d: Drzwi, g: Node, strona_z: float) -> Pulapka:
 	p.wlasciciel = g
 	p.strona = strona_z
 	d.skrzydlo.add_child(p)
+	p.add_to_group("pulapki")
 	# klamka: przy krawędzi skrzydła po stronie zamka, wysokość ok. 1 m nad podłogą
 	var lh := d.wys - 0.05 - 0.012
 	p.position = Vector3(d._szer_skrzydla * 0.5 - 0.13, 1.0 - (lh * 0.5 + 0.006) - 0.06, strona_z * (Drzwi.GR * 0.5 + 0.045))
@@ -99,10 +100,23 @@ func punkt_rozbrajania() -> Vector3:
 
 
 ## Rozbrojenie (ze strony pułapki): powoli zdjąć szklankę, przytrzymując łyżkę, wsunąć zawleczkę.
+## Ile światła przy pułapce (latarka gracza też się liczy): po ciemku palce szukają łyżki na oślep.
+static func swiatlo(n: Node3D, punkt: Vector3) -> float:
+	var rajd = n.get_tree().get_first_node_in_group("ui_rajdu")
+	return float(rajd.oswietlenie(punkt)) if rajd and rajd.has_method("oswietlenie") else 1.0
+
+
 func rozbroj(g) -> void:
 	Gra.emituj_halas(g.global_position, 1.5 if float(g.get("kucanie")) > 0.5 else 3.0, g)
-	g.zacznij_akcje("Rozbrajanie pułapki", 4.5, func():
+	var ciemno := Pulapka.swiatlo(self, global_position) < 0.3
+	if ciemno:
+		g.komunikat.emit("Po ciemku – szklanka i łyżka na wyczucie. Poświeć latarką, będzie pewniej.")
+	g.zacznij_akcje("Rozbrajanie pułapki" + (" (po ciemku)" if ciemno else ""), 4.5 * (1.8 if ciemno else 1.0), func():
 		if _spuszczona:
+			return
+		if ciemno and randf() < 0.12:
+			g.komunikat.emit("Szklanka wyślizgnęła się z palców!")
+			spust()
 			return
 		_spuszczona = true
 		if drzwi:

@@ -139,6 +139,13 @@ func _wybuch() -> void:
 				c.trafiony(czesci[randi() % (5 if randf() < 0.3 else 4)], obrazenia * sila * 0.3, 3.0, rzucajacy if rzucajacy else self, srodek, (srodek - p).normalized())
 		if c is Wrog and c.has_method("przygniec") and not ciala.martwy:
 			c.przygniec(2.0 * clampf(1.0 - d / (promien * 1.6), 0.0, 1.0), rzucajacy)
+	# fala strąca szklanki z klamek i szarpie druty potykaczy w pobliżu (wybuch łańcuchowy)
+	for pu in get_tree().get_nodes_in_group("pulapki"):
+		if is_instance_valid(pu) and (pu as Node3D).global_position.distance_to(p) < 6.0 and randf() < 1.0 - (pu as Node3D).global_position.distance_to(p) / 6.0:
+			pu.spust()
+	for po in get_tree().get_nodes_in_group("potykacze"):
+		if is_instance_valid(po) and ((po.a + po.b) * 0.5).distance_to(p) < 4.0 and randf() < 0.7:
+			po.spust()
 	# fala wyważa bliskie zamknięte drzwi
 	for dr in get_tree().get_nodes_in_group("drzwi"):
 		if is_instance_valid(dr) and (dr as Node3D).global_position.distance_to(p) < 3.2 and not dr.wywazone:

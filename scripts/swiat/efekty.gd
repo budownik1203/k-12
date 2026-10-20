@@ -129,6 +129,7 @@ static func sprzataj() -> void:
 	_mesh_czastek.clear()
 	_slady.clear()
 	_otwory.clear()
+	_chmury.clear()
 	material_sciany_fn = Callable()
 
 
@@ -511,9 +512,33 @@ static func iskry(rodzic: Node3D, pos: Vector3, kier: Vector3, ile := 14) -> voi
 
 ## Zawiesina kurzu w powietrzu po serii w ciasnym pomieszczeniu: kilka dużych, bladych kłębów
 ## na wysokości oczu, które powoli opadają i rzedną (chwilę gorzej widać).
+static var _chmury: Array = []     # [środek, promień, koniec (s)] – kurz w powietrzu zasłania też wzrok AI
+
+
+## Jak gęsty kurz leży na linii wzroku a→b (0 = czysto, 1 = mleko).
+static func zaslona_kurzu(a: Vector3, b: Vector3) -> float:
+	if _chmury.is_empty():
+		return 0.0
+	var teraz := Time.get_ticks_msec() / 1000.0
+	var z := 0.0
+	for i in range(_chmury.size() - 1, -1, -1):
+		var c: Array = _chmury[i]
+		if teraz > float(c[2]):
+			_chmury.remove_at(i)
+			continue
+		var ab := b - a
+		var t := clampf((c[0] - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
+		var d := (a + ab * t).distance_to(c[0])
+		if d < float(c[1]):
+			var zanik := clampf((float(c[2]) - teraz) / 3.0, 0.0, 1.0)
+			z = maxf(z, (1.0 - d / float(c[1])) * zanik * float(c[3]))
+	return z
+
+
 static func zawiesina(rodzic: Node3D, pos: Vector3, sila := 1.0) -> void:
 	if rodzic == null or not rodzic.is_inside_tree():
 		return
+	_chmury.append([pos, 2.6, Time.get_ticks_msec() / 1000.0 + 7.5, clampf(sila, 0.3, 1.0)])
 	_przygotuj_plomien()
 	for i in 7:
 		var mi := MeshInstance3D.new()

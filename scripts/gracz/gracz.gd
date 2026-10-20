@@ -7,9 +7,10 @@ signal komunikat(tekst: String)
 signal zginal(przyczyna: String)
 signal trafiony_sygnal(kierunek: Vector3, czesc: String)
 
-const PREDKOSC_CHOD := 2.45
-const PREDKOSC_BIEG := 4.5
-const PREDKOSC_KUC := 1.2
+# tempo marszu z oporządzeniem (wolniej niż w zręcznościowych FPS): ostrożny krok, trucht zamiast sprintu
+const PREDKOSC_CHOD := 1.7
+const PREDKOSC_BIEG := 3.5
+const PREDKOSC_KUC := 0.85
 const WYS_STOJ := 1.62
 const WYS_KUC := 0.98
 const MASKA_INTERAKCJI := Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_INTERAKCJE
@@ -322,6 +323,7 @@ func _physics_process(delta: float) -> void:
 	_rozgladanie(delta, we_aktywne)
 	_ruch(delta, we_aktywne or (sterowanie and ruch_z_ekwipunkiem))
 	_akcje(delta)
+	_ciagnij(delta)
 	_interakcje(we_aktywne)
 	_bron(delta, we_aktywne)
 	_dzwieki_ciala(delta)
@@ -466,8 +468,15 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	elif kucanie > 0.5:
 		v = PREDKOSC_KUC
 	v *= [1.0, 0.9, 0.75, 0.5][prog] * cialo.mnoznik_ruchu()
+	# w tył i bokiem idzie się wolniej niż przodem (patrzenie pod nogi, krok odstawny)
+	if kier.z > 0.1:
+		v *= 0.65
+	elif absf(kier.x) > 0.1 and kier.z > -0.1:
+		v *= 0.82
 	if not akcja.is_empty():
 		v *= 0.45
+	if akcja.get("ciagniecie", false):
+		v = minf(v, 0.55)       # 80 kg martwego ciężaru
 	if ruch_z_ekwipunkiem and Sterowanie.blokada:
 		# zerkanie w ładownice w marszu: tylko powoli, bez biegu
 		v = minf(v, PREDKOSC_KUC)
@@ -478,9 +487,9 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		v *= 0.75
 	_biegnie = moze_biec and kier.length() > 0.1
 	if moze_biec and kier.length() > 0.1:
-		wytrzymalosc = maxf(0.0, wytrzymalosc - delta * (11.0 + prog * 5.0))
+		wytrzymalosc = maxf(0.0, wytrzymalosc - delta * (14.0 + prog * 6.0) * (1.6 if cialo.zlamanie["klatka"] else 1.0))
 	else:
-		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (9.0 if kier.length() < 0.1 else 5.0) * mnoznik_sil())
+		wytrzymalosc = minf(100.0, wytrzymalosc + delta * (7.0 if kier.length() < 0.1 else 3.5) * mnoznik_sil())
 	var cel := (global_basis * kier.normalized()) * v
 	# ciężki ruch: rozpędzanie i hamowanie w m/s², zależne od obciążenia; w powietrzu prawie bez kontroli
 	var teraz := Vector2(velocity.x, velocity.z)
@@ -490,13 +499,13 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		przysp = 2.0
 	elif cel2.length() > teraz.length() + 0.05:
 		# rozpędzanie: do chodu prawie od razu, do biegu wolniej (zależnie od obciążenia)
-		przysp = [22.0, 18.0, 14.0, 10.0][prog] if teraz.length() < PREDKOSC_CHOD else [9.0, 7.5, 6.0, 4.5][prog]
+		przysp = [9.0, 7.5, 6.0, 4.5][prog] if teraz.length() < PREDKOSC_CHOD else [3.6, 3.0, 2.4, 1.8][prog]
 	else:
-		# hamowanie i zmiana kierunku: stopy trzymają się podłogi
-		przysp = [30.0, 26.0, 22.0, 16.0][prog]
-	# zmiana kierunku (np. w bok przy biegu) też hamuje mocno, bez poślizgu
+		# hamowanie: ciężar sprzętu niesie dalej – kilka kroków, nie w miejscu
+		przysp = [13.0, 11.0, 9.0, 7.0][prog]
+	# zmiana kierunku hamuje (bez poślizgu), ale nie natychmiast
 	if is_on_floor() and teraz.length() > 0.3 and cel2.length() > 0.3 and teraz.normalized().dot(cel2.normalized()) < 0.7:
-		przysp = maxf(przysp, 20.0)
+		przysp = maxf(przysp, 10.0)
 	teraz = teraz.move_toward(cel2, przysp * delta)
 	velocity.x = teraz.x
 	velocity.z = teraz.y
@@ -512,8 +521,8 @@ func _ruch(delta: float, aktywne: bool) -> void:
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.krok(global_position, get_parent(), clampf(-6.0 + wys * 3.0, -6.0, 3.0), 0.8)
 		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
-			velocity.y = 3.6
-			wytrzymalosc -= 10.0
+			velocity.y = 3.0
+			wytrzymalosc -= 15.0
 			wstrzas_kieszeni(0.06, "skok")
 	else:
 		if not _w_powietrzu:
@@ -779,8 +788,18 @@ func _otworz_po_drodze(p: Przedmiot) -> bool:
 	var s := ekw.siatka_z(p)
 	if s == null or not ekw.otworz_kieszen_dla(s, p):
 		return false
-	Dzwiek.graj("rzep", -9.0, randf_range(0.9, 1.1))
-	Gra.emituj_halas(global_position, 3.5, self)
+	# dźwięk wg zapięcia ładownic tej kamizelki (rzep głośny, zamek / guzik / zatrzask cicho)
+	var typ := "rzep"
+	if ekw.sloty["kamizelka"] != null and s == ekw.siatka_kamizelki():
+		typ = ModeleOporzadzenia.TYP_LADOWNIC.get((ekw.sloty["kamizelka"] as Przedmiot).id, "rzep")
+	match typ:
+		"zamek":
+			Dzwiek.graj("zamek", -11.0, randf_range(0.95, 1.1))
+		"guzik", "zatrzask":
+			Dzwiek.graj("klik", -12.0, randf_range(0.7, 0.85))
+		_:
+			Dzwiek.graj("rzep", -5.0, randf_range(0.9, 1.1))
+	Gra.emituj_halas(global_position, {"rzep": 6.0, "zamek": 1.8, "guzik": 1.4, "zatrzask": 1.6}.get(typ, 3.0), self)
 	Gra.wskazowka("ladownica_otwarta", "Sięgając do zapiętej ładownicy, postać ją otwiera – i zostawia otwartą. Z otwartej wyjmuje się szybciej, ale w biegu, przy skoku czy trafieniu coś może z niej wypaść. Zapniesz ją w ekwipunku (uchwyt „zapnij”).")
 	return true
 
@@ -839,6 +858,8 @@ func _samouczek() -> void:
 ## Mnożnik odzyskiwania sił (głód, pragnienie).
 func mnoznik_sil() -> float:
 	var m := 1.0
+	if cialo.zlamanie["klatka"] and cialo.przeciwbol <= 0.0:
+		m *= 0.5           # pęknięte żebro: płytki oddech, siły wracają wolno
 	if float(Gra.potrzeby["glod"]) < 25.0:
 		m *= 0.75
 	if float(Gra.potrzeby["pragnienie"]) < 25.0:
@@ -965,6 +986,55 @@ func zaplanuj(nazwa: String, cb: Callable) -> void:
 
 # ------------------------------------------------------------------ interakcje
 
+# ------------------------------------------------------------------ ciągnięcie zwłok
+
+var _plyta_t: Array = []          # chwile kul zatrzymanych przez płytę (seria = pęknięte żebro)
+var _ciagniete: Ragdoll = null
+var _ciag_dzw := 0.0
+
+
+## Chwyt za kołnierz i ciągnięcie ciała (schować w ciemnym kącie, za drzwiami): broń schowana, krok bardzo
+## wolny, szuranie słychać. [Z] / [X] / strzał / trafienie – puszcza.
+func _zacznij_ciagnac(pj: Node) -> void:
+	var rd = pj.get_meta("ragdoll")
+	if rd == null or not is_instance_valid(rd):
+		return
+	_ciagniete = rd
+	zacznij_akcje("Ciągnięcie ciała", 36000.0, func(): pass, "podnies", 0, Callable(), {"ciagniecie": true})
+	Dzwiek.graj("szelest_0", -8.0, 0.8)
+	Gra.wskazowka("ciagniecie", "Ciało ciągnięte za kołnierz: bardzo wolno i głośno. Ukryte w ciemności albo za drzwiami trudniej zauważyć – znalezione alarmuje cały oddział. [Z] puszcza.")
+
+
+func _ciagnij(delta: float) -> void:
+	if _ciagniete == null:
+		return
+	if not is_instance_valid(_ciagniete) or not akcja.get("ciagniecie", false) or (sterowanie and not Sterowanie.blokada and Input.is_action_just_pressed("ciagnij") and akcja.get("t", 0.0) > 0.2):
+		if is_instance_valid(_ciagniete):
+			_ciagniete.pusc()
+		_ciagniete = null
+		if akcja.get("ciagniecie", false):
+			przerwij_akcje()
+		return
+	var przod := -global_basis.z
+	przod.y = 0.0
+	# ciało przed graczem, nisko (pochylony, ciągnie tyłem albo przodem – jak chce gracz)
+	_ciagniete.ciagnij(global_position + przod.normalized() * 0.85 + Vector3.UP * 0.35)
+	if Vector2(_ciagniete.srodek().x - global_position.x, _ciagniete.srodek().z - global_position.z).length() > 2.8:
+		# zaklinowane o mebel – wyrywa się z ręki
+		_ciagniete.pusc()
+		_ciagniete = null
+		przerwij_akcje()
+		komunikat.emit("Ciało się zaklinowało – puszczasz kołnierz")
+		return
+	var pozioma := Vector2(velocity.x, velocity.z).length()
+	_ciag_dzw -= delta * (0.3 + pozioma * 2.0)
+	if _ciag_dzw <= 0.0 and pozioma > 0.1:
+		_ciag_dzw = 0.6
+		Dzwiek.graj_3d(Dzwiek.wariant("szelest"), _ciagniete.srodek(), get_parent(), -10.0, randf_range(0.6, 0.75), 12.0)
+		Gra.emituj_halas(global_position, 5.0, self)
+	wytrzymalosc = maxf(0.0, wytrzymalosc - delta * 4.0 * pozioma)
+
+
 func _interakcje(aktywne: bool) -> void:
 	# mapa w rękach: [F], ekwipunek albo pasek chowają ją (ręce potrzebne do czegoś innego)
 	if akcja.get("mapa", false) and (Sterowanie.blokada or (aktywne and Input.is_action_just_pressed("interakcja"))):
@@ -1011,6 +1081,11 @@ func _interakcje(aktywne: bool) -> void:
 		return
 	cel_interakcji = cel
 	tekst_interakcji = cel.tekst_interakcji(self) if cel.has_method("tekst_interakcji") else "Użyj"
+	if cel is Pojemnik and (cel as Node).has_meta("ragdoll") and _ciagniete == null:
+		tekst_interakcji += "    [Z] ciągnij za kołnierz"
+		if aktywne and Input.is_action_just_pressed("ciagnij") and akcja.is_empty():
+			_zacznij_ciagnac(cel)
+			return
 	if aktywne and Input.is_action_just_pressed("interakcja") and cel.has_method("interakcja"):
 		cel.interakcja(self)
 
@@ -1105,7 +1180,15 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 			var nowy := cialo.siniak <= 0.0
 			cialo.siniak = maxf(cialo.siniak, 3.5 + obr * 0.08)
 			wytrzymalosc = maxf(0.0, wytrzymalosc - 18.0)
-			if nowy:
+			# kilka kul w płytę w krótkim czasie: pęknięte żebro (złamanie – szyna usztywnia)
+			var teraz := Time.get_ticks_msec() / 1000.0
+			_plyta_t = _plyta_t.filter(func(x): return teraz - float(x) < 25.0)
+			_plyta_t.append(teraz)
+			if czesc in ["klatka", "brzuch"] and _plyta_t.size() >= 3 and not cialo.zlamanie["klatka"]:
+				cialo.zlamanie["klatka"] = true
+				cialo.zmiana.emit()
+				komunikat.emit("Trzaśnięcie pod płytą – pęknięte żebro. Szyna usztywni klatkę.")
+			elif nowy:
 				komunikat.emit("Kamizelka zatrzymała kulę – stłuczenie, brak tchu")
 	else:
 		Dzwiek.graj("trafienie_cialo", -1.0)

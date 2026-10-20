@@ -291,6 +291,19 @@ func _przebuduj() -> void:
 			_dodatki.add_child(b)
 		"posrednik":
 			_dodatki.add_child(_panel_zlecen())
+			# sprawdzenie meldunku: Pośrednik ma swoje kanały (pewna informacja o Sępie i zdarzeniach najbliższego rajdu)
+			var bm := Button.new()
+			var juz := Gra.potwierdzone_ziarno == Gra.nastepne_ziarno and Gra.nastepne_ziarno != 0
+			bm.text = "Meldunek na najbliższy rajd: sprawdzony" if juz else "Sprawdź meldunek na najbliższy rajd (1800)"
+			bm.disabled = juz or Gra.bony < 1800
+			bm.tooltip_text = "Nasłuch Wojska bywa przekłamany. Pośrednik potwierdzi, co naprawdę szykuje się w strefie (widać na stole z mapą i przy rozkazie wyjścia)."
+			bm.pressed.connect(func():
+				Gra.dodaj_bony(-1800)
+				Gra.potwierdzone_ziarno = Gra.nastepne_ziarno
+				_powitanie.text = "„Popytałem. %s”" % " ".join(Gra.meldunki().slice(1, 3))
+				Dzwiek.graj("pieczatka", -4.0)
+				_przebuduj())
+			_dodatki.add_child(bm)
 			var ub := VBoxContainer.new()
 			ub.add_theme_constant_override("separation", 4)
 			ub.add_child(Motyw.naglowek("Ubezpieczenie"))

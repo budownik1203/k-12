@@ -26,6 +26,7 @@ var meble_zapas := {}         # kupione, niepostawione meble: id -> liczba
 var reputacja := {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
 var odpoczynek := false       # po powrocie z rajdu można raz przespać się w kryjówce
 var izby_kryjowki := 1        # 2 = wykupiona druga izba (przebita ściana)
+var potwierdzone_ziarno := 0  # meldunek tego ziarna sprawdzony u Pośrednika (pewny)
 var nastepne_ziarno := 0      # ziarno najbliższego rajdu (losowane po powrocie – meldunki mogą je „podejrzeć”)
 var przerwany_rajd := false   # gra zamknięta w trakcie rajdu: przy wczytaniu – zaginięcie w akcji
 
@@ -33,7 +34,7 @@ var przerwany_rajd := false   # gra zamknięta w trakcie rajdu: przy wczytaniu �
 func _ready() -> void:
 	# testy automatyczne nie nadpisują zapisu gracza
 	var a := OS.get_cmdline_user_args()
-	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja") or a.has("--test_v14") or a.has("--soak"):
+	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja") or a.has("--test_v14") or a.has("--soak") or a.has("--test_v15"):
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
@@ -275,9 +276,14 @@ func meldunki() -> Array:
 	# przekłamania są stałe dla danego rajdu (to samo ziarno – ten sam meldunek)
 	var rw := clampf(float(reputacja.get("wojskowy", 0)) / 60.0, 0.0, 1.0)
 	var wiar := 0.55 + 0.4 * rw
+	if potwierdzone_ziarno == z and z != 0:
+		wiar = 1.01         # Pośrednik sprawdził meldunek swoimi kanałami
 	var rng := RandomNumberGenerator.new()
 	rng.seed = z * 7 + 3
-	out.append("Wiarygodność nasłuchu: %s (reputacja u Wojska)" % ("wysoka" if wiar > 0.85 else ("średnia" if wiar > 0.68 else "niska")))
+	if wiar > 1.0:
+		out.append("Meldunek sprawdzony przez Pośrednika – pewny.")
+	else:
+		out.append("Wiarygodność nasłuchu: %s (reputacja u Wojska; Pośrednik sprawdzi za opłatą)" % ("wysoka" if wiar > 0.85 else ("średnia" if wiar > 0.68 else "niska")))
 	var zlec := false
 	for k in kontrakty.get("aktywne", []):
 		if String(k.get("cel", "")) in ["boss", "niesmiertelnik"]:
@@ -539,7 +545,7 @@ func zapisz() -> void:
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
 		"zdrowie": zdrowie, "potrzeby": potrzeby, "kontrakty": kontrakty, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
 		"latarka_wydana": true, "kryjowka": kryjowka, "meble_zapas": meble_zapas, "reputacja": reputacja, "odpoczynek": odpoczynek, "izby": izby_kryjowki,
-		"nastepne_ziarno": nastepne_ziarno, "rajd_w_toku": rajd_w_toku,
+		"nastepne_ziarno": nastepne_ziarno, "rajd_w_toku": rajd_w_toku, "potwierdzone_ziarno": potwierdzone_ziarno,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -579,6 +585,7 @@ func wczytaj() -> bool:
 		odpoczynek = bool(d.get("odpoczynek", false))
 		izby_kryjowki = int(d.get("izby", 1))
 		nastepne_ziarno = int(d.get("nastepne_ziarno", 0))
+		potwierdzone_ziarno = int(d.get("potwierdzone_ziarno", 0))
 		if nastepne_ziarno == 0:
 			nastepne_ziarno = randi() | 1
 		if not (kontrakty as Dictionary).has("frakcje"):
