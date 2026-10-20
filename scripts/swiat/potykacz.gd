@@ -98,7 +98,8 @@ func interakcja(g) -> void:
 
 ## Odległość postaci od drutu (w poziomie), gdy stopy są na wysokości drutu.
 func _odl(p: Vector3) -> float:
-	if absf(p.y - a.y) > 0.6:
+	# stopy nad drutem (skok) albo na innej kondygnacji – nie zahaczą
+	if p.y - a.y > 0.22 or a.y - p.y > 0.6:
 		return 99.0
 	var a2 := Vector2(a.x, a.z)
 	var b2 := Vector2(b.x, b.z)

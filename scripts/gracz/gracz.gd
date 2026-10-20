@@ -951,6 +951,11 @@ var kolejka_akcji: Array = []
 
 
 func zaplanuj(nazwa: String, cb: Callable) -> void:
+	if akcja.get("mapa", false):
+		# z mapą w rękach: kartka do kieszeni i od razu ta czynność (nie czeka w kolejce na schowanie mapy)
+		przerwij_akcje()
+		cb.call()
+		return
 	if kolejka_akcji.size() >= 3:
 		komunikat.emit("Za dużo naraz – najpierw skończ")
 		return
@@ -961,6 +966,9 @@ func zaplanuj(nazwa: String, cb: Callable) -> void:
 # ------------------------------------------------------------------ interakcje
 
 func _interakcje(aktywne: bool) -> void:
+	# mapa w rękach: [F], ekwipunek albo pasek chowają ją (ręce potrzebne do czegoś innego)
+	if akcja.get("mapa", false) and (Sterowanie.blokada or (aktywne and Input.is_action_just_pressed("interakcja"))):
+		przerwij_akcje()
 	cel_interakcji = null
 	tekst_interakcji = ""
 	var space := get_world_3d().direct_space_state

@@ -33,7 +33,7 @@ var przerwany_rajd := false   # gra zamknięta w trakcie rajdu: przy wczytaniu �
 func _ready() -> void:
 	# testy automatyczne nie nadpisują zapisu gracza
 	var a := OS.get_cmdline_user_args()
-	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja") or a.has("--test_v14"):
+	if a.has("--test") or a.has("--walka") or a.has("--ewakuacja") or a.has("--zrzuty") or a.has("--test_zapis") or a.has("--test_kryjowki") or a.has("--ekonomia") or a.has("--prezentacja") or a.has("--test_v14") or a.has("--soak"):
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()

@@ -152,6 +152,9 @@ func _ready() -> void:
 	elif args.has("--test_mapa"):
 		_tryb_testu = "mapa"
 		_test_mapy.call_deferred(args[args.find("--test_mapa") + 1])
+	elif args.has("--soak"):
+		_tryb_testu = "soak"
+		_test_soak.call_deferred(float(args[args.find("--soak") + 1]))
 	elif args.has("--test_v14"):
 		_tryb_testu = "v14"
 		_test_v14.call_deferred(args[args.find("--test_v14") + 1])
@@ -786,6 +789,7 @@ func _zakoncz(w: Dictionary) -> void:
 		for p in Gra.ekw.wszystkie():
 			if (p as Przedmiot).typ() == "bron":
 				p.dane["brud"] = minf(30.0, float(p.dane.get("brud", 0.0)) + brud)
+				w["brudna_bron"] = true
 	var zuz := []
 	var zuz_suma := 0
 	for p in Gra.ekw.wszystkie():
@@ -3726,4 +3730,39 @@ func _test_v14(katalog: String) -> void:
 		print("  BŁĄD: przytłumienie zostało po zamknięciu")
 		bl += 1
 	print("TEST V14: błędów ", bl)
+	get_tree().quit()
+
+
+
+## Długi przebieg bez gracza (gracz schowany wysoko, nieśmiertelny): frakcje walczą, łupią, szukają.
+## Wypisuje statystykę stanów co minutę i na końcu – szukanie zawieszonych AI i błędów.
+func _test_soak(sek: float) -> void:
+	Engine.time_scale = 3.0
+	gracz.global_position += Vector3(0, 60, 0)
+	gracz.set_physics_process(false)
+	gracz.cialo.hp["glowa"] = 99999.0
+	var t := 0.0
+	var poz := {}
+	var stoi := {}
+	while t < sek:
+		await get_tree().create_timer(10.0 * Engine.time_scale).timeout
+		t += 10.0 * Engine.time_scale
+		var st := {}
+		var zywi := 0
+		for w in get_tree().get_nodes_in_group("wrogowie"):
+			if not (w is Wrog) or w.cialo.martwy:
+				continue
+			zywi += 1
+			st[w.stan] = int(st.get(w.stan, 0)) + 1
+			var p: Vector3 = w.global_position
+			if poz.has(w) and (poz[w] as Vector3).distance_to(p) < 0.05 and w.stan in ["szukanie", "szaber", "czujny"]:
+				stoi[w] = int(stoi.get(w, 0)) + 1
+			else:
+				stoi[w] = 0
+			poz[w] = p
+		var zawieszeni := stoi.keys().filter(func(k): return is_instance_valid(k) and int(stoi[k]) >= 3)
+		print("SOAK t=%d s: żywi %d, stany %s, stoją w miejscu ≥30 s w ruchliwym stanie: %s, pułapki %d, łup gracza zabici %d" % [int(t), zywi, st,
+			zawieszeni.map(func(k): return "%s/%s/%s" % [k.frakcja, k.stan, k._szaber_cel]), get_tree().get_nodes_in_group("potykacze").size(), zabici.size()])
+	print("SOAK KONIEC")
+	Engine.time_scale = 1.0
 	get_tree().quit()

@@ -911,6 +911,9 @@ func alarm_od_oddzialu(pos: Vector3) -> void:
 var _szaber_cel: Node3D = null
 var _szaber_t := 0.0
 var _szaber_skan := 0.0
+var _szaber_ost: Node3D = null
+var _szaber_droga := 0.0         # ile już idzie do celu szabru (limit – cel może być nieosiągalny)
+var _nieosiagalne := {}          # id celów szabru, do których nie dało się dojść
 
 
 func _patrol(delta: float) -> void:
@@ -966,6 +969,8 @@ func _szukaj_lupu(zasieg := 9.0) -> Node3D:
 			continue
 		if w is LupNaZiemi and (w as LupNaZiemi)._podnoszony:
 			continue
+		if _nieosiagalne.has(w.get_instance_id()):
+			continue
 		var d := global_position.distance_to(w.global_position)
 		if d < bd and absf(w.global_position.y - global_position.y) < 1.5:
 			bd = d
@@ -979,11 +984,27 @@ func _szaber(delta: float) -> void:
 	if _szaber_cel == null or not is_instance_valid(_szaber_cel):
 		stan = "patrol"
 		return
+	if _szaber_cel != _szaber_ost:
+		_szaber_ost = _szaber_cel
+		_szaber_droga = 0.0
 	var cel: Vector3 = _szaber_cel.global_position if not _szaber_cel.has_method("punkt_rozbrajania") else _szaber_cel.punkt_rozbrajania()
-	if global_position.distance_to(cel) > 1.1:
+	# zasięg ręki liczony w poziomie (ciało leży na wersalce, granat wisi na klamce – środek bywa wyżej niż biodra)
+	var poziom := Vector2(cel.x - global_position.x, cel.z - global_position.z).length()
+	if poziom > 1.15 or absf(cel.y - global_position.y) > 1.4:
 		_kucanie_cel = 0.0
+		_szaber_droga += delta
+		if _szaber_droga > 14.0:
+			# nie da się podejść (ciało za meblem, na innym piętrze): odpuszcza i więcej tu nie wraca
+			_nieosiagalne[_szaber_cel.get_instance_id()] = true
+			if _szaber_cel.has_meta("szabrowany"):
+				_szaber_cel.remove_meta("szabrowany")
+			_szaber_cel = null
+			_szaber_droga = 0.0
+			stan = "patrol"
+			return
 		_idz(_najblizszy_na_siatce(cel))
 		return
+	_szaber_droga = 0.0
 	_idz(global_position)
 	_kucanie_cel = 1.0
 	_obroc_do(cel, delta, 3.0)
@@ -1074,7 +1095,7 @@ func _sprawdz_ciala() -> void:
 		kier.y = 0.0
 		var skad := cp - (kier.normalized() * randf_range(6.0, 11.0) if kier.length() > 0.01 else Vector3.ZERO)
 		ostatnia_pozycja = _najblizszy_na_siatce(skad)
-		_napis(["Mają naszego!", "Leży... ktoś go sprzątnął.", "Trup! Kryć się!", "To %s! Nie żyje!" % w.nazwa_jednostki.get_slice(" ", 0)].pick_random())
+		_napis(["Mają naszego!", "Leży... ktoś go sprzątnął.", "Trup! Kryć się!", "Nie żyje! Uważajcie!"].pick_random())
 		stan = "szukanie"
 		_nasluch = false
 		czas_bez_kontaktu = 0.0
