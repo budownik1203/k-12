@@ -23,7 +23,7 @@ var _gen: GeneratorBiomu
 var _wezly: Array = []         # węzeł na każdy wpis Gra.kryjowka
 var _duch: Node3D              # podgląd stawianego mebla
 var _duch_id := ""
-var _duch_r := 0
+var _duch_kat := 0.0           # obrót stawianego mebla w stopniach (co 15°; Shift – co 90°)
 var _duch_idx := -1            # przestawiany postawiony mebel (-1 = nowy z magazynu)
 var _duch_ok := false
 var _duch_pos := Vector2.ZERO
@@ -151,7 +151,7 @@ static func postaw_pionowo(w: Node3D, dol: Vector3) -> void:
 
 func _wezel(e: Dictionary, idx: int) -> Node3D:
 	var id := String(e["id"])
-	var r := int(e.get("r", 0))
+	var kat := kat_wpisu(e)
 	var pos := Vector3(float(e["x"]), 0.0, float(e["z"]))
 	if id == "zarowka":
 		var n := Node3D.new()
@@ -180,13 +180,23 @@ func _wezel(e: Dictionary, idx: int) -> Node3D:
 		sb.set_meta("idx_mebla", idx)
 		return n
 	var w: Node3D
-	if id == "stojak_bron":
+	if id == "stol_mapa":
+		w = _gen._mebel("stol", pos, deg_to_rad(kat), true)
+		var plan := ModelePrzedmiotow.wezel(Przedmiot.nowy("mapa"))
+		plan.scale = Vector3.ONE * 3.0
+		w.add_child(plan)
+		plan.position = Vector3(0, 0.76, 0)
+		plan.rotation.y = 0.2
+		var kmp := ModelePrzedmiotow.wezel(Przedmiot.nowy("radio"))
+		w.add_child(kmp)
+		kmp.position = Vector3(0.4, 0.76, -0.22)
+	elif id == "stojak_bron":
 		w = _stojak()
 		add_child(w)
 		w.position = pos
-		w.rotation.y = r * PI * 0.5
+		w.rotation.y = deg_to_rad(kat)
 	else:
-		w = _gen._mebel(id, pos, r * PI * 0.5, true)
+		w = _gen._mebel(id, pos, deg_to_rad(kat), true)
 	w.set_meta("idx_mebla", idx)
 	# dywan i inne bez kolizji: obszar do wskazywania w trybie budowy
 	if not (w is CollisionObject3D):
@@ -202,7 +212,7 @@ func _wezel(e: Dictionary, idx: int) -> Node3D:
 		w.add_child(sb2)
 		sb2.set_meta("idx_mebla", idx)
 	var f := String(MebleKryjowki.KATALOG.get(id, {}).get("funkcja", ""))
-	if f in ["skrytka", "warsztat", "odpoczynek", "kuchnia"]:
+	if f in ["skrytka", "warsztat", "odpoczynek", "kuchnia", "meldunki"]:
 		var it := StaticBody3D.new()
 		it.collision_layer = Balistyka.WARSTWA_INTERAKCJE
 		it.set_meta("interakcja", _Funkcja.new(self, id, f))
@@ -219,16 +229,25 @@ func _wezel(e: Dictionary, idx: int) -> Node3D:
 
 
 ## Obrys mebla na podłodze (obrót co 90°, więc prostokąt osiowy).
-static func obrys(id: String, x: float, z: float, r: int) -> Rect2:
+## Kąt wpisu w stopniach (stare zapisy: "r" = obrót co 90°).
+static func kat_wpisu(e: Dictionary) -> float:
+	return float(e.get("kat", int(e.get("r", 0)) * 90))
+
+
+## Obrys mebla na podłodze: prostokąt osiowy obejmujący obrócony mebel (przy 90° – dokładny).
+static func obrys(id: String, x: float, z: float, kat: float) -> Rect2:
 	var roz := MebleKryjowki.rozmiar(id)
-	var sx := roz.x if r % 2 == 0 else roz.z
-	var sz := roz.z if r % 2 == 0 else roz.x
+	var a := deg_to_rad(kat)
+	var c := absf(cos(a))
+	var s := absf(sin(a))
+	var sx := c * roz.x + s * roz.z
+	var sz := s * roz.x + c * roz.z
 	return Rect2(x - sx * 0.5, z - sz * 0.5, sx, sz)
 
 
 ## Pusty napis = można postawić; inaczej powód.
-func powod_odmowy(id: String, x: float, z: float, r: int, pomin := -1) -> String:
-	var o := obrys(id, x, z, r)
+func powod_odmowy(id: String, x: float, z: float, kat: float, pomin := -1) -> String:
+	var o := obrys(id, x, z, kat)
 	var wn := granice.grow(-0.02)
 	if not wn.encloses(o):
 		return "nie mieści się w kryjówce"
@@ -258,7 +277,7 @@ func powod_odmowy(id: String, x: float, z: float, r: int, pomin := -1) -> String
 		# żarówka wisi pod sufitem; dywan leży pod meblami (ale dwa dywany na sobie – nie)
 		if eid == "zarowka" or ((id == "dywan") != (eid == "dywan")):
 			continue
-		if o.grow(-0.01).intersects(obrys(eid, float(e["x"]), float(e["z"]), int(e.get("r", 0)))):
+		if o.grow(-0.01).intersects(obrys(eid, float(e["x"]), float(e["z"]), kat_wpisu(e))):
 			return "koliduje z: " + MebleKryjowki.nazwa(eid).to_lower()
 	return ""
 
@@ -305,6 +324,8 @@ class _Funkcja:
 				return "Prześpij się (leczy połowę ran)" if Gra.odpoczynek else "Odpocząłeś – sen leczy raz po każdym powrocie ze strefy"
 			"kuchnia":
 				return "Ugotuj posiłek (konserwa / suchary + woda)"
+			"meldunki":
+				return "Przejrzyj meldunki przed rajdem"
 		return ""
 
 	func interakcja(_g) -> void:
@@ -319,6 +340,9 @@ class _Funkcja:
 				k.odpocznij()
 			"kuchnia":
 				k.ugotuj()
+			"meldunki":
+				for linia in Gra.meldunki():
+					k.baza.komunikat("Meldunek: " + linia)
 
 
 ## Sen na pryczy: połowa brakującego zdrowia każdej części, raz po każdym powrocie. Głód i pragnienie rosną.
@@ -454,7 +478,7 @@ func zacznij_stawianie(id: String, idx := -1) -> void:
 	_podswietl(-1)
 	_duch_id = id
 	_duch_idx = idx
-	_duch_r = int(Gra.kryjowka[idx].get("r", 0)) if idx >= 0 else 0
+	_duch_kat = kat_wpisu(Gra.kryjowka[idx]) if idx >= 0 else 0.0
 	if idx >= 0 and idx < _wezly.size() and is_instance_valid(_wezly[idx]):
 		(_wezly[idx] as Node3D).visible = false
 	_duch = _model_ducha(id)
@@ -469,6 +493,8 @@ func zacznij_stawianie(id: String, idx := -1) -> void:
 func _model_ducha(id: String) -> Node3D:
 	if id == "stojak_bron":
 		return _stojak(true)
+	if id == "stol_mapa":
+		id = "stol"
 	var path := "res://assets/models/meble/%s.glb" % id
 	if not ResourceLoader.exists(path):
 		path = "res://assets/models/%s.glb" % id
@@ -533,7 +559,7 @@ func _aktualizuj_ducha() -> void:
 	var x := snappedf(l.x, 0.1)
 	var z := snappedf(l.z, 0.1)
 	# dociągnięcie do ściany: mebel przy ścianie staje równo z nią
-	var o := obrys(_duch_id, x, z, _duch_r)
+	var o := obrys(_duch_id, x, z, _duch_kat)
 	if o.position.x < granice.position.x + 0.25:
 		x += granice.position.x + 0.03 - o.position.x
 	if o.end.x > granice.end.x - 0.25:
@@ -544,19 +570,19 @@ func _aktualizuj_ducha() -> void:
 		z -= o.end.y - (granice.end.y - 0.03)
 	_duch_pos = Vector2(x, z)
 	_duch.position = Vector3(x, wysokosc if _duch_id == "zarowka" else 0.0, z)
-	_duch.rotation.y = _duch_r * PI * 0.5
-	var powod := powod_odmowy(_duch_id, x, z, _duch_r, _duch_idx)
+	_duch.rotation.y = deg_to_rad(_duch_kat)
+	var powod := powod_odmowy(_duch_id, x, z, _duch_kat, _duch_idx)
 	_duch_ok = powod == ""
 	for mi in _duch.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_override = _mat_ok if _duch_ok else _mat_zle
-	_podpis.text = "%s  ·  %s   [LPM] postaw   [R] obróć   [PPM] anuluj" % [MebleKryjowki.nazwa(_duch_id), "można postawić" if _duch_ok else "nie: " + powod]
+	_podpis.text = "%s  ·  %s   [LPM] postaw   [R]/kółko obróć o 15° (Shift+R – 90°)   [PPM] anuluj" % [MebleKryjowki.nazwa(_duch_id), "można postawić" if _duch_ok else "nie: " + powod]
 
 
 func _postaw() -> void:
 	if not _duch_ok:
 		Dzwiek.graj("sucho", -10.0)
 		return
-	var e := {"id": _duch_id, "x": snappedf(_duch_pos.x, 0.01), "z": snappedf(_duch_pos.y, 0.01), "r": _duch_r}
+	var e := {"id": _duch_id, "x": snappedf(_duch_pos.x, 0.01), "z": snappedf(_duch_pos.y, 0.01), "kat": fposmod(_duch_kat, 360.0)}
 	var id := _duch_id
 	if _duch_idx >= 0:
 		Gra.kryjowka[_duch_idx] = e
@@ -613,7 +639,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if tryb == Tryb.STAWIANIE:
 		if event.is_action_pressed("przeladuj"):
-			_duch_r = (_duch_r + 1) % 4
+			_duch_kat = fposmod(_duch_kat + (90.0 if Input.is_key_pressed(KEY_SHIFT) else 15.0), 360.0)
 			get_viewport().set_input_as_handled()
 		elif event is InputEventMouseButton and event.pressed:
 			if event.button_index == MOUSE_BUTTON_LEFT:
@@ -622,9 +648,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_porzuc_ducha()
 				_przeglad()
 			elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
-				_duch_r = (_duch_r + 1) % 4
+				_duch_kat = fposmod(_duch_kat + 15.0, 360.0)
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				_duch_r = (_duch_r + 3) % 4
+				_duch_kat = fposmod(_duch_kat - 15.0, 360.0)
 			get_viewport().set_input_as_handled()
 	elif tryb == Tryb.PRZEGLAD:
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _wskazany >= 0:

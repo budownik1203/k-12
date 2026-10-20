@@ -1790,6 +1790,22 @@ func komorka_w(p: Vector3) -> Vector2i:
 
 
 ## Rodzaj podłoża pod punktem (do dźwięku kroków): lastryko / parkiet / kafelki / beton / gruz.
+## Materiał ściany pomieszczenia w punkcie (dziury po kulach, pył): tynk / cegla / kafelki / beton.
+func sciana_mat(p: Vector3) -> String:
+	var k := komorka_w(p)
+	if k.x < 0:
+		return "beton"
+	var mats: Array = komorki[k].get("mats", [])
+	var m := String(mats[0]) if mats.size() > 0 else ""
+	if m.begins_with("cegla"):
+		return "cegla"
+	if m.contains("kafel"):
+		return "kafelki"
+	if m.begins_with("beton"):
+		return "beton"
+	return "tynk"
+
+
 func podloze(p: Vector3) -> String:
 	var k := komorka_w(p)
 	if k.x < 0:

@@ -16,6 +16,7 @@ const KATALOG := {
 	"biurko": {"cena": 3500, "funkcja": "skrytka", "wiersze": 4, "opis": "Biurko z szufladami. Skrytka +4 rzędy."},
 	"lodowka": {"cena": 4000, "funkcja": "skrytka", "wiersze": 4, "opis": "Lodówka Mińsk (nie chłodzi). Skrytka +4 rzędy."},
 	"stojak_bron": {"cena": 6000, "funkcja": "skrytka", "wiersze": 4, "opis": "Stojak na broń z odzysku. Skrytka +4 rzędy; pokazuje do 4 sztuk broni ze skrytki."},
+	"stol_mapa": {"cena": 3500, "funkcja": "meldunki", "opis": "Stół z planem strefy i nasłuchem. Przed rajdem: czy jest Sęp, zapowiedziane zdarzenia."},
 	"stol_warsztatowy": {"cena": 9000, "funkcja": "warsztat", "opis": "Stół roboczy z imadłem: montaż kolimatora, lunety i chwytu."},
 	"lozko": {"cena": 5000, "funkcja": "odpoczynek", "opis": "Prycza. Sen po rajdzie leczy połowę ran (raz po każdym powrocie)."},
 	"wersalka": {"cena": 4000, "funkcja": "odpoczynek", "opis": "Wersalka. Sen po rajdzie leczy połowę ran (raz po każdym powrocie)."},
@@ -31,7 +32,8 @@ const KATALOG := {
 }
 
 ## Wyposażenie nowej gry: prycza i jedna szafka (skrytka 16 rzędów).
-const START := [{"id": "lozko", "x": 1.2, "z": 1.0, "r": 1}, {"id": "szafka_metalowa", "x": 0.35, "z": 3.4, "r": 1}]
+const START := [{"id": "lozko", "x": 1.2, "z": 1.0, "r": 1}, {"id": "szafka_metalowa", "x": 0.35, "z": 3.4, "r": 1},
+	{"id": "zarowka", "x": 1.4, "z": 2.0, "r": 0}]
 ## Zapisy sprzed kryjówki: odtwarza dawny schron (skrytka 28 rzędów, stół roboczy, kącik).
 const MIGRACJA := [{"id": "lozko", "x": 1.2, "z": 1.0, "r": 1}, {"id": "szafka_metalowa", "x": 0.35, "z": 3.0, "r": 1},
 	{"id": "szafka_metalowa", "x": 0.35, "z": 3.6, "r": 1}, {"id": "szafka_metalowa", "x": 0.35, "z": 4.2, "r": 1},

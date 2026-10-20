@@ -123,12 +123,22 @@ func _ready() -> void:
 	_komunikaty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_komunikaty)
 	# napisy wrogów (dół, nad środkiem)
+	_mapa = MapaStrefy.new()
+	_mapa.hud = self
+	_mapa.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_mapa.offset_left = -470
+	_mapa.offset_right = -24
+	_mapa.offset_top = -170
+	_mapa.offset_bottom = 170
+	_mapa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mapa.visible = false
+	_root.add_child(_mapa)
 	_napisy = VBoxContainer.new()
 	_napisy.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_napisy.offset_left = -300
 	_napisy.offset_right = 300
-	_napisy.offset_top = -250
-	_napisy.offset_bottom = -170
+	_napisy.offset_top = -78
+	_napisy.offset_bottom = -54
 	_napisy.alignment = BoxContainer.ALIGNMENT_END
 	_napisy.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_napisy)
@@ -323,6 +333,10 @@ func _odswiez(delta: float) -> void:
 			_wyjscia_t = 8.0
 		_wyjscia_t -= delta
 		_czas.visible = _wyjscia_t > 0.0
+		if _mapa:
+			_mapa.visible = _wyjscia_t > 0.0 and gracz.ekw.ma_wyposazenie("mapa")
+			if _mapa.visible:
+				_mapa.queue_redraw()
 		if _wyjscia_t > 0.0:
 			var linie := ["WYJŚCIA ZE STREFY:"]
 			for w in rajd.info["wyjscia"]:
@@ -482,7 +496,7 @@ func ramka_celu() -> Rect2:
 	if vp is SubViewport:
 		var kont := vp.get_parent() as Control
 		if kont:
-			skala = kont.size / Vector2((vp as SubViewport).size)
+			skala = Widok3D.skala_ekranu(vp)
 	# AABB zapamiętany w układzie obiektu (drzwi się obracają, ale ramka i tak przybliżona)
 	var ab := _ramka_aabb
 	var mn := Vector2(INF, INF)
@@ -532,13 +546,14 @@ func napis_wroga(kto: String, tekst: String, pos: Vector3) -> void:
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	l.add_theme_constant_override("shadow_offset_x", 1)
 	l.add_theme_constant_override("shadow_offset_y", 1)
-	_napisy.add_child(l)
-	while _napisy.get_child_count() > 3:
-		var c := _napisy.get_child(0)
+	l.add_theme_font_size_override("font_size", 14)
+	# jeden okrzyk naraz, przy dolnej krawędzi – nowy zastępuje stary (bez stosu napisów na środku)
+	for c in _napisy.get_children():
 		_napisy.remove_child(c)
 		c.queue_free()
+	_napisy.add_child(l)
 	var tw := l.create_tween()
-	tw.tween_interval(2.6)
+	tw.tween_interval(2.2)
 	tw.tween_property(l, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(l.queue_free)
 
@@ -564,6 +579,73 @@ func _trafiony(kier: Vector3, _czesc: String) -> void:
 	_trafienie = 1.0
 	var lok := gracz.global_basis.inverse() * kier
 	_trafienie_kier = atan2(lok.x, -lok.z)
+
+
+var _mapa: MapaStrefy
+
+
+## Szkic planu z mapy strefy ([O] z mapą na slocie wyposażenia): kondygnacja gracza, odwiedzone pomieszczenia
+## zamalowane, wyjścia, widziane strzałki (też te fałszywe – mapa nie wie, kto kłamie), znaki gracza, gracz z kierunkiem.
+class MapaStrefy:
+	extends Control
+	var hud
+
+	func _draw() -> void:
+		var rajd = hud.rajd
+		if rajd == null or rajd.gen == null:
+			return
+		var g: Node3D = hud.gracz
+		var pietro := 1 if g.global_position.y > GeneratorBiomu.PIETRO_H - 0.6 else 0
+		var gen: GeneratorBiomu = rajd.gen_p if pietro == 1 else rajd.gen
+		var mn := Vector2(INF, INF)
+		var mx := Vector2(-INF, -INF)
+		for k in gen.komorki:
+			var r: Rect2 = gen.komorki[k]["rect"]
+			mn = mn.min(r.position)
+			mx = mx.max(r.end)
+		var obszar := Rect2(Vector2(8, 26), size - Vector2(16, 34))
+		var sk := minf(obszar.size.x / maxf(1.0, mx.x - mn.x), obszar.size.y / maxf(1.0, mx.y - mn.y))
+		var off := obszar.position + (obszar.size - (mx - mn) * sk) * 0.5
+		var na_ekran := func(p: Vector3) -> Vector2: return off + (Vector2(p.x, p.z) - mn) * sk
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.84, 0.8, 0.68, 0.93))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.25, 0.2, 0.15), false, 2.0)
+		draw_string(Motyw.mono_b(), Vector2(10, 18), "PLAN – %s" % ("PIĘTRO" if pietro == 1 else "PARTER"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.25, 0.2, 0.15))
+		for k in gen.komorki:
+			var r: Rect2 = gen.komorki[k]["rect"]
+			var rr := Rect2(off + (r.position - mn) * sk, r.size * sk)
+			if rajd.odwiedzone_k.has(Vector3i(k.x, k.y, pietro)):
+				draw_rect(rr, Color(0.55, 0.48, 0.36, 0.55))
+			draw_rect(rr, Color(0.3, 0.25, 0.2, 0.9), false, 1.0)
+		var kol := {"brama": Color(0.95, 0.95, 0.9), "piwnica": Color(0.85, 0.7, 0.15), "okno": Color(0.75, 0.15, 0.1)}
+		for w in rajd.info["wyjscia"]:
+			var e := w as Ewakuacja
+			if (e.global_position.y > GeneratorBiomu.PIETRO_H - 0.6) != (pietro == 1):
+				continue
+			var c: Color = kol["brama"] if e.nazwa.contains("Brama") else (kol["piwnica"] if e.nazwa.contains("Piwnica") else kol["okno"])
+			var sp: Vector2 = na_ekran.call(e.global_position)
+			draw_circle(sp, 6.0, Color(0.15, 0.12, 0.1))
+			draw_circle(sp, 4.5, c)
+		for i in rajd.widziane_strzalki:
+			var ps: Array = Naklejki.pozycje[i]
+			var pp: Vector3 = ps[0]
+			if (pp.y > GeneratorBiomu.PIETRO_H - 0.6) != (pietro == 1):
+				continue
+			var nrm: Vector3 = ps[1]
+			var prawo := Vector3.UP.cross(nrm).normalized() * (1.0 if String(ps[2]).ends_with("_p") else -1.0)
+			var s0: Vector2 = na_ekran.call(pp)
+			var kier := Vector2(prawo.x, prawo.z)
+			var c2: Color = kol.get(String(ps[2]).split("_")[1], Color.WHITE)
+			draw_line(s0 - kier * 5.0, s0 + kier * 5.0, c2.darkened(0.3), 2.0)
+			draw_colored_polygon(PackedVector2Array([s0 + kier * 7.0, s0 + kier * 2.0 + kier.orthogonal() * 3.0, s0 + kier * 2.0 - kier.orthogonal() * 3.0]), c2.darkened(0.3))
+		for z in Naklejki.znaki_gracza:
+			var zp: Vector3 = z[0]
+			if (zp.y > GeneratorBiomu.PIETRO_H - 0.6) != (pietro == 1):
+				continue
+			draw_circle(na_ekran.call(zp), 3.0, Color(0.92, 0.47, 0.11))
+		var gp: Vector2 = na_ekran.call(g.global_position)
+		var f := -g.global_basis.z
+		var fv := Vector2(f.x, f.z).normalized()
+		draw_colored_polygon(PackedVector2Array([gp + fv * 9.0, gp - fv * 5.0 + fv.orthogonal() * 5.0, gp - fv * 5.0 - fv.orthogonal() * 5.0]), Color(0.1, 0.35, 0.15))
 
 
 class Kropka:

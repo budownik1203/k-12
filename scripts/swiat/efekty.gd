@@ -17,6 +17,64 @@ static func _material_sladu() -> StandardMaterial3D:
 static var _mat_krew: StandardMaterial3D
 
 
+static var material_sciany_fn: Callable      # (pozycja) -> "tynk" / "cegla" / "kafelki" / "beton" (ustawia rajd)
+static var _otwory: Array = []
+const PYL := {"tynk": Color(0.78, 0.76, 0.7), "cegla": Color(0.6, 0.3, 0.22), "kafelki": Color(0.88, 0.88, 0.84), "beton": Color(0.5, 0.48, 0.44)}
+
+
+## Trafienie kulą w ścianę: dziura z odpryskiem i pył w kolorze materiału (tynk, cegła, kafelki, beton),
+## dźwięk wg materiału. Dziury zostają do końca rajdu (najwyżej 200 najnowszych).
+static func trafienie_sciany(rodzic: Node3D, pos: Vector3, normal: Vector3) -> void:
+	if rodzic == null or not rodzic.is_inside_tree():
+		return
+	var mat := "beton"
+	if material_sciany_fn.is_valid() and absf(normal.y) < 0.6:
+		mat = String(material_sciany_fn.call(pos + normal * 0.3))
+	elif normal.y >= 0.6:
+		mat = "beton"
+	var el: Dictionary = Naklejki.dane()["elementy"]
+	var id := "otwor_%s_%d" % [mat, randi() % 2]
+	if el.has(id):
+		var e: Dictionary = el[id]
+		var A := float(Naklejki.dane()["atlas"])
+		var re: Array = e["rect"]
+		var s := randf_range(0.1, 0.14)
+		var qm := QuadMesh.new()
+		qm.size = Vector2(s, s)
+		var u0 := float(re[0]) / A
+		var v0 := float(re[1]) / A
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var pts := [Vector3(-s * 0.5, -s * 0.5, 0), Vector3(s * 0.5, -s * 0.5, 0), Vector3(s * 0.5, s * 0.5, 0), Vector3(-s * 0.5, s * 0.5, 0)]
+		var du := float(re[2]) / A
+		var dv := float(re[3]) / A
+		var uv := [Vector2(u0, v0 + dv), Vector2(u0 + du, v0 + dv), Vector2(u0 + du, v0), Vector2(u0, v0)]
+		for i in [0, 2, 1, 0, 3, 2]:
+			st.set_normal(Vector3.BACK)
+			st.set_uv(uv[i])
+			st.add_vertex(pts[i])
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = Naklejki.material()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rodzic.add_child(mi)
+		mi.global_position = pos + normal * 0.004
+		var up := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.95 else Vector3.FORWARD
+		mi.look_at(mi.global_position - normal, up)
+		mi.rotate_object_local(Vector3.BACK, randf() * TAU)
+		_otwory.append(mi)
+		while _otwory.size() > 200:
+			var old = _otwory.pop_front()
+			if is_instance_valid(old):
+				old.queue_free()
+	var kol: Color = PYL.get(mat, PYL["beton"])
+	czastki(rodzic, pos, normal, kol, 14 if mat != "kafelki" else 10, 3.2)
+	if mat in ["beton", "kafelki"] and randf() < 0.4:
+		czastki(rodzic, pos, normal, Color(1.0, 0.8, 0.4), 3, 5.0)
+	var wys: float = float({"tynk": 0.9, "cegla": 0.8, "kafelki": 1.35, "beton": 1.0}.get(mat, 1.0)) * randf_range(0.93, 1.07)
+	Dzwiek.graj_3d("trafienie_beton", pos, rodzic, -6.0, wys)
+
+
 static func slad(rodzic: Node3D, pos: Vector3, normal: Vector3, krew := false) -> void:
 	if rodzic == null or not rodzic.is_inside_tree():
 		return
@@ -178,13 +236,16 @@ static func blysk(rodzic: Node3D, pos: Vector3, sila := 2.5) -> void:
 		return
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.75, 0.4)
-	l.light_energy = sila
-	l.omni_range = 5.0
-	l.light_specular = 0.0
+	l.light_energy = sila * randf_range(1.1, 1.4)
+	l.omni_range = 7.0
+	l.omni_attenuation = 1.4
+	l.light_specular = 0.15
 	rodzic.add_child(l)
 	l.global_position = pos
+	# pełny błysk przez klatkę (inaczej przy 60 kl./s ledwo widać), potem szybkie wygaszanie
 	var t := l.create_tween()
-	t.tween_property(l, "light_energy", 0.0, 0.06)
+	t.tween_interval(0.022)
+	t.tween_property(l, "light_energy", 0.0, 0.075).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	t.tween_callback(l.queue_free)
 
 
@@ -298,13 +359,13 @@ static func plomien_wylotu(rodzic: Node3D, xf: Transform3D, skala := 1.0, celowa
 	var i := randi() % 3
 	var gw := MeshInstance3D.new()
 	var q := QuadMesh.new()
-	var s := 0.16 * skala * randf_range(0.85, 1.15) * (0.7 if celowanie > 0.5 else 1.0)
+	var s := 0.2 * skala * randf_range(0.85, 1.2) * (0.72 if celowanie > 0.5 else 1.0)
 	q.size = Vector2(s, s)
 	gw.mesh = q
 	gw.material_override = _mat_gw_puste[i] if celowanie > 0.5 else _mat_gw[i]
 	gw.position = Vector3(0, 0, -0.01 * skala)
 	n.add_child(gw)
-	var dl := 0.26 * skala * randf_range(0.8, 1.25)
+	var dl := 0.32 * skala * randf_range(0.8, 1.25)
 	for k in 2:
 		var b := MeshInstance3D.new()
 		var qb := QuadMesh.new()
@@ -320,7 +381,8 @@ static func plomien_wylotu(rodzic: Node3D, xf: Transform3D, skala := 1.0, celowa
 	for mi in n.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var t := n.create_tween()
-	t.tween_property(n, "scale", Vector3(0.55, 0.55, 1.3), 0.045)
+	t.tween_interval(0.017)
+	t.tween_property(n, "scale", Vector3(0.5, 0.5, 1.35), 0.04)
 	t.tween_callback(n.queue_free)
 
 

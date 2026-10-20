@@ -15,6 +15,7 @@ var hud: Node
 var ekran_ekw: Node
 var czas := 0.0
 var zabici: Array = []
+var _start_zapas := {}         # id przedmiotu -> [wartość amunicji, wartość leków] na starcie (raport: zużycie)
 var zginieni_inni := 0           # polegli w walkach frakcji (bez udziału gracza)
 var zdarzenia: Array = []
 var wartosc_poczatkowa := 0
@@ -55,6 +56,7 @@ func _ready() -> void:
 	wartosc_poczatkowa = Gra.ekw.wartosc()
 	for p in Gra.ekw.wszystkie():
 		_start_ids[(p as Przedmiot).get_instance_id()] = true
+		_start_zapas[(p as Przedmiot).get_instance_id()] = _zapas_przedmiotu(p)
 	if ResourceLoader.exists("res://scripts/ai/menedzer_wrogow.gd"):
 		var mw = load("res://scripts/ai/menedzer_wrogow.gd").new()
 		mw.name = "Wrogowie"
@@ -75,10 +77,12 @@ func _ready() -> void:
 	Sterowanie.blokada = false
 	Sterowanie.menu_otwarte = false
 	Dzwiek.graj("start_rajdu", -6.0)
+	Gra.ukryj_ladowanie()
 	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). [O] – lista wyjść z kierunkiem.")
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
 	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
 	Dzwiek.podloze_fn = _podloze_dzw
+	Efekty.material_sciany_fn = func(p: Vector3) -> String: return gen_dla(p).sciana_mat(p)
 	Dzwiek.akustyka_fn = _akustyka_dzw
 	Dzwiek.ambient("wiatr", self, -22.0)
 	_napiecie = Dzwiek.ambient("napiecie", self, -60.0)
@@ -133,6 +137,12 @@ func _ready() -> void:
 	elif args.has("--strzalki"):
 		_tryb_testu = "strzalki"
 		_zrzut_strzalek.call_deferred(args[args.find("--strzalki") + 1])
+	elif args.has("--test_mapa"):
+		_tryb_testu = "mapa"
+		_test_mapy.call_deferred(args[args.find("--test_mapa") + 1])
+	elif args.has("--test_pulapka"):
+		_tryb_testu = "pulapka"
+		_test_pulapki.call_deferred(args[args.find("--test_pulapka") + 1])
 	elif args.has("--ekonomia"):
 		_tryb_testu = "ekonomia"
 		_sonda_ekonomii.call_deferred()
@@ -197,11 +207,25 @@ func _naklejki() -> void:
 	var sp_lista: Array = info["spawny"].duplicate()
 	for i in mini(8, sp_lista.size()):
 		zrodla.append((sp_lista[rng.randi() % sp_lista.size()] as Dictionary)["pos"])
-	var st := Naklejki.strzalki(swiat, sp, info["wyjscia"], zrodla, OFF_P.y, rng, [WARSTWA_PARTER, WARSTWA_PIETRO])
+	# cel fałszywego tropu: głęboki zaułek daleko od wyjść
+	var zaulki: Array = []
+	for spn in info["spawny"]:
+		var dal := true
+		for w in info["wyjscia"]:
+			if (w as Node3D).global_position.distance_to(spn["pos"]) < 25.0:
+				dal = false
+		if dal and int(spn.get("glebokosc", 0)) >= 2:
+			zaulki.append(spn["pos"])
+	var st := Naklejki.strzalki(swiat, sp, info["wyjscia"], zrodla, OFF_P.y, rng, [WARSTWA_PARTER, WARSTWA_PIETRO], zaulki)
 	var m0 := Naklejki.rozmiesc(swiat.get_node("Parter"), sp, gen.komorki, 0.0, GeneratorBiomu.H, rng, WARSTWA_PARTER)
 	var m1 := Naklejki.rozmiesc(swiat.get_node("Pietro"), sp, gen_p.komorki, OFF_P.y, GeneratorBiomu.H, rng, WARSTWA_PIETRO)
 	print_verbose("naklejki: %d + %d, strzałki do wyjść: %d + %d" % [int(m0.get_meta("ile", 0)) if m0 else 0, int(m1.get_meta("ile", 0)) if m1 else 0,
 		int(st[0].get_meta("ile", 0)) if st[0] else 0, int(st[1].get_meta("ile", 0)) if st[1] else 0])
+
+
+## Warstwy renderu kondygnacji dla punktu (naklejki dodawane w trakcie rajdu).
+func warstwy_dla(p: Vector3) -> int:
+	return WARSTWA_PIETRO if p.y > GeneratorBiomu.PIETRO_H - 0.6 else WARSTWA_PARTER
 
 
 ## Generator kondygnacji, na której jest punkt.
@@ -266,6 +290,8 @@ var _start_ms := 0
 var _plan_zdarzen: Array = []
 var _start_ids := {}           # przedmioty wniesione do strefy (do podsumowania łupu)
 var odwiedzone := {}           # typy pomieszczeń, w których był gracz (zlecenia zwiadu)
+var odwiedzone_k := {}         # Vector3i(x, y, kondygnacja) – komórki, w których był gracz (mapa)
+var widziane_strzalki := {}    # indeks w Naklejki.pozycje -> true (gracz je widział)
 var _odw_t := 0.0
 var awaria_pradu := false
 
@@ -277,14 +303,7 @@ func _zaplanuj_zdarzenia() -> void:
 		if a.has("--zdarzenia"):
 			_plan_zdarzen = [{"t": 2.0, "typ": "awaria"}, {"t": 4.0, "typ": "zrzut"}, {"t": 6.0, "typ": "oblawa"}]
 		return
-	var rng := RandomNumberGenerator.new()
-	rng.seed = Gra.ziarno_rajdu * 7 + 3
-	if rng.randf() < 0.4:
-		_plan_zdarzen.append({"t": rng.randf_range(300.0, 900.0), "typ": "awaria"})
-	if rng.randf() < 0.3:
-		_plan_zdarzen.append({"t": rng.randf_range(420.0, 1200.0), "typ": "oblawa"})
-	if rng.randf() < 0.3:
-		_plan_zdarzen.append({"t": rng.randf_range(480.0, 1100.0), "typ": "zrzut"})
+	_plan_zdarzen = Gra.plan_zdarzen(Gra.ziarno_rajdu)
 
 
 func _zdarzenia_strefy() -> void:
@@ -455,6 +474,8 @@ var _tlo_t := 10.0
 func _exit_tree() -> void:
 	Dzwiek.podloze_fn = Callable()
 	Dzwiek.akustyka_fn = Callable()
+	Efekty.material_sciany_fn = Callable()   # lambda z przechwyconym stanem sceny nie może przeżyć jej zwolnienia
+	Efekty._otwory.clear()
 
 
 ## Odgłosy strefy: kapanie, skrzypienie budynku, odległe strzelaniny i wycie – losowo, z różnych stron.
@@ -545,6 +566,19 @@ func _process(delta: float) -> void:
 		_odw_t = 1.0
 		var gg := gen_dla(gracz.global_position)
 		var kk := gg.komorka_w(gracz.global_position)
+		if kk.x >= 0:
+			odwiedzone_k[Vector3i(kk.x, kk.y, 1 if gg == gen_p else 0)] = true
+		# strzałki, które gracz widział z bliska (na mapę)
+		var oko := gracz.kamera.global_position
+		var spc := swiat.get_world_3d().direct_space_state
+		for i in Naklejki.pozycje.size():
+			if widziane_strzalki.has(i):
+				continue
+			var ps: Vector3 = Naklejki.pozycje[i][0]
+			if ps.distance_to(oko) < 9.0:
+				var qw := PhysicsRayQueryParameters3D.create(oko, ps + (Naklejki.pozycje[i][1] as Vector3) * 0.05, Balistyka.WARSTWA_SWIAT)
+				if spc.intersect_ray(qw).is_empty():
+					widziane_strzalki[i] = true
 		if kk.x >= 0:
 			var typ: String = gg.komorki[kk]["typ"]
 			if not odwiedzone.has(typ):
@@ -683,8 +717,43 @@ func _smierc(przyczyna: String) -> void:
 	_zakoncz({"przezyl": false, "przyczyna": przyczyna, "wyjscie": ""})
 
 
+## [wartość amunicji, wartość leków] w przedmiocie (luzem, w magazynku, w broni).
+static func _zapas_przedmiotu(p: Przedmiot) -> Array:
+	var am := 0.0
+	var med := 0.0
+	match p.typ():
+		"amunicja":
+			am = p.wartosc()
+		"magazynek":
+			if int(p.dane.get("naboje", 0)) > 0:
+				am = float(Dane.def(String(p.dane.get("amunicja", ""))).get("cena", 0)) * int(p.dane["naboje"])
+		"bron":
+			if p.dane.get("mag") != null:
+				am += _zapas_przedmiotu(p.dane["mag"])[0]
+			if String(p.dane.get("komora", "")) != "":
+				am += float(Dane.def(String(p.dane["komora"])).get("cena", 0))
+			if int(p.dane.get("wewn", 0)) > 0:
+				am += float(Dane.def(String(p.dane.get("wewn_typ", ""))).get("cena", 0)) * int(p.dane["wewn"])
+		"med":
+			med = p.wartosc()
+	return [am, med]
+
+
 func _zakoncz(w: Dictionary) -> void:
 	w["czas"] = czas
+	# zużycie: amunicja i leki z przedmiotów wniesionych do strefy (zniknięte = zużyte)
+	var teraz := {}
+	for p in Gra.ekw.wszystkie():
+		teraz[(p as Przedmiot).get_instance_id()] = _zapas_przedmiotu(p)
+	var zu_am := 0.0
+	var zu_med := 0.0
+	for id in _start_zapas:
+		var s0: Array = _start_zapas[id]
+		var s1: Array = teraz.get(id, [0.0, 0.0])
+		zu_am += maxf(0.0, float(s0[0]) - float(s1[0]))
+		zu_med += maxf(0.0, float(s0[1]) - float(s1[1]))
+	w["zuzyte_amunicja"] = int(zu_am)
+	w["zuzyte_leki"] = int(zu_med)
 	w["zabici"] = zabici
 	w["zdarzenia"] = zdarzenia
 	w["odwiedzone"] = odwiedzone.keys()
@@ -2869,6 +2938,36 @@ func _test_bossa() -> void:
 		if zabici.size() != przed:
 			print("  BŁĄD: cudze zabójstwo policzone graczowi")
 			bl += 1
+	# obstawa pada: Sęp najpierw się wycofuje, potem ucieka do wyjścia
+	var straz := []
+	for o in mw.oddzialy:
+		if s in o.czlonkowie:
+			straz = o.czlonkowie.filter(func(w): return w != s)
+	s.gracz = gracz
+	s.stan = "walka"
+	var poz0: Vector3 = s.posterunek.get("pos", Vector3.ZERO)
+	if straz.size() > 0:
+		var w0: Wrog = straz[0]
+		while not w0.cialo.martwy:
+			w0.trafiony("glowa", 60.0, 40.0, gracz, w0.global_position + Vector3.UP * 1.6, Vector3.FORWARD)
+		await get_tree().process_frame
+		s._boss_decyzje()
+		print("  po stracie pierwszego: wycofany %s, nowa pozycja o %.1f m" % [s._boss_wycofany, (s.posterunek.get("pos", poz0) as Vector3).distance_to(poz0)])
+		if not s._boss_wycofany:
+			print("  BŁĄD: Sęp się nie wycofał")
+			bl += 1
+	for w in straz:
+		while not (w as Wrog).cialo.martwy:
+			(w as Wrog).trafiony("glowa", 60.0, 40.0, gracz, (w as Wrog).global_position + Vector3.UP * 1.6, Vector3.FORWARD)
+	await get_tree().process_frame
+	s.stan = "walka"
+	s._boss_decyzje()
+	print("  sam: ucieka %s, cel o %.0f m" % [s._boss_ucieka, s._boss_cel.distance_to(s.global_position)])
+	if not s._boss_ucieka:
+		print("  BŁĄD: Sęp nie ucieka")
+		bl += 1
+	s._boss_ucieka = false
+	zabici = zabici.filter(func(z): return not z.get("dezerter", false))
 	# gracz zabija Sępa
 	var strzaly := 0
 	while not s.cialo.martwy and strzaly < 40:
@@ -2940,6 +3039,22 @@ func _test_reputacji() -> void:
 		if not zol.rozejm or ostrz.is_empty():
 			print("  BŁĄD: brak ostrzeżenia")
 			bl += 1
+	# handel z przyjaznym: informacje, potem amunicja
+	if zol:
+		var b0 := Gra.bony
+		Gra.bony = 5000
+		var t1: String = zol.tekst_interakcji(gracz)
+		zol.interakcja(gracz)
+		var t2: String = zol.tekst_interakcji(gracz)
+		var am0 := Gra.ekw.policz_amunicje(String(gracz.bron.przedmiot.defn()["bron"]["kaliber"])) if gracz.bron.przedmiot else 0
+		zol.interakcja(gracz)
+		var am1 := Gra.ekw.policz_amunicje(String(gracz.bron.przedmiot.defn()["bron"]["kaliber"])) if gracz.bron.przedmiot else 0
+		print("  handel: '%s' → '%s', bony 5000 → %d, amunicja %d → %d" % [t1, t2, Gra.bony, am0, am1])
+		var kal_g := String(gracz.bron.przedmiot.defn()["bron"]["kaliber"]) if gracz.bron.przedmiot else ""
+		if not t1.begins_with("Pogadaj") or Gra.bony > 4800 or (kal_g in ["7.62x39", "9x18"] and am1 <= am0) or (kal_g == "12/70" and am1 != am0):
+			print("  BŁĄD: handel z przyjaznym")
+			bl += 1
+		Gra.bony = b0
 	# polowanie: szabrownicy przy reputacji −50
 	gracz.global_position = info["start"]
 	await get_tree().physics_frame
@@ -3090,6 +3205,33 @@ func _prezentacja(katalog: String) -> void:
 				cel.trafiony("klatka", 60.0, 40.0, gracz, cel.global_position + Vector3.UP * 1.3, cel._ost_kier)
 			for k in 3:
 				await _zapisz_kadr(katalog, "walka_upadek_%d" % k, 6)
+			# seria w najbliższą ścianę: dziury i pył wg materiału (w oświetlonym pomieszczeniu startowym)
+			gracz.global_position = info["start"] + Vector3(0, 0.05, 0)
+			for f in 5:
+				await get_tree().physics_frame
+			var space := swiat.get_world_3d().direct_space_state
+			var najb := 99.0
+			var kier_sc := Vector3.FORWARD
+			for i in 16:
+				var a := TAU * i / 16.0
+				var kd := Vector3(cos(a), 0, sin(a))
+				var q := PhysicsRayQueryParameters3D.create(gracz.global_position + Vector3.UP * 1.5, gracz.global_position + Vector3.UP * 1.5 + kd * 8.0, Balistyka.WARSTWA_SWIAT)
+				var rr := space.intersect_ray(q)
+				if not rr.is_empty() and String((rr["collider"] as Node).name).begins_with("Sciany"):
+					var dd := (rr["position"] as Vector3).distance_to(gracz.global_position)
+					if dd > 2.0 and dd < najb:
+						najb = dd
+						kier_sc = kd
+			_patrz_na(gracz.global_position + Vector3.UP * 1.45 + kier_sc * 5.0)
+			for f in 40:
+				await get_tree().process_frame
+			Input.action_press("strzal")
+			for k in 4:
+				await _zapisz_kadr(katalog, "sciana_ogien_%d" % k, 1)
+			for f in 25:
+				await get_tree().process_frame
+			Input.action_release("strzal")
+			await _zapisz_kadr(katalog, "sciana_dziury", 40)
 			gracz.sterowanie = false
 	print("zrzuty prezentacji gotowe")
 	get_tree().quit()
@@ -3151,4 +3293,130 @@ func _zrzut_strzalek(katalog: String) -> void:
 		gracz.kamera.rotation.x = -0.05
 		await _zapisz_kadr(katalog, "strzalka_%d_%s" % [n, e[2]], 25)
 		n += 1
+	get_tree().quit()
+
+
+## Test mapy i sprayu: odwiedzone komórki, widziane strzałki (też fałszywe), znak sprayem, kadr planu [O].
+func _test_mapy(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+		(w as Node3D).global_position += Vector3(0, -50, 0)
+	var bl := 0
+	Gra.ekw.sloty["util1"] = Przedmiot.nowy("mapa")
+	var falsz := Naklejki.pozycje.filter(func(e): return e.size() > 3 and e[3]).size()
+	print("  strzałek %d, w tym fałszywych %d" % [Naklejki.pozycje.size(), falsz])
+	if falsz == 0:
+		print("  UWAGA: brak fałszywego tropu na tej mapie")
+	# obejście kilku strzałek parteru
+	var n := 0
+	for i in Naklejki.pozycje.size():
+		var e: Array = Naklejki.pozycje[i]
+		var p0: Vector3 = e[0]
+		if p0.y > GeneratorBiomu.PIETRO_H - 0.6 or n >= 6:
+			continue
+		gracz.global_position = Vector3(p0.x, 0.05, p0.z) + (e[1] as Vector3) * 2.0
+		var d := p0 - gracz.global_position
+		gracz.rotation.y = atan2(-d.x, -d.z)
+		for f in 3:
+			await get_tree().physics_frame
+		_odw_t = 0.0
+		await get_tree().process_frame
+		await get_tree().process_frame
+		n += 1
+	print("  widziane strzałki: %d, odwiedzone komórki: %d" % [widziane_strzalki.size(), odwiedzone_k.size()])
+	if widziane_strzalki.is_empty() or odwiedzone_k.is_empty():
+		print("  BŁĄD: śledzenie mapy")
+		bl += 1
+	# spray: przodem do ściany przy ostatniej strzałce
+	var puszka := Przedmiot.nowy("farba_spray")
+	Gra.ekw.kieszenie.dodaj(puszka)
+	var przed := Naklejki.znaki_gracza.size()
+	ekran_ekw._maluj("gracz_strzalka_p")
+	for f in 140:
+		await get_tree().physics_frame
+	print("  znaki gracza: %d → %d, puszka użyć %d" % [przed, Naklejki.znaki_gracza.size(), int(puszka.dane.get("uzycia", 12))])
+	if Naklejki.znaki_gracza.size() != przed + 1:
+		print("  BŁĄD: spray")
+		bl += 1
+	gracz.rotation.y += 0.6
+	await _zapisz_kadr(katalog, "spray", 10)
+	hud._wyjscia_t = 8.0
+	await _zapisz_kadr(katalog, "mapa", 10)
+	print("TEST MAPY: błędów ", bl)
+	get_tree().quit()
+
+
+## Test pułapki: granat w szklance na klamce, wróg otwiera drzwi z drugiej strony, wybuch liczy się graczowi.
+func _test_pulapki(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	var bl := 0
+	var drz: Drzwi = null
+	var najb := INF
+	for n in swiat.find_children("*", "", true, false):
+		if n is Drzwi and not (n as Drzwi).na_klucz and (n as Drzwi).zamkniete() and (n as Drzwi).global_position.y < 1.0:
+			var dd := (n as Node3D).global_position.distance_to(info["start"])
+			if dd < najb:
+				najb = dd
+				drz = n
+	if drz == null:
+		print("  BŁĄD: brak drzwi")
+		get_tree().quit()
+		return
+	# gracz przed drzwiami, po stronie +Z, przodem do klamki
+	var klamka := drz.global_transform * Vector3(drz.szer * 0.5 - 0.14, 1.0, 0.0)
+	gracz.global_position = drz.global_transform * Vector3(drz.szer * 0.25, 0.05, 0.9)
+	var d := klamka - gracz.global_position
+	gracz.rotation.y = atan2(-d.x, -d.z)
+	gracz.kamera.rotation.x = atan2(klamka.y - (gracz.global_position.y + 1.6), Vector2(d.x, d.z).length())
+	var granat := Przedmiot.nowy("granat_f1")
+	Gra.ekw.kieszenie.dodaj(granat)
+	Gra.ekw.kieszenie.dodaj(Przedmiot.nowy("szklanka"))
+	for _i in 3:
+		await get_tree().physics_frame
+	ekran_ekw._zastaw_pulapke(granat)
+	for _i in 340:
+		await get_tree().physics_frame
+	print("  pułapka na drzwiach: %s, strona %s" % [drz.pulapka != null, drz.pulapka.strona if drz.pulapka else 0])
+	if drz.pulapka == null:
+		print("  BŁĄD: pułapka nie zastawiona")
+		bl += 1
+		print("TEST PUŁAPKI: błędów ", bl)
+		get_tree().quit()
+		return
+	print("  tekst ze strony pułapki: ", drz.tekst_interakcji(gracz))
+	await _zapisz_kadr(katalog, "pulapka_klamka", 10)
+	# wróg z drugiej strony otwiera drzwi; gracz odchodzi na bezpieczną odległość
+	var wr: Wrog = null
+	# bez kamizelki (odłamki zatrzymuje pancerz – to osobny, prawdziwy przypadek)
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w is Wrog and not w.cialo.martwy and w.pancerz == null:
+			wr = w
+			break
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w != wr:
+			w.set_physics_process(false)
+	wr.set_physics_process(false)
+	wr.global_position = drz.global_transform * Vector3(drz.szer * 0.3, 0.05, -0.7)
+	var bez := drz.global_transform * Vector3(drz.szer * 0.25, 0.05, 1.0)
+	gracz.global_position = bez + (bez - drz.global_position).normalized() * 9.0
+	await get_tree().physics_frame
+	var zab0 := zabici.size()
+	drz._otworz(drz.max_kat, 1.6, false, wr)
+	for _i in 30:
+		await get_tree().physics_frame
+	await _zapisz_kadr(katalog, "pulapka_szklo", 2)
+	# otwierający wchodzi do środka (tak jak w grze – AI przechodzi przez drzwi, nim zrozumie, co brzęknęło)
+	for _i in 40:
+		await get_tree().physics_frame
+	wr.global_position = drz.global_transform * Vector3(drz.szer * 0.15, 0.05, 0.8)
+	for _i in 160:
+		await get_tree().physics_frame
+	print("  po otwarciu: wróg martwy %s (hp %s), zabici gracza %d → %d, pułapka %s" % [wr.cialo.martwy, wr.cialo.hp, zab0, zabici.size(), drz.pulapka])
+	if not wr.cialo.martwy or zabici.size() != zab0 + 1:
+		print("  BŁĄD: pułapka nie zadziałała")
+		bl += 1
+	print("TEST PUŁAPKI: błędów ", bl)
 	get_tree().quit()

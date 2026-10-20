@@ -1079,7 +1079,7 @@ func _rzut(p: Vector3) -> Variant:
 	if vp is SubViewport:
 		var kont := vp.get_parent() as Control
 		if kont:
-			skala = kont.size / Vector2((vp as SubViewport).size)
+			skala = Widok3D.skala_ekranu(vp)
 	return kam.unproject_position(p) * skala
 
 
@@ -1171,7 +1171,7 @@ func _skala_ekranu() -> Vector2:
 	if vp is SubViewport:
 		var kont := vp.get_parent() as Control
 		if kont:
-			skala = kont.size / Vector2((vp as SubViewport).size)
+			skala = Widok3D.skala_ekranu(vp)
 	return skala
 
 
@@ -2427,6 +2427,10 @@ enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZU
 const M_DOD := 100
 const M_ELAB := 200          # + indeks przepisu
 const M_NAPRAW_PANC := 300
+const M_SPRAY := 400         # + rodzaj znaku
+const M_PULAPKA := 500
+const ZNAKI_SPRAYU := [["Maluj na ścianie: strzałka →", "gracz_strzalka_p"], ["Maluj na ścianie: ← strzałka", "gracz_strzalka_l"],
+	["Maluj na ścianie: krzyżyk (tu byłem)", "gracz_krzyzyk"], ["Maluj na ścianie: wykrzyknik (uwaga)", "gracz_wykrzyknik"]]
 
 ## Elaboracja przy stole roboczym: [kaliber (amunicja), sztuk, puszek prochu].
 const PRZEPISY := [["a_9x18", 20, 1], ["a_12", 10, 1], ["a_762", 15, 2]]
@@ -2470,6 +2474,14 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 				_menu.add_item("Zdejmij: %s%s" % [dd.nazwa(), " (stół roboczy)" if warsz and not _warsztat else ""], M_DOD + i)
 		if p.dane.get("wewn", 0) > 0 or p.dane.get("komora", "") != "":
 			_menu.add_item("Rozładuj", M_ROZLADUJ)
+	# granat + szklanka: pułapka na klamce zamkniętych drzwi przed sobą
+	if p.id == "granat_f1" and not tryb_bazy and gracz:
+		_menu.add_item("Zastaw pułapkę na drzwiach (szklanka)" if _znajdz_narzedzie("szklanka") != null else "Pułapka na drzwiach (brak szklanki)", M_PULAPKA)
+		_menu.set_item_disabled(_menu.item_count - 1, _znajdz_narzedzie("szklanka") == null)
+	# puszka sprayu: znak na ścianie przed sobą (w rajdzie)
+	if p.id == "farba_spray" and not tryb_bazy and gracz:
+		for i in ZNAKI_SPRAYU.size():
+			_menu.add_item(ZNAKI_SPRAYU[i][0], M_SPRAY + i)
 	# stół roboczy: elaboracja (na prasie) i naprawa pancerza (tkaniną balistyczną)
 	if p.id == "prasa_elaboracyjna":
 		for i in PRZEPISY.size():
@@ -2521,6 +2533,65 @@ func _zabierz_material(pid: String, ile: int) -> bool:
 	return true
 
 
+## Pułapka: zamknięte drzwi na wprost (do 1,8 m), granat i szklanka pod ręką. Zawleczka wyciągnięta na końcu –
+## przerwanie wcześniej nic nie psuje.
+func _zastaw_pulapke(granat: Przedmiot) -> void:
+	var kam: Camera3D = gracz.kamera
+	var od := kam.global_position
+	var q := PhysicsRayQueryParameters3D.create(od, od - kam.global_basis.z * 1.8, Balistyka.WARSTWA_SWIAT)
+	var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	var d: Drzwi = (r["collider"] as Node).get_meta("drzwi") if not r.is_empty() and (r["collider"] as Node).has_meta("drzwi") else null
+	if d == null or not d.zamkniete() or d.wywazone:
+		_komunikat("Stań przy zamkniętych drzwiach, przodem do klamki.")
+		return
+	if d.pulapka != null:
+		_komunikat("Na tej klamce już coś wisi.")
+		return
+	var szk := _znajdz_narzedzie("szklanka")
+	if szk == null:
+		_komunikat("Potrzebna szklanka.")
+		return
+	if not gracz.akcja.is_empty() or _zajete():
+		return
+	var strona := 1.0 if (gracz.global_position - d.global_position).dot(d.global_basis.z) > 0.0 else -1.0
+	zamknij()
+	gracz.zacznij_akcje("Pułapka: granat w szklance", 5.0, func():
+		if d.pulapka != null or not d.zamkniete():
+			_komunikat("Drzwi się ruszyły – nie da się.")
+			return
+		if not ekw.usun_przedmiot(granat) or not ekw.usun_przedmiot(szk):
+			return
+		Dzwiek.graj_3d("zawleczka", d.global_position + Vector3.UP, gracz.get_parent(), -8.0)
+		Pulapka.zastaw(d, gracz, strona)
+		_komunikat("Zawleczka w kieszeni. Ktokolwiek otworzy te drzwi, zrzuci szklankę."), "otwieranie", 0, Callable(), {"id": "drzwi"})
+
+
+## Spray: ściana na wprost (do 2,6 m) – znak zostaje do końca rajdu. Trwa chwilę i syczy (słychać).
+func _maluj(id: String) -> void:
+	var kam: Camera3D = gracz.kamera
+	var od := kam.global_position
+	var q := PhysicsRayQueryParameters3D.create(od, od - kam.global_basis.z * 2.6, Balistyka.WARSTWA_SWIAT)
+	var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+	if r.is_empty() or not String((r["collider"] as Node).name).begins_with("Sciany") or absf((r["normal"] as Vector3).y) > 0.3:
+		_komunikat("Stań przodem do ściany (najwyżej 2,5 m).")
+		return
+	var pos: Vector3 = r["position"]
+	var nrm: Vector3 = r["normal"]
+	var puszka := _znajdz_narzedzie("farba_spray")
+	if puszka == null:
+		_komunikat("Puszka musi być pod ręką (kamizelka, kieszenie).")
+		return
+	_uzyj_narzedzia(puszka, "farba_spray", 1.6, "Malowanie", func():
+		var warstwy := 0
+		var sr = get_tree().get_first_node_in_group("ui_rajdu")
+		if sr and sr.has_method("warstwy_dla"):
+			warstwy = sr.warstwy_dla(pos)
+		Naklejki.znak_gracza(gracz.get_parent(), pos, nrm, id, warstwy)
+		Gra.emituj_halas(pos, 4.0, gracz)
+		Dzwiek.graj_3d("szelest_1", pos, gracz.get_parent(), -2.0, 1.4)
+		_komunikat("Namalowane."))
+
+
 ## Górna granica wytrzymałości pancerza: każda naprawa tkaniną zabiera 10% (łata nigdy nie jest jak nowa).
 static func _maks_pancerza(p: Przedmiot) -> float:
 	return float(p.dane.get("maks_wytrz", float(p.defn()["pancerz"]["wytrzymalosc"])))
@@ -2570,6 +2641,12 @@ func _menu_akcja(id: int) -> void:
 		return
 	if id == M_NAPRAW_PANC:
 		_napraw_pancerz(p)
+		return
+	if id == M_PULAPKA:
+		_zastaw_pulapke(p)
+		return
+	if id >= M_SPRAY and id < M_SPRAY + ZNAKI_SPRAYU.size():
+		_maluj(String(ZNAKI_SPRAYU[id - M_SPRAY][1]))
 		return
 	match id:
 		M_JEDZ:
@@ -2904,6 +2981,46 @@ func _hover(p: Przedmiot) -> void:
 	_tooltip.reset_size()
 
 
+## Porównanie z tym, co gracz ma na sobie w tym samym slocie (pancerz, hełm, broń, plecak, kamizelka).
+static func _porownanie(p: Przedmiot) -> String:
+	if Gra.ekw == null:
+		return ""
+	var sl := Ekwipunek.slot_dla(p)
+	if sl == "" or not Gra.ekw.sloty.has(sl):
+		return ""
+	var nos: Przedmiot = Gra.ekw.sloty[sl]
+	if nos == null or nos == p:
+		return ""
+	var r := []
+	var fmt := func(nazwa: String, d: float, lepiej_wiecej: bool, f := "%+.0f") -> void:
+		if absf(d) < 0.01:
+			return
+		var dobrze := (d > 0) == lepiej_wiecej
+		r.append("[color=%s]%s %s[/color]" % ["#7fae6a" if dobrze else "#c8674f", nazwa, f % d])
+	match p.typ():
+		"pancerz":
+			var a: Dictionary = p.defn()["pancerz"]
+			var b: Dictionary = nos.defn()["pancerz"]
+			fmt.call("klasa", float(a["klasa"]) - float(b["klasa"]), true)
+			fmt.call("wytrz.", float(p.dane.get("wytrz", 0)) - float(nos.dane.get("wytrz", 0)), true)
+		"bron":
+			var a2: Dictionary = p.defn()["bron"]
+			var b2: Dictionary = nos.defn()["bron"]
+			fmt.call("rozrzut", (float(a2["rozrzut_ads"]) - float(b2["rozrzut_ads"])) * 100.0 / maxf(0.01, float(b2["rozrzut_ads"])), false, "%+.0f%%")
+			fmt.call("odrzut", (float(a2["odrzut"]) - float(b2["odrzut"])) * 100.0 / maxf(0.01, float(b2["odrzut"])), false, "%+.0f%%")
+			fmt.call("szybkostrz.", float(a2["rpm"]) - float(b2["rpm"]), true)
+			fmt.call("stan", float(p.dane.get("stan", 100.0)) - float(nos.dane.get("stan", 100.0)), true, "%+.0f%%")
+		"pojemnik":
+			var a3: Dictionary = p.defn()["pojemnik"]
+			var b3: Dictionary = nos.defn()["pojemnik"]
+			fmt.call("miejsce", float(int(a3["sw"]) * int(a3["sh"]) - int(b3["sw"]) * int(b3["sh"])), true, "%+.0f kratek")
+			fmt.call("odciążenie", (float(a3.get("redukcja", 0)) - float(b3.get("redukcja", 0))) * 100.0, true, "%+.0f%%")
+	fmt.call("waga", p.waga() - nos.waga(), false, "%+.1f kg")
+	if r.is_empty():
+		return ""
+	return "[color=#8c8670]wzgl. noszonego (%s):[/color] %s\n" % [nos.nazwa(), ", ".join(r)]
+
+
 static func opis_przedmiotu(p: Przedmiot) -> String:
 	if p.nieznany():
 		return "[b]%s[/b]\n[color=#8c8670]%.1f kg · wartość nieznana[/color]\nNie wiesz, co to jest. [PPM] Obejrzyj – trzeba światła." % [p.nazwa(), p.waga()]
@@ -2981,6 +3098,7 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 		t += "[color=#6f9a68]UBEZPIECZONY – wróci do skrytki po śmierci[/color]\n"
 	if p.dane.get("przydzial", false):
 		t += "[color=#8c8670]Z przydziału (zestaw startowy) – nikt tego nie odkupi[/color]\n"
+	t += _porownanie(p)
 	t += "[i][color=#a49d86]%s[/color][/i]" % d.get("opis", "")
 	return t
 

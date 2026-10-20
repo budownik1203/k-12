@@ -75,6 +75,9 @@ func _ready() -> void:
 		komunikat("Masz nieleczone urazy. Medyk przyjmuje (odpłatnie), prycza leczy część za darmo.")
 	if float(Gra.potrzeby["glod"]) < 40.0 or float(Gra.potrzeby["pragnienie"]) < 40.0:
 		komunikat("Burczy w brzuchu i zasycha w gardle. Zjedz i napij się przed wyjściem.")
+	if Gra.przerwany_rajd:
+		Gra.przerwany_rajd = false
+		komunikat("Poprzedni rajd przerwany – operator uznany za zaginionego w akcji. Sprzęt przepadł, ubezpieczone wróci pocztą.")
 	var zwrot := Gra.odbierz_poczte()
 	if not zwrot.is_empty():
 		komunikat("Pośrednik: ubezpieczyciel zwrócił do skrytki: " + ", ".join(zwrot))
@@ -604,6 +607,12 @@ func pokaz_wyjscie() -> void:
 	var akt: Array = Gra.kontrakty.get("aktywne", [])
 	for k in akt:
 		v.add_child(Motyw.etykieta("Zlecenie: " + String(k["opis"]), 13, ciemny, Motyw.mono()))
+	if MebleKryjowki.ma_funkcje(Gra.kryjowka, "meldunki"):
+		for linia in Gra.meldunki():
+			var lm := Motyw.etykieta("Meldunek: " + linia, 13, Color(0.2, 0.3, 0.45), Motyw.mono())
+			lm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			lm.custom_minimum_size = Vector2(520, 0)
+			v.add_child(lm)
 	v.add_child(Motyw.etykieta("Wszystko, co masz przy sobie, możesz stracić.", 13, Color(0.35, 0.3, 0.25)))
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
@@ -735,7 +744,7 @@ func _test_kryjowki() -> void:
 	var na_szafce := ""
 	for e in Gra.kryjowka:
 		if String(e["id"]) == "szafka_metalowa":
-			na_szafce = kryjowka.powod_odmowy("regal_metalowy", float(e["x"]), float(e["z"]), 1)
+			na_szafce = kryjowka.powod_odmowy("regal_metalowy", float(e["x"]), float(e["z"]), 90.0)
 			break
 	var poza := kryjowka.powod_odmowy("regal_metalowy", 9.0, 3.0, 0)
 	var wolne := kryjowka.powod_odmowy("regal_metalowy", 6.5, 0.3, 0)
@@ -876,6 +885,16 @@ func _test_kryjowki() -> void:
 		print("  BŁĄD: naprawa pancerza")
 		bl += 1
 	ekran_ekw.zamknij()
+	# porównanie z noszonym pancerzem w opisie
+	var stary_p = Gra.ekw.sloty["pancerz"]
+	Gra.ekw.sloty["pancerz"] = Przedmiot.nowy("kamizelka_kl2")
+	var opis: String = load("res://scripts/ui/ekran_ekwipunku.gd").opis_przedmiotu(Przedmiot.nowy("kamizelka_kl4"))
+	Gra.ekw.sloty["pancerz"] = stary_p
+	var linia: Array = Array(opis.split("\n")).filter(func(l): return String(l).contains("wzgl. noszonego"))
+	print("  porównanie: ", linia)
+	if linia.is_empty() or not String(linia[0]).contains("klasa +2"):
+		print("  BŁĄD: porównanie w opisie")
+		bl += 1
 	print("TEST KRYJÓWKI: błędów ", bl)
 	get_tree().quit()
 

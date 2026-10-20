@@ -1,0 +1,82 @@
+class_name Pulapka
+extends Node3D
+## Pułapka na drzwiach: granat F-1 bez zawleczki wciśnięty w szklankę, szklanka zawieszona na klamce (strona gracza).
+## Łyżkę zapalnika trzyma ścianka szklanki. Otwarcie drzwi (kogokolwiek – też gracza, kopniak, wybuch) zrzuca
+## szklankę: pęka na podłodze, łyżka odskakuje, po ok. 2,5 s wybuch. Ze strony pułapki można ją powoli rozbroić
+## (zawleczka wraca na miejsce – granat i szklanka do ekwipunku).
+
+var drzwi: Drzwi
+var wlasciciel: Node            # gracz – zabici liczą się jemu
+var strona := 1.0               # +1 / −1: po której stronie skrzydła wisi (lokalne Z drzwi)
+var _spuszczona := false
+
+
+static func zastaw(d: Drzwi, g: Node, strona_z: float) -> Pulapka:
+	var p := Pulapka.new()
+	p.drzwi = d
+	p.wlasciciel = g
+	p.strona = strona_z
+	d.skrzydlo.add_child(p)
+	# klamka: przy krawędzi skrzydła po stronie zamka, wysokość ok. 1 m nad podłogą
+	var lh := d.wys - 0.05 - 0.012
+	p.position = Vector3(d._szer_skrzydla * 0.5 - 0.13, 1.0 - (lh * 0.5 + 0.006) - 0.06, strona_z * (Drzwi.GR * 0.5 + 0.045))
+	d.pulapka = p
+	return p
+
+
+func _ready() -> void:
+	var szk := ModelePrzedmiotow.wezel(Przedmiot.nowy("szklanka"))
+	add_child(szk)
+	szk.rotation = Vector3(0, 0, 0)
+	szk.position = Vector3(0, -0.05, 0)
+	var gr := ModelePrzedmiotow.wezel(Przedmiot.nowy("granat_f1"))
+	add_child(gr)
+	gr.position = Vector3(0, 0.0, 0)
+	# sznurek z klamki
+	var B := preload("res://scripts/core/bryly.gd")
+	add_child(B.instancja([B.walec(Vector3(0, 0.06, 0), Vector3(0, 0.1, 0), 0.0015, 0.0015, "czern", 4)], false))
+
+
+## Drzwi ruszyły: szklanka spada i pęka, łyżka odskakuje, granat leży pod drzwiami.
+func spust() -> void:
+	if _spuszczona:
+		return
+	_spuszczona = true
+	if drzwi:
+		drzwi.pulapka = null
+	var swiat := drzwi.get_parent() as Node3D
+	var gp := global_position
+	reparent(swiat, true)
+	var podloga := Vector3(gp.x, drzwi.global_position.y + 0.03, gp.z)
+	var tw := create_tween()
+	tw.tween_property(self, "global_position", podloga, 0.32).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.parallel().tween_property(self, "rotation:z", 1.4, 0.32)
+	tw.tween_callback(func():
+		Dzwiek.graj_3d("szklo_pek", podloga, swiat, 0.0, randf_range(0.95, 1.05), 26.0)
+		Efekty.czastki(swiat, podloga + Vector3.UP * 0.03, Vector3.UP, Color(0.8, 0.9, 0.92), 14, 2.2)
+		Gra.emituj_halas(podloga, 9.0, wlasciciel)
+		var g := Granat.rzuc(swiat, podloga + Vector3.UP * 0.05, Vector3(randf_range(-0.4, 0.4), 0.3, randf_range(-0.4, 0.4)), wlasciciel, Dane.def("granat_f1"))
+		g.zapalnik = randf_range(2.3, 2.8)
+		g.ostrzega_od = 1.3
+		get_tree().create_timer(0.08).timeout.connect(func(): Dzwiek.graj_3d("lyzka", podloga, swiat, -4.0, 1.0, 14.0))
+		queue_free())
+
+
+## Rozbrojenie (ze strony pułapki): powoli zdjąć szklankę, przytrzymując łyżkę, wsunąć zawleczkę.
+func rozbroj(g) -> void:
+	g.zacznij_akcje("Rozbrajanie pułapki", 4.5, func():
+		if _spuszczona:
+			return
+		_spuszczona = true
+		if drzwi:
+			drzwi.pulapka = null
+		for pid in ["granat_f1", "szklanka"]:
+			var pz := Przedmiot.nowy(pid)
+			if not g.ekw.dodaj(pz):
+				var l := LupNaZiemi.new()
+				l.przedmiot = pz
+				drzwi.get_parent().add_child(l)
+				l.global_position = global_position + Vector3.UP * 0.1
+		Dzwiek.graj_3d("zawleczka", global_position, drzwi.get_parent(), -10.0)
+		g.komunikat.emit("Pułapka zdjęta: łyżka przytrzymana, zawleczka z powrotem. Granat i szklanka w kieszeni.")
+		queue_free(), "otwieranie", 0, Callable(), {"id": "drzwi"})

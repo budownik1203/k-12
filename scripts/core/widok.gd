@@ -7,12 +7,12 @@ const POMNIEJSZENIE := 1   # pełna rozdzielczość (styl Iron Blight: pikselowe
 
 
 static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
+	# 3D w natywnej rozdzielczości okna: kontener bez rozciągania, pomniejszony odwrotnością skali płótna
+	# (stretch canvas_items + skala interfejsu) – piksel obrazu = piksel ekranu, a UI skaluje się osobno
 	var kont := SubViewportContainer.new()
 	kont.name = "Widok3D"
-	kont.stretch = true
-	kont.stretch_shrink = POMNIEJSZENIE
+	kont.stretch = false
 	kont.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	kont.set_anchors_preset(Control.PRESET_FULL_RECT)
 	kont.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/psx_post_vp.gdshader")
@@ -55,7 +55,39 @@ static func zbuduj(rodzic: Node, mgla := 0.06, ambient := 0.085) -> Dictionary:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	swiat.add_child(we)
+	dopasuj(kont, vp)
+	kont.get_viewport().size_changed.connect(func(): dopasuj(kont, vp))
 	return {"kontener": kont, "viewport": vp, "swiat": swiat, "material": mat, "env": env}
+
+
+## Rozmiar widoku 3D = piksele okna; kontener w jednostkach płótna pomniejszony o skalę płótna.
+static func dopasuj(kont: SubViewportContainer, vp: SubViewport) -> void:
+	if not is_instance_valid(kont) or not kont.is_inside_tree():
+		return
+	var root := kont.get_viewport()
+	var s := root.get_final_transform().get_scale()
+	if s.x <= 0.0 or s.y <= 0.0:
+		s = Vector2.ONE
+	var plotno := root.get_visible_rect().size
+	var px := Vector2i(maxi(16, int(round(plotno.x * s.x))), maxi(16, int(round(plotno.y * s.y))))
+	vp.size = px
+	kont.scale = Vector2(1.0 / s.x, 1.0 / s.y)
+	kont.position = Vector2.ZERO
+	kont.size = Vector2(px)
+
+
+## Mnożnik: punkt ekranu (jednostki płótna) = piksel widoku 3D × mnożnik.
+static func skala_ekranu(vp: Viewport) -> Vector2:
+	if vp is SubViewport:
+		var kont := vp.get_parent() as Control
+		if kont:
+			return (kont.size * kont.scale) / Vector2((vp as SubViewport).size)
+	return Vector2.ONE
+
+
+## Skala interfejsu z ustawień (content_scale_factor okna).
+static func skala_ui(okno: Window) -> void:
+	okno.content_scale_factor = clampf(float(Gra.ustawienia.get("skala_ui", 1.0)), 0.75, 1.6)
 
 
 ## Wypieka siatkę nawigacji z kolizji statycznych świata (warstwa 1).
@@ -87,6 +119,7 @@ static func zastosuj(w: Dictionary) -> void:
 	var vp: SubViewport = w.get("viewport")
 	if vp == null:
 		return
+	skala_ui(vp.get_window())
 	var sk := clampf(float(Gra.ustawienia.get("skala_renderu", 1.0)), 0.5, 1.0)
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	vp.scaling_3d_scale = sk

@@ -278,5 +278,15 @@
   "oslona": null,
   "pojemnik": null,
   "nazwa": "Stojak na broń"
+ },
+ "stol_mapa": {
+  "rozmiar": [
+   1.2,
+   0.75,
+   0.8
+  ],
+  "oslona": null,
+  "pojemnik": null,
+  "nazwa": "Stół z planem strefy"
  }
 }

@@ -606,7 +606,7 @@ func do_ekranu(p: Vector3) -> Variant:
 	if vp is SubViewport:
 		var kont := vp.get_parent() as Control
 		if kont:
-			skala = kont.size / Vector2((vp as SubViewport).size)
+			skala = Widok3D.skala_ekranu(vp)
 	return _kam.unproject_position(p) * skala
 
 
@@ -652,5 +652,5 @@ func punkt_ekranu(co: String) -> Variant:
 	if vp is SubViewport:
 		var kont := vp.get_parent() as Control
 		if kont:
-			skala = kont.size / Vector2((vp as SubViewport).size)
+			skala = Widok3D.skala_ekranu(vp)
 	return _kam.unproject_position(p) * skala

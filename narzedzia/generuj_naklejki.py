@@ -265,7 +265,7 @@ def strzalka(tekst, strona, kolor, seed):
     f = ImageFont.truetype(FONT, 20 * s)
     tw = d.textlength(tekst, font=f)
     lw = 5 * s
-    sy = h * s * 0.72
+    sy = h * s * 0.72 if tekst else h * s * 0.5
     if strona == "p":
         x0, x1 = w * s * 0.06, w * s * 0.93
         d.text((x0, h * s * 0.04), tekst, font=f, fill=255)
@@ -283,6 +283,24 @@ def strzalka(tekst, strona, kolor, seed):
     rgb = np.zeros((h, w, 3), np.uint8)
     rgb[...] = kolor
     return Image.fromarray(np.dstack([rgb, (np.clip(a, 0, 1) * 255).astype(np.uint8)]), "RGBA")
+
+
+def otwor(pierscien, srodek, seed):
+    r = random.Random(seed)
+    n = 12
+    im = pusta(n, n)
+    px = im.load()
+    c = (n - 1) / 2 + r.uniform(-0.6, 0.6)
+    for y in range(n):
+        for x in range(n):
+            d = math.hypot(x - c, y - c) + r.uniform(-0.7, 0.7)
+            if d < 1.6:
+                px[x, y] = srodek + (255,)
+            elif d < 3.2:
+                px[x, y] = tuple(int(k * 0.7) for k in pierscien) + (235,)
+            elif d < 5.2 and r.random() < 0.6:
+                px[x, y] = pierscien + (int(170 * (1 - (d - 3.2) / 2.0)),)
+    return im
 
 
 def main():
@@ -315,6 +333,17 @@ def main():
     for nazwa, tekst, kolor in [("brama", "BRAMA", (225, 222, 205)), ("piwnica", "PIWNICA 7", (210, 175, 40)), ("okno", "OKNO", (175, 40, 30))]:
         for strona in ["p", "l"]:
             elementy.append(("strzalka_%s_%s" % (nazwa, strona), strzalka(tekst, strona, kolor, 200 + len(elementy)), "strzalka", 0))
+    # znaki gracza (puszka sprayu): pomarańczowe – odróżniają się od cudzych
+    pom = (235, 120, 28)
+    elementy.append(("gracz_strzalka_p", strzalka("", "p", pom, 400), "gracza", 0))
+    elementy.append(("gracz_strzalka_l", strzalka("", "l", pom, 401), "gracza", 0))
+    elementy.append(("gracz_krzyzyk", spray("X", 48, 48, pom, 402, rozmiar=110), "gracza", 0))
+    elementy.append(("gracz_wykrzyknik", spray("!", 48, 48, pom, 403, rozmiar=120), "gracza", 0))
+    # dziury po kulach wg materiału ściany (pojedyncze, 12 px – w świecie ok. 12 cm z odpryskiem)
+    for nazwa, pierscien, srodek in [("tynk", (205, 200, 185), (25, 22, 20)), ("cegla", (150, 70, 50), (40, 22, 18)),
+                                      ("kafelki", (235, 235, 228), (30, 30, 30)), ("beton", (120, 118, 112), (22, 22, 22))]:
+        for i in range(2):
+            elementy.append(("otwor_%s_%d" % (nazwa, i), otwor(pierscien, srodek, 300 + i * 7 + len(nazwa)), "otwor", 0))
     # pakowanie półkowe
     atlas = pusta(ATLAS, ATLAS)
     meta = {}

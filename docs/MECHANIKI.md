@@ -51,3 +51,14 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Łaty pancerza | tkanina przywraca wytrzymałość, maks. −10% za łatę, wartość −15% | Medyk/handlarze nie naprawiają – jedyna droga przedłużenia życia pancerza |
 | Ostrzeżenia i polowanie | przyjaźni ostrzegają, wrodzy przy −40 ruszają na gracza | korzysta z istniejącego alarmu oddziału; posterunki wojska nie opuszczają gniazd |
 | Rozliczanie zabójstw | tylko ofiary gracza (kula, granat, wykrwawienie po trafieniu) | naprawia nabijanie zleceń i reputacji przez wojnę frakcji |
+
+## Pułapki, ślady i wywiad (v0.13.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Pułapka z granatu | F1 + szklanka na klamce zamkniętych drzwi; otwarcie = wybuch po 2,3–2,8 s | czas zastawiania (5 s) odsłania gracza jak każda czynność z ekwipunku; rozbrojenie tylko od strony pułapki; zabójstwa zaliczane do zleceń |
+| Spray gracza | własne strzałki i znaki na ścianach | znaki zostają w danym rajdzie; fałszywe strzałki szabrowników wymuszają weryfikację drogi mapą |
+| Mapa ze szkicem | odwiedzone pomieszczenia i zauważone strzałki | wymaga przedmiotu „mapa” w slocie wyposażenia |
+| Meldunki | stół z mapą w kryjówce pokazuje Sępa i zdarzenia następnego rajdu | ziarno rajdu losowane z wyprzedzeniem i zapisywane |
+| Zaginięcie w akcji | wyjście z gry w trakcie rajdu = utrata sprzętu z rajdu | zamyka exploit „zamknij grę, zachowaj ekwipunek” |
+| Bez „weź wszystko” | celowo pominięte: zarządzanie ekwipunkiem ma być ciężkie i odsłaniać gracza | — |

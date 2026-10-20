@@ -441,6 +441,16 @@ static func _lup(id: String) -> Array:
 			return [_b(Vector3(0, 0.015, 0), Vector3(0.14, 0.03, 0.07), "metal_jasny", 0.006, Color(0.45, 0.5, 0.35)),
 				_w(Vector3(-0.1, 0.006, 0.05), Vector3(0.14, 0.006, 0.05), 0.003, 0.003, "metal_jasny", 6),
 				_w(Vector3(0.06, 0.0, -0.06), Vector3(0.06, 0.03, -0.06), 0.015, 0.015, "mosiadz", 10)]
+		"szklanka":
+			var szk := Color(0.75, 0.85, 0.85)
+			return [_w(Vector3(0, 0.0, 0), Vector3(0, 0.004, 0), 0.032, 0.032, "metal_jasny", 14, szk),
+				_w(Vector3(0, 0.004, 0), Vector3(0, 0.1, 0), 0.03, 0.036, "metal_jasny", 14, szk.lightened(0.1)),
+				_w(Vector3(0, 0.03, 0), Vector3(0, 0.032, 0), 0.0315, 0.0315, "bandaz", 14, Color(0.85, 0.75, 0.3))]
+		"farba_spray":
+			return [_w(Vector3(0, 0.025, 0.07), Vector3(0, 0.025, -0.08), 0.025, 0.025, "metal_jasny", 12, Color(0.9, 0.5, 0.15)),
+				_w(Vector3(0, 0.025, -0.08), Vector3(0, 0.025, -0.1), 0.022, 0.014, "metal_jasny", 10, Color(0.7, 0.7, 0.68)),
+				_b(Vector3(0, 0.03, -0.106), Vector3(0.012, 0.014, 0.012), "bakelit", 0.002),
+				_w(Vector3(0, 0.025, 0.02), Vector3(0, 0.025, -0.04), 0.0255, 0.0255, "bandaz", 12, Color(0.95, 0.92, 0.85))]
 		"niesmiertelnik":
 			var cz4 := [_b(Vector3(0, 0.0015, 0.0), Vector3(0.028, 0.003, 0.05), "metal_jasny", 0.006, Color(0.75, 0.76, 0.72)),
 				_b(Vector3(0, 0.0032, 0.004), Vector3(0.018, 0.0006, 0.03), "czern", 0.0, Color(0.3, 0.3, 0.3))]

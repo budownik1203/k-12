@@ -43,6 +43,7 @@ func _ready() -> void:
 	_suwak(_ustawienia, "Głośność tła", "glosnosc_tla", 0.0, 1.0, 0.05)
 	_suwak(_ustawienia, "Kołysanie kamery", "kolysanie", 0.0, 1.0, 0.05)
 	_suwak(_ustawienia, "Skala renderu (wydajność)", "skala_renderu", 0.5, 1.0, 0.05)
+	_suwak(_ustawienia, "Skala interfejsu", "skala_ui", 0.75, 1.6, 0.05)
 	_przelacznik(_ustawienia, "Odwróć oś Y myszy", "odwroc_y")
 	_przelacznik(_ustawienia, "Cienie od lamp", "cienie")
 	_przelacznik(_ustawienia, "Wygładzanie krawędzi", "wygladzanie")
@@ -93,7 +94,11 @@ func _suwak(v: Control, t: String, klucz: String, mn: float, mx: float, krok: fl
 	s.value_changed.connect(func(x):
 		Gra.ustawienia[klucz] = x
 		w.text = "%.2f" % x
-		Gra.ustawienia_zmiana.emit())
+		# skala interfejsu dopiero po puszczeniu suwaka (inaczej menu skacze pod kursorem)
+		if klucz != "skala_ui":
+			Gra.ustawienia_zmiana.emit())
+	if klucz == "skala_ui":
+		s.drag_ended.connect(func(_z): Gra.ustawienia_zmiana.emit())
 	h.add_child(s)
 	h.add_child(w)
 	v.add_child(h)

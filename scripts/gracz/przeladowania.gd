@@ -430,6 +430,11 @@ static func okienka(b, mag: Przedmiot) -> MeshInstance3D:
 	var cap := float(mag.defn()["magazynek"]["pojemnosc"])
 	var pelny := float(mag.dane.get("naboje", 0)) / maxf(1.0, cap)
 	var c := []
+	# najgłębsze okienko, w którym jeszcze widać nabój – mosiądz jaśniejszy (tam patrzy oko)
+	var ostatnie := -1.0
+	for fr0 in OKIENKA[id]:
+		if pelny >= float(fr0) - 0.001 and pelny > 0.0:
+			ostatnie = float(fr0)
 	for fr in OKIENKA[id]:
 		var p := Vector3.ZERO
 		var rot := Vector3.ZERO
@@ -452,7 +457,8 @@ static func okienka(b, mag: Przedmiot) -> MeshInstance3D:
 			var q := Vector3(p.x * sx, p.y, p.z)
 			c.append(B.box(q, rozm, "czern", 0.0, rot))
 			if pelny >= fr - 0.001 and pelny > 0.0:
-				c.append(B.box(q + Vector3(0.0006 * -sx, 0, 0), Vector3(0.0012, rozm.y * 0.7, rozm.z * 0.8), "metal_jasny", 0.0, rot))
+				var ost := absf(float(fr) - ostatnie) < 0.001
+				c.append(B.box(q + Vector3(0.0006 * -sx, 0, 0), Vector3(0.0012, rozm.y * (0.8 if ost else 0.7), rozm.z * (0.9 if ost else 0.8)), "mosiadz" if ost else "metal_jasny", 0.0, rot))
 	var mi := B.instancja(c)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	b.mag_node.add_child(mi)

@@ -12,6 +12,7 @@ var _t := 0.0
 var _odbicia := 0
 var _ostrzez_t := 0.0
 var _ostatni_kontakt := 0.0
+var ostrzega_od := 0.4      # po ilu sekundach wrogowie „widzą” granat (pułapka: później – szkło, łyżka, zanim zrozumieją)
 
 
 static func rzuc(swiat: Node3D, skad: Vector3, predkosc: Vector3, kto: Node, defn: Dictionary = {}) -> Granat:
@@ -67,7 +68,7 @@ func _kontakt(_b: Node) -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	_ostrzez_t -= delta
-	if _ostrzez_t <= 0.0 and _t > 0.4:
+	if _ostrzez_t <= 0.0 and _t > ostrzega_od:
 		_ostrzez_t = 0.3
 		_ostrzez()
 	if _t >= zapalnik:
@@ -127,13 +128,14 @@ func _wybuch() -> void:
 			if c.has_method("przygniec"):
 				c.przygniec(oglusz * 3.0)
 			if sila > 0.0:
-				# kilka odłamków w losowe części ciała
-				for i in 4:
+				# kilka odłamków w losowe części ciała (z bliska więcej)
+				for i in 4 + int(round(4.0 * clampf(1.0 - d / promien, 0.0, 1.0) * zaslona)):
 					c.trafiony(srodek + Vector3(randf_range(-0.3, 0.3), randf_range(-0.6, 0.6), randf_range(-0.3, 0.3)), obrazenia * sila * 0.3, 3.0, rzucajacy if rzucajacy else self, true)
 				c.set_meta("zabojca", "granat")
 		elif c.has_method("trafiony") and sila > 0.0:
 			var czesci := ["klatka", "brzuch", "nogi", "rece", "glowa"]
-			for i in 4:
+			# im bliżej, tym więcej odłamków (z bliska F-1 jest śmiertelny)
+			for i in 4 + int(round(4.0 * clampf(1.0 - d / promien, 0.0, 1.0) * zaslona)):
 				c.trafiony(czesci[randi() % (5 if randf() < 0.3 else 4)], obrazenia * sila * 0.3, 3.0, rzucajacy if rzucajacy else self, srodek, (srodek - p).normalized())
 		if c is Wrog and c.has_method("przygniec") and not ciala.martwy:
 			c.przygniec(2.0 * clampf(1.0 - d / (promien * 1.6), 0.0, 1.0), rzucajacy)

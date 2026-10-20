@@ -32,6 +32,7 @@ var _ai_kop_t := 0.0
 var _podsluch_t := 0.0
 var _podsluch_cd := 0.0
 var _szer_skrzydla := 1.1
+var pulapka: Node = null         # Pulapka: granat w szklance na klamce
 
 
 ## Ustawia drzwi w miejscu z generatora: {"p", "n", "w", "h"}.
@@ -216,6 +217,9 @@ func _physics_process(delta: float) -> void:
 				nowy = kat
 		else:
 			_blok_t = 0.0
+		# pułapka: każde poruszenie zamkniętego skrzydła zrzuca szklankę z klamki
+		if pulapka and is_instance_valid(pulapka) and stary > -0.05 and nowy < stary - 0.01:
+			pulapka.spust()
 		kat = nowy
 		_zawias.rotation.y = kat
 		if _cel == 0.0 and kat == 0.0 and stary != 0.0:
@@ -249,9 +253,19 @@ func _ktos_w_drodze(k: float) -> Node:
 
 # ------------------------------------------------------------------ gracz
 
+## Gracz po stronie, po której wisi pułapka (widzi szklankę na klamce)?
+func strona_pulapki(g) -> bool:
+	if pulapka == null or not is_instance_valid(pulapka) or g == null:
+		return false
+	var s := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
+	return s == float(pulapka.strona)
+
+
 func tekst_interakcji(g) -> String:
 	if wywazone:
 		return "Wyważone drzwi"
+	if strona_pulapki(g):
+		return "Rozbrój pułapkę (granat w szklance) – powoli"
 	var kuca: bool = g != null and float(g.kucanie) > 0.5
 	if na_klucz and zamkniete():
 		if g != null and g.ekw.ma_przedmiot("wytrych"):
@@ -266,6 +280,9 @@ func tekst_interakcji(g) -> String:
 
 func interakcja(g) -> void:
 	if wywazone or not g.akcja.is_empty():
+		return
+	if strona_pulapki(g):
+		pulapka.rozbroj(g)
 		return
 	var kuca: bool = float(g.kucanie) > 0.5
 	if na_klucz and zamkniete():

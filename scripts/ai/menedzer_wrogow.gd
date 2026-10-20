@@ -24,6 +24,8 @@ class Oddzial:
 	var nazwa := ""
 	var czlonkowie: Array = []
 	var dowodca: Node = null
+	var poluje_t := 0.0      # wysłany na gracza: przez ten czas nawołuje się (słychać z daleka)
+	var glos_t := 0.0
 
 	## Kto idzie przodem przy przeszukiwaniu: dowódca albo najodważniejszy z żywych.
 	func prowadzacy() -> Node:
@@ -98,8 +100,7 @@ func rozstaw(r: Node) -> void:
 		uzyte[k] = true
 		i += 1
 	# Sęp: najgłębsza wolna komórka daleko od startu (zawsze, gdy jest na niego zlecenie)
-	var szansa := 1.0 if zlecenie_na_bossa() or OS.get_cmdline_user_args().has("--boss") else 0.4
-	if rng.randf() < szansa:
+	if zlecenie_na_bossa() or OS.get_cmdline_user_args().has("--boss") or Gra.sep_w_rajdzie(Gra.ziarno_rajdu):
 		var najg: Vector2i = Vector2i(-999, -999)
 		var gl := -1.0
 		for k in po_komorce:
@@ -251,6 +252,17 @@ func _process(delta: float) -> void:
 	if _rep_t <= 0.0:
 		_rep_t = 1.5
 		_ostrzezenia()
+	# polujący nawołują się w marszu – gracz ma szansę usłyszeć, skąd idą
+	for o in oddzialy:
+		if o.poluje_t <= 0.0:
+			continue
+		o.poluje_t -= delta
+		o.glos_t -= delta
+		if o.glos_t <= 0.0:
+			o.glos_t = rng.randf_range(7.0, 11.0)
+			var d: Node = o.prowadzacy()
+			if d and d.stan != "walka":
+				Dzwiek.graj_3d("glos_komenda_%d" % (rng.randi() % 3), (d as Node3D).global_position + Vector3.UP * 1.6, (d as Node3D).get_parent(), 3.0, rng.randf_range(0.9, 1.05), 45.0)
 	_polowanie_t -= delta
 	if _polowanie_t <= 0.0:
 		_polowanie_t = rng.randf_range(80.0, 120.0)
@@ -368,6 +380,8 @@ func _polowanie() -> void:
 		for w in best.czlonkowie:
 			if is_instance_valid(w):
 				w.alarm_od_oddzialu(g.global_position + Vector3(rng.randf_range(-5.0, 5.0), 0.0, rng.randf_range(-5.0, 5.0)))
+		best.poluje_t = 70.0
+		best.glos_t = rng.randf_range(3.0, 6.0)
 		if not _polowanie_zapowiedziane:
 			_polowanie_zapowiedziane = true
 			g.komunikat.emit("W radiostacji trzaski: %s cię namierzyli (reputacja %d). Ruszają w twoją stronę." % [FrakcjeBazy.DANE[f]["nazwa"], FrakcjeBazy.rep(f)])

@@ -574,6 +574,174 @@
    ],
    "miejsce": "strzalka",
    "waga": 0
+  },
+  "gracz_strzalka_p": {
+   "rect": [
+    0,
+    422,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "gracza",
+   "waga": 0
+  },
+  "gracz_strzalka_l": {
+   "rect": [
+    130,
+    422,
+    128,
+    48
+   ],
+   "m": [
+    2.0,
+    0.75
+   ],
+   "miejsce": "gracza",
+   "waga": 0
+  },
+  "gracz_krzyzyk": {
+   "rect": [
+    260,
+    422,
+    48,
+    48
+   ],
+   "m": [
+    0.75,
+    0.75
+   ],
+   "miejsce": "gracza",
+   "waga": 0
+  },
+  "gracz_wykrzyknik": {
+   "rect": [
+    310,
+    422,
+    48,
+    48
+   ],
+   "m": [
+    0.75,
+    0.75
+   ],
+   "miejsce": "gracza",
+   "waga": 0
+  },
+  "otwor_tynk_0": {
+   "rect": [
+    360,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_tynk_1": {
+   "rect": [
+    374,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_cegla_0": {
+   "rect": [
+    388,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_cegla_1": {
+   "rect": [
+    402,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_kafelki_0": {
+   "rect": [
+    416,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_kafelki_1": {
+   "rect": [
+    430,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_beton_0": {
+   "rect": [
+    444,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
+  },
+  "otwor_beton_1": {
+   "rect": [
+    458,
+    422,
+    12,
+    12
+   ],
+   "m": [
+    0.1875,
+    0.1875
+   ],
+   "miejsce": "otwor",
+   "waga": 0
   }
  }
 }

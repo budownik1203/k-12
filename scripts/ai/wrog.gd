@@ -84,6 +84,11 @@ var dezerter := false         # obstawa Sępa: najemnicy-dezerterzy (bez wpływu
 var _poddany_t := 0.0
 var _oddal_lup := false
 var _sprzedal_info := false
+var _handel_info := false      # przyjazny (rozejm z reputacji): sprzedał informacje
+var _handel_amun := false      # … i amunicję
+var _boss_wycofany := false
+var _boss_ucieka := false
+var _boss_cel := Vector3.ZERO
 var _bron_upuszczona := false
 var _zachwianie := 0.0        # chwila po trafieniu: nie strzela
 var _zachwianie_cd := 0.0
@@ -163,6 +168,70 @@ func uczyn_dezerterem() -> void:
 	morale += 25.0
 
 
+## Sęp: po stracie pierwszego człowieka wycofuje się o kilka metrów od gracza i znów trzyma pozycję;
+## sam albo poniżej połowy zdrowia – ucieka do najbliższego wyjścia z dala od gracza (jeśli dobiegnie, znika ze strefy).
+func _boss_decyzje() -> void:
+	if _boss_ucieka:
+		return
+	var ochrona := 0
+	if oddzial:
+		for w in oddzial.czlonkowie:
+			if is_instance_valid(w) and w != self and not w.cialo.martwy:
+				ochrona += 1
+	var zagrozenie_gracz: Node3D = gracz if gracz is Gracz else null
+	if not _boss_wycofany and ochrona < 2 and zagrozenie_gracz:
+		_boss_wycofany = true
+		var od := global_position - zagrozenie_gracz.global_position
+		od.y = 0.0
+		var p := _najblizszy_na_siatce(global_position + od.normalized() * 8.0)
+		var kier := zagrozenie_gracz.global_position - p
+		kier.y = 0.0
+		posterunek = {"pos": p, "kier": kier.normalized() if kier.length() > 0.1 else -global_basis.z}
+		_napis_t = 0.0
+		_napis(["Cofamy się! Trzymać korytarz!", "Do tyłu, osłaniać mnie!"].pick_random())
+	if (ochrona == 0 and stan in ["walka", "szukanie", "czujny"]) or cialo.procent() < 0.5:
+		var rajd := get_tree().get_first_node_in_group("ui_rajdu")
+		if rajd == null or rajd.get("info") == null:
+			return
+		var best: Vector3 = Vector3.INF
+		var bd := INF
+		for w in rajd.info["wyjscia"]:
+			var e := w as Node3D
+			var d := e.global_position.distance_to(global_position)
+			# z dala od gracza: wyjście, do którego gracz ma bliżej niż Sęp, odpada
+			if zagrozenie_gracz and e.global_position.distance_to(zagrozenie_gracz.global_position) < d * 0.8:
+				continue
+			if d < bd:
+				bd = d
+				best = e.global_position
+		if best == Vector3.INF:
+			return
+		_boss_ucieka = true
+		_boss_cel = _najblizszy_na_siatce(best)
+		posterunek = {}
+		_napis_t = 0.0
+		_napis(["Dość tego! Spadam!", "Nie dziś, nie dla was!"].pick_random())
+		if rajd.has_method("dodaj_zdarzenie"):
+			rajd.dodaj_zdarzenie("Sęp rzucił się do ucieczki.")
+
+
+func _boss_ewakuacja(delta: float) -> void:
+	biegnie = true
+	_kucanie_cel = 0.0
+	_idz(_boss_cel)
+	if widzi and gracz and global_position.distance_to(gracz.global_position) < 12.0:
+		_strzelaj(delta)
+	if global_position.distance_to(_boss_cel) < 1.6:
+		var rajd := get_tree().get_first_node_in_group("ui_rajdu")
+		if rajd and rajd.has_method("dodaj_zdarzenie"):
+			rajd.dodaj_zdarzenie("Sęp uciekł ze strefy. Nieśmiertelnik razem z nim.")
+		if gracz is Gracz:
+			(gracz as Gracz).komunikat.emit("Gdzieś daleko trzasnęły drzwi. Sęp się wymknął.")
+		if oddzial:
+			oddzial.czlonkowie.erase(self)
+		queue_free()
+
+
 func _pojemnosc() -> int:
 	var bd: Dictionary = bron.defn()["bron"]
 	if bd.has("wewnetrzny"):
@@ -174,6 +243,8 @@ func _ready() -> void:
 	add_to_group("wrogowie")
 	cialo = Cialo.new()
 	cialo.npc = true
+	if rozejm and not dezerter:
+		call_deferred("_dodaj_obszar_rozmowy")
 	if boss:
 		for c in cialo.hp:
 			cialo.hp[c] = float(cialo.hp[c]) * 1.8
@@ -726,6 +797,13 @@ func _physics_process(delta: float) -> void:
 			stan = "opatrywanie"
 			_opatr_t = randf_range(4.0, 6.0)
 			_napis(["Opatruję się!", "Osłaniaj, bandażuję!", "Chwila, krwawię!"].pick_random())
+	if boss:
+		_boss_decyzje()
+		if _boss_ucieka:
+			_boss_ewakuacja(delta)
+			_ruch(delta)
+			_animuj(delta)
+			return
 	# wojskowi z posterunku nie opuszczają gniazda: zaalarmowani trzymają wejście
 	if not posterunek.is_empty() and stan in ["czujny", "szukanie", "patrol"]:
 		_posterunek_alarm(delta)
@@ -1030,6 +1108,24 @@ func _poddaj_sie() -> void:
 var _obszar_rozmowy: Area3D
 
 
+func _dodaj_obszar_rozmowy() -> void:
+	if _obszar_rozmowy and is_instance_valid(_obszar_rozmowy):
+		return
+	var a := Area3D.new()
+	a.collision_layer = Balistyka.WARSTWA_INTERAKCJE
+	a.collision_mask = 0
+	a.monitoring = false
+	a.set_meta("interakcja", self)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.7, 1.8, 0.7)
+	cs.shape = bs
+	cs.position.y = 0.9
+	a.add_child(cs)
+	add_child(a)
+	_obszar_rozmowy = a
+
+
 func _upusc_bron() -> void:
 	if _bron_upuszczona:
 		return
@@ -1071,7 +1167,38 @@ func _odejdz() -> void:
 		_obszar_rozmowy.queue_free()
 
 
+func _przyjazny_do_rozmowy() -> bool:
+	return rozejm and not poddany and not dezerter and not cialo.martwy and stan not in ["walka", "ucieczka", "opatrywanie"]
+
+
+## Amunicja do broni gracza, którą ta frakcja nosi (albo pusty napis).
+func _amunicja_dla(g) -> Array:
+	var b: Przedmiot = g.bron.przedmiot if g.bron and g.bron.przedmiot else null
+	if b == null:
+		return []
+	var kal := String(b.defn()["bron"]["kaliber"])
+	# każda frakcja ma tylko to, z czego sama strzela
+	var ma: Array = {"szabrownik": ["9x18", "12/70"], "najemnik": ["9x18", "7.62x39"], "wojskowy": ["7.62x39", "9x18"]}.get(frakcja, [])
+	if kal not in ma:
+		return []
+	var am := Dane.amunicja_dla(kal)
+	if am.is_empty():
+		return []
+	var id := String(am[0])
+	var n := 10 if kal == "12/70" else 20
+	var cena := int(float(Dane.def(id).get("cena", 50)) * n * 1.5)
+	return [id, n, cena]
+
+
 func tekst_interakcji(g) -> String:
+	if _przyjazny_do_rozmowy() and g is Gracz:
+		if not _handel_info:
+			return "Pogadaj: informacje (200 bonów)"
+		if not _handel_amun:
+			var a := _amunicja_dla(g)
+			if not a.is_empty():
+				return "Odkup amunicję: %s ×%d (%d bonów)" % [Dane.nazwa(a[0]), a[1], a[2]]
+		return ""
 	if not poddany or cialo.martwy:
 		return ""
 	if not _oddal_lup:
@@ -1082,6 +1209,37 @@ func tekst_interakcji(g) -> String:
 
 
 func interakcja(g) -> void:
+	if _przyjazny_do_rozmowy() and g is Gracz:
+		if not _handel_info:
+			if Gra.bony < 200:
+				g.komunikat.emit("Za mało bonów (200).")
+				return
+			Gra.bony -= 200
+			Gra.zmiana_bonow.emit()
+			_handel_info = true
+			_napis_t = 0.0
+			_napis(["Słuchaj uważnie, nie powtórzę.", "Za darmo to w piwnicy pełzacze.", "Dobra, mów cicho."].pick_random())
+			g.komunikat.emit(_informacja(g))
+			return
+		if not _handel_amun:
+			var a := _amunicja_dla(g)
+			if a.is_empty():
+				return
+			if Gra.bony < int(a[2]):
+				g.komunikat.emit("Za mało bonów (%d)." % int(a[2]))
+				return
+			Gra.bony -= int(a[2])
+			Gra.zmiana_bonow.emit()
+			_handel_amun = true
+			var p := Przedmiot.nowy(String(a[0]), int(a[1]))
+			if not (g as Gracz).ekw.dodaj(p):
+				var l := LupNaZiemi.new()
+				l.przedmiot = p
+				get_parent().add_child(l)
+				l.global_position = global_position - global_basis.z * 0.6 + Vector3.UP * 0.3
+			Dzwiek.graj_3d("szelest_0", global_position, get_parent(), -6.0)
+			g.komunikat.emit("Odkupiłeś %s ×%d." % [Dane.nazwa(a[0]), int(a[1])])
+		return
 	if not poddany or cialo.martwy:
 		return
 	if not _oddal_lup:

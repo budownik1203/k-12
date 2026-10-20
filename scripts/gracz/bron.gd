@@ -931,8 +931,18 @@ func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr:
 	if col.has_meta("czesc"):
 		var wl = col.get_meta("wlasciciel")
 		if is_instance_valid(wl) and wl.has_method("trafiony"):
-			wl.trafiony(String(col.get_meta("czesc")), obr, pen, gracz, r["position"], kier)
+			var czesc_t := String(col.get_meta("czesc"))
+			wl.trafiony(czesc_t, obr, pen, gracz, r["position"], kier)
 			var zabity: bool = wl.get("cialo") != null and wl.cialo.martwy
+			# z daleka trafienie słychać z opóźnieniem dźwięku (głuche w ciało, metaliczne w płytę) – bez znaczników
+			var odl := gracz.global_position.distance_to(r["position"])
+			if odl > 12.0:
+				var w_panc := false
+				var pc = wl.get("helm") if czesc_t == "glowa" else wl.get("pancerz")
+				if pc is Przedmiot and czesc_t in ((pc as Przedmiot).defn()["pancerz"]["strefy"] as Array):
+					w_panc = true
+				var dzw := "trafienie_pancerz" if w_panc else "trafienie_cialo"
+				get_tree().create_timer(odl / 343.0).timeout.connect(func(): Dzwiek.graj(dzw, -13.0, randf_range(0.9, 1.05)))
 			get_tree().call_group("hud", "znacznik_trafienia", zabity, String(col.get_meta("czesc")) == "glowa")
 			# krew na ścianie za celem
 			var q2 := PhysicsRayQueryParameters3D.create(r["position"], r["position"] + kier * 2.5, Balistyka.WARSTWA_SWIAT)
@@ -941,6 +951,10 @@ func _promien(space: PhysicsDirectSpaceState3D, od: Vector3, kier: Vector3, obr:
 				Efekty.slad(gracz.get_parent(), r2["position"], r2["normal"], true)
 			return
 	var swiat := gracz.get_parent() as Node3D
+	# meble i przedmioty: dotychczasowy ślad; ściany i podłogi: dziura i pył wg materiału
+	if (col as Node).name.begins_with("Sciany"):
+		Efekty.trafienie_sciany(swiat, r["position"], r["normal"])
+		return
 	Efekty.slad(swiat, r["position"], r["normal"])
 	Efekty.czastki(swiat, r["position"], r["normal"], Color(0.5, 0.48, 0.44), 12, 3.0)
 	if randf() < 0.35:

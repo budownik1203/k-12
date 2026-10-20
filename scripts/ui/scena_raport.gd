@@ -56,6 +56,8 @@ func _ready() -> void:
 		v.add_child(Motyw.etykieta("Wyjście: %s" % r.get("wyjscie", "?"), 15, ciem, Motyw.mono()))
 		var zysk := int(r.get("zysk", 0))
 		v.add_child(Motyw.etykieta("Bilans wyposażenia: %+d bonów" % zysk, 15, ciem, Motyw.mono()))
+		if int(r.get("zuzyte_amunicja", 0)) + int(r.get("zuzyte_leki", 0)) > 0:
+			v.add_child(Motyw.etykieta("  w tym zużyte: amunicja ok. %d, leki ok. %d bonów" % [int(r.get("zuzyte_amunicja", 0)), int(r.get("zuzyte_leki", 0))], 13, szary, Motyw.mono()))
 		if zysk <= 0:
 			v.add_child(Motyw.etykieta("Uwaga komisji: rajd bez zysku. Obecność odnotowano, entuzjazmu nie.", 13, szary))
 		else:
@@ -100,6 +102,15 @@ func _ready() -> void:
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(sp)
 	var s: Dictionary = Gra.statystyki
+	var akt: Array = Gra.kontrakty.get("aktywne", [])
+	if not akt.is_empty():
+		var lz := []
+		for k in akt:
+			lz.append(String(k["opis"]) + ("" if k["typ"] in ["dostawa", "wyjscie", "zwiad"] else " [%d/%d]" % [int(k["postep"]), int(k["ile"])]))
+		var le := Motyw.etykieta("Zlecenia w toku: " + "; ".join(lz), 13, szary, Motyw.mono())
+		le.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		le.custom_minimum_size = Vector2(560, 0)
+		v.add_child(le)
 	var rp: Dictionary = r.get("reputacja", {})
 	if not rp.is_empty():
 		var czesci := []

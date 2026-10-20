@@ -16,7 +16,7 @@ var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
 var kontrakty := {"oferty": [], "aktywne": []}       # zlecenia Pośrednika
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8, "glosnosc_tla": 0.8, "odwroc_y": false, "kolysanie": 1.0,
-	"skala_renderu": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "proste_kieszenie": false, "samouczek_widziane": []}
+	"skala_renderu": 1.0, "skala_ui": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "proste_kieszenie": false, "samouczek_widziane": []}
 var ostatni_raport := {}
 var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0
@@ -26,6 +26,8 @@ var meble_zapas := {}         # kupione, niepostawione meble: id -> liczba
 var reputacja := {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
 var odpoczynek := false       # po powrocie z rajdu można raz przespać się w kryjówce
 var izby_kryjowki := 1        # 2 = wykupiona druga izba (przebita ściana)
+var nastepne_ziarno := 0      # ziarno najbliższego rajdu (losowane po powrocie – meldunki mogą je „podejrzeć”)
+var przerwany_rajd := false   # gra zamknięta w trakcie rajdu: przy wczytaniu – zaginięcie w akcji
 
 
 func _ready() -> void:
@@ -35,6 +37,7 @@ func _ready() -> void:
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
+	Widok3D.skala_ui.call_deferred(get_window())
 
 
 func nowa_gra() -> void:
@@ -44,6 +47,7 @@ func nowa_gra() -> void:
 	reputacja = {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
 	odpoczynek = false
 	izby_kryjowki = 1
+	nastepne_ziarno = randi() | 1
 	skrytka = Siatka.new(MebleKryjowki.SZER_SKRYTKI, MebleKryjowki.wiersze_skrytki(kryjowka), 0.0)
 	ekw = Ekwipunek.new()
 	zdrowie = {}
@@ -155,15 +159,121 @@ func idz_do_bazy() -> void:
 
 
 func rozpocznij_rajd() -> void:
-	ziarno_rajdu = randi()
+	ziarno_rajdu = nastepne_ziarno if nastepne_ziarno != 0 else randi()
+	nastepne_ziarno = 0
 	rajd_w_toku = true
 	statystyki["rajdy"] += 1
+	pokaz_ladowanie()
 	# droga do strefy i noc w terenie: głód i pragnienie rosną (jedzenie w bazie ma sens)
 	potrzeby["glod"] = maxf(0.0, float(potrzeby["glod"]) - 10.0)
 	potrzeby["pragnienie"] = maxf(0.0, float(potrzeby["pragnienie"]) - 14.0)
 	odpoczynek = false
 	zapisz()
+	# dwie klatki na narysowanie ekranu przemarszu, zanim generator zajmie wątek
+	await get_tree().process_frame
+	await get_tree().process_frame
 	get_tree().change_scene_to_file("res://scenes/rajd.tscn")
+
+
+# ------------------------------------------------------------------ ekran przemarszu (ładowanie rajdu)
+
+var _ladowanie: CanvasLayer
+const PRZEMARSZ := ["Przemarsz kanałem burzowym. Szczury salutują.", "Wartownik sprawdza przepustkę dłużej niż zwykle. Też nie wierzy, że wrócisz.",
+	"Mgła nad blokowiskiem gęstnieje. Instrukcja przewiduje mgłę „umiarkowaną”.", "Ostatni papieros przed bramą. Regulamin zabrania, nikt nie pilnuje.",
+	"Licznik Geigera trzeszczy. Zgodnie z normą – w zaokrągleniu.", "Za ogrodzeniem cisza. Nie ta dobra cisza."]
+
+
+func pokaz_ladowanie() -> void:
+	if OS.get_cmdline_user_args().size() > 0 and _ladowanie == null and DisplayServer.get_name() == "headless":
+		return
+	ukryj_ladowanie(true)
+	_ladowanie = CanvasLayer.new()
+	_ladowanie.layer = 120
+	add_child(_ladowanie)
+	var tlo := ColorRect.new()
+	tlo.color = Color(0.02, 0.02, 0.025)
+	tlo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tlo.theme = Motyw.motyw()
+	_ladowanie.add_child(tlo)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_CENTER)
+	v.offset_left = -360
+	v.offset_right = 360
+	v.offset_top = -60
+	v.offset_bottom = 60
+	v.add_theme_constant_override("separation", 10)
+	tlo.add_child(v)
+	v.add_child(Motyw.etykieta("PRZEMARSZ DO STREFY K-12 · ROZKAZ NR %d" % (int(statystyki.get("rajdy", 0))), 20, Motyw.TEKST, Motyw.mono_b()))
+	var l := Motyw.etykieta(PRZEMARSZ[randi() % PRZEMARSZ.size()], 15, Motyw.TEKST_CIEMNY)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(l)
+	v.add_child(Motyw.etykieta("…", 15, Motyw.TEKST_CIEMNY, Motyw.mono()))
+
+
+## Rajd gotowy: ekran przemarszu gaśnie.
+func ukryj_ladowanie(od_razu := false) -> void:
+	if _ladowanie == null or not is_instance_valid(_ladowanie):
+		return
+	var cl := _ladowanie
+	_ladowanie = null
+	if od_razu:
+		cl.queue_free()
+		return
+	var tlo := cl.get_child(0) as CanvasItem
+	var tw := create_tween()
+	tw.tween_property(tlo, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(cl.queue_free)
+
+
+## Czy Sęp będzie w rajdzie o tym ziarnie (bez zlecenia na niego) – deterministycznie, żeby meldunki mówiły prawdę.
+static func sep_w_rajdzie(ziarno: int) -> bool:
+	var r := RandomNumberGenerator.new()
+	r.seed = ziarno * 31 + 9
+	return r.randf() < 0.4
+
+
+## Zdarzenia rajdu o tym ziarnie: [{"t", "typ"}] (awaria prądu, obława, zrzut).
+static func plan_zdarzen(ziarno: int) -> Array:
+	var out := []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = ziarno * 7 + 3
+	if rng.randf() < 0.4:
+		out.append({"t": rng.randf_range(300.0, 900.0), "typ": "awaria"})
+	if rng.randf() < 0.3:
+		out.append({"t": rng.randf_range(420.0, 1200.0), "typ": "oblawa"})
+	if rng.randf() < 0.3:
+		out.append({"t": rng.randf_range(480.0, 1100.0), "typ": "zrzut"})
+	return out
+
+
+## Meldunki przed rajdem (stół z planem strefy w kryjówce): Sęp i zapowiedziane zdarzenia najbliższej nocy.
+func meldunki() -> Array:
+	var out := []
+	var z := nastepne_ziarno
+	var zlec := false
+	for k in kontrakty.get("aktywne", []):
+		if String(k.get("cel", "")) in ["boss", "niesmiertelnik"]:
+			zlec = true
+	if zlec:
+		out.append("Masz zlecenie na Sępa – pośrednicy pilnują, żeby był w strefie.")
+	elif sep_w_rajdzie(z):
+		out.append("Nasłuch: Sęp i jego ludzie siedzą w strefie.")
+	else:
+		out.append("O Sępie cisza – albo go nie ma, albo siedzi bardzo cicho.")
+	var plan := plan_zdarzen(z)
+	plan.sort_custom(func(a, b): return float(a["t"]) < float(b["t"]))
+	for e in plan:
+		var m := int(float(e["t"]) / 60.0)
+		match String(e["typ"]):
+			"awaria":
+				out.append("Elektrownia zapowiada przerwę w dostawie prądu (ok. %d. minuty)." % m)
+			"oblawa":
+				out.append("Wojsko szykuje obławę w strefie (ok. %d. minuty)." % m)
+			"zrzut":
+				out.append("Mówią o zrzucie zaopatrzenia (ok. %d. minuty) – samolot nisko nad blokami." % m)
+	if plan.is_empty():
+		out.append("Poza tym spokojna noc – bez zapowiedzi.")
+	return out
 
 
 ## Skrytka dopasowana do mebli kryjówki (nigdy nie ucina przedmiotów).
@@ -341,6 +451,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 		zmien_reputacje(f, bilans[f])
 	wynik["reputacja"] = bilans
 	odpoczynek = bool(wynik.get("przezyl", false))
+	nastepne_ziarno = randi() | 1
 	if wynik["przezyl"]:
 		statystyki["przezyte"] += 1
 		zdrowie = wynik.get("zdrowie", {})
@@ -385,6 +496,7 @@ func zapisz() -> void:
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
 		"zdrowie": zdrowie, "potrzeby": potrzeby, "kontrakty": kontrakty, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
 		"latarka_wydana": true, "kryjowka": kryjowka, "meble_zapas": meble_zapas, "reputacja": reputacja, "odpoczynek": odpoczynek, "izby": izby_kryjowki,
+		"nastepne_ziarno": nastepne_ziarno, "rajd_w_toku": rajd_w_toku,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -423,12 +535,18 @@ func wczytaj() -> bool:
 			reputacja[f] = int(d["reputacja"][f])
 		odpoczynek = bool(d.get("odpoczynek", false))
 		izby_kryjowki = int(d.get("izby", 1))
+		nastepne_ziarno = int(d.get("nastepne_ziarno", 0))
+		if nastepne_ziarno == 0:
+			nastepne_ziarno = randi() | 1
 		if not (kontrakty as Dictionary).has("frakcje"):
 			var o: Array = kontrakty.get("oferty", [])
 			odnow_oferty()
 			if not o.is_empty():
 				kontrakty["oferty"] = o
 		dopasuj_skrytke()
+		# zamknięcie gry w trakcie rajdu nie cofa czasu: zaginięcie w akcji (kryjówka, skrytka i reputacja zostają)
+		if bool(d.get("rajd_w_toku", false)):
+			_zaginiecie_po_przerwaniu()
 		# przedmioty, które po zmianie rozmiarów (stosy, przegródki) nie zmieściły się – do skrytki albo na pocztę
 		for p in Przedmiot.przepelnienie:
 			if not skrytka.dodaj(p):
@@ -440,6 +558,30 @@ func wczytaj() -> bool:
 				skrytka.dodaj(Przedmiot.nowy("latarka"))
 		return true
 	return false
+
+
+func _zaginiecie_po_przerwaniu() -> void:
+	statystyki["zgony"] = int(statystyki.get("zgony", 0)) + 1
+	var utracone := []
+	var zwrot := []
+	for p in ekw.ryzykowane():
+		utracone.append(p.nazwa())
+		if p.dane.get("ubezp", false):
+			var kopia := Przedmiot.nowy(p.id)
+			if p.dane.get("przydzial", false):
+				kopia.dane["przydzial"] = true
+			poczta.append(kopia.to_dict())
+			zwrot.append(p.nazwa())
+	ekw.wyczysc()
+	zdrowie = {}
+	potrzeby = {"glod": 60.0, "pragnienie": 60.0}
+	rajd_w_toku = false
+	odpoczynek = false
+	nastepne_ziarno = randi() | 1
+	ostatni_raport = {"przezyl": false, "przyczyna": "zaginiecie", "utracone": utracone, "ubezpieczone": zwrot, "przerwany": true}
+	przerwany_rajd = true
+	odnow_oferty()
+	zapisz()
 
 
 func istnieje_zapis() -> bool:
