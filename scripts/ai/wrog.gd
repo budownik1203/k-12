@@ -78,6 +78,9 @@ var _unik_t := 0.0
 var _granat_cd := 0.0
 var poddany := false          # rzucił broń, ręce w górze – nie strzela do gracza
 var rozejm := false           # oddział przekupiony: nie atakuje gracza, dopóki ten nie strzeli
+var ostatni_sprawca: Node = null   # kto trafił ostatni (gracz / inna frakcja) – do rozliczeń zabójstw
+var boss := false             # Sęp: dowódca dezerterów
+var dezerter := false         # obstawa Sępa: najemnicy-dezerterzy (bez wpływu na reputację, bez rozejmu)
 var _poddany_t := 0.0
 var _oddal_lup := false
 var _sprzedal_info := false
@@ -123,6 +126,43 @@ func przygotuj(frak: String, zestaw: Dictionary, rng: RandomNumberGenerator) -> 
 		rozejm = true
 
 
+## Zginął od gracza (kula, granat, wykrwawienie po jego trafieniu)?
+func zabity_przez_gracza() -> bool:
+	return is_instance_valid(ostatni_sprawca) and ostatni_sprawca is Gracz
+
+
+## Sęp – boss Blokowiska: dezerter z najemników, w czarnej skórze, KB-47 z kolimatorem na BP, pancerz kl. 4.
+## Twardszy (×1,8 zdrowia), szybszy w reakcji, celniejszy, nie ucieka i się nie poddaje. Niesie nieśmiertelnik.
+func uczyn_bossem() -> void:
+	boss = true
+	dezerter = true
+	rozejm = false
+	nazwa_jednostki = "Sęp"
+	dane_frakcji = (dane_frakcji as Dictionary).duplicate(true)
+	dane_frakcji["kolory"] = {"ubranie": [0.12, 0.11, 0.11], "spodnie": [0.16, 0.15, 0.14], "glowa": [0.35, 0.08, 0.07]}
+	dane_frakcji["celnosc"] = 0.88
+	dane_frakcji["reakcja"] = 0.5
+	amunicja_id = "a_762bp"
+	bron = Gra.nowy_naladowany("kb47", "a_762bp")
+	bron.dane["dod_celownik"] = Przedmiot.nowy("kolimator")
+	_w_magazynku = _pojemnosc()
+	zapas_mag = 4
+	pancerz = Przedmiot.nowy("kamizelka_kl4")
+	helm = Przedmiot.nowy("helm_wz67")
+	lup = [Przedmiot.nowy("niesmiertelnik"), Przedmiot.nowy("lancuszek"), Przedmiot.nowy("a_762bp", 30)]
+	cecha = "agresywny"
+	morale = 400.0
+	granaty = 3
+	_opatrunki = 4
+
+
+## Obstawa Sępa: dezerterzy – nie liczą się do reputacji najemników i nie respektują rozejmu.
+func uczyn_dezerterem() -> void:
+	dezerter = true
+	rozejm = false
+	morale += 25.0
+
+
 func _pojemnosc() -> int:
 	var bd: Dictionary = bron.defn()["bron"]
 	if bd.has("wewnetrzny"):
@@ -134,6 +174,9 @@ func _ready() -> void:
 	add_to_group("wrogowie")
 	cialo = Cialo.new()
 	cialo.npc = true
+	if boss:
+		for c in cialo.hp:
+			cialo.hp[c] = float(cialo.hp[c]) * 1.8
 	cialo.smierc.connect(_smierc)
 	var cs := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -509,6 +552,8 @@ func _wybierz_cel() -> void:
 func trafiony(czesc: String, obr: float, pen: float, od_kogo: Node, punkt: Vector3, kier: Vector3) -> void:
 	if cialo.martwy:
 		return
+	if od_kogo:
+		ostatni_sprawca = od_kogo
 	var wynik := Balistyka.przez_pancerz({"pancerz": pancerz, "helm": helm}, czesc, obr, pen)
 	_ost_kier = kier
 	_drgniecie = minf(1.0, _drgniecie + 0.45 + wynik["obr"] * 0.012)

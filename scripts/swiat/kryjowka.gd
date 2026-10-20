@@ -15,6 +15,8 @@ var gracz: Gracz
 var granice := Rect2(0, 0, 8, 7)          # wnętrze kryjówki (x, z)
 var wysokosc := 2.8
 var strefa_drzwi := Rect2(3.2, 6.0, 1.6, 1.0)   # przejście do korytarza – zawsze wolne
+var przeszkody: Array = []     # Rect2 ścian wewnątrz granic (przegroda między izbami)
+var wolne_strefy: Array = []   # Rect2 przejść, których nie wolno zastawić (oprócz drzwi do korytarza)
 var tryb := Tryb.WYL
 
 var _gen: GeneratorBiomu
@@ -32,6 +34,7 @@ var _lista: VBoxContainer
 var _podpis: Label
 var _mat_ok: StandardMaterial3D
 var _mat_zle: StandardMaterial3D
+var _stojaki_odswiezane := false
 
 
 func _ready() -> void:
@@ -42,6 +45,12 @@ func _ready() -> void:
 	_mat_zle = _mat_ducha(Color(1.0, 0.3, 0.25, 0.42))
 	_buduj_ui()
 	odbuduj()
+	Gra.skrytka.zmieniona.connect(func():
+		if not _stojaki_odswiezane:
+			_stojaki_odswiezane = true
+			(func():
+				_stojaki_odswiezane = false
+				odswiez_stojaki()).call_deferred())
 
 
 func _mat_ducha(c: Color) -> StandardMaterial3D:
@@ -65,7 +74,79 @@ func odbuduj() -> void:
 	for i in Gra.kryjowka.size():
 		_wezly.append(_wezel(Gra.kryjowka[i], i))
 	Gra.dopasuj_skrytke()
+	odswiez_stojaki()
 	zmiana.emit()
+
+
+## Stojak na broń: rama z desek, dwie belki z wycięciami, półka na kolby (tył przy ścianie: −Z).
+func _stojak(duch := false) -> Node3D:
+	var B := preload("res://scripts/core/bryly.gd")
+	var dr := Color(0.45, 0.32, 0.2)
+	var cz := []
+	for sx in [-0.62, 0.62]:
+		cz.append({"t": "box", "c": Vector3(sx, 0.85, -0.12), "s": Vector3(0.06, 1.7, 0.08), "m": "drewno_m", "k": dr, "f": 0.006})
+		cz.append({"t": "box", "c": Vector3(sx, 0.03, 0.0), "s": Vector3(0.08, 0.06, 0.4), "m": "drewno_m", "k": dr, "f": 0.006})
+	cz.append({"t": "box", "c": Vector3(0, 0.3, 0.02), "s": Vector3(1.3, 0.05, 0.28), "m": "drewno_m", "k": dr.darkened(0.1), "f": 0.006})
+	cz.append({"t": "box", "c": Vector3(0, 1.3, -0.08), "s": Vector3(1.3, 0.08, 0.12), "m": "drewno_m", "k": dr, "f": 0.006})
+	cz.append({"t": "box", "c": Vector3(0, 1.62, -0.12), "s": Vector3(1.3, 0.06, 0.06), "m": "drewno_m", "k": dr, "f": 0.006})
+	for i in 4:
+		cz.append({"t": "box", "c": Vector3(-0.45 + i * 0.3, 1.36, -0.02), "s": Vector3(0.05, 0.05, 0.06), "m": "metal_ciemny_m", "f": 0.003})
+	var mi := B.instancja(cz, false)
+	if duch:
+		var n := Node3D.new()
+		n.add_child(mi)
+		return n
+	var sb := StaticBody3D.new()
+	sb.collision_layer = Balistyka.WARSTWA_SWIAT
+	sb.add_child(mi)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(1.3, 1.7, 0.4)
+	cs.shape = bs
+	cs.position.y = 0.85
+	sb.add_child(cs)
+	var bronie := Node3D.new()
+	bronie.name = "Bronie"
+	sb.add_child(bronie)
+	return sb
+
+
+## Broń ze skrytki na stojakach (po 4 na stojak, od najcenniejszej).
+func odswiez_stojaki() -> void:
+	var bronie: Array = Gra.skrytka.wszystkie().filter(func(p): return (p as Przedmiot).typ() == "bron")
+	bronie.sort_custom(func(a, b): return (a as Przedmiot).wartosc() > (b as Przedmiot).wartosc())
+	var k := 0
+	for i in Gra.kryjowka.size():
+		if String(Gra.kryjowka[i]["id"]) != "stojak_bron" or i >= _wezly.size() or not is_instance_valid(_wezly[i]):
+			continue
+		var miejsce: Node3D = (_wezly[i] as Node3D).get_node_or_null("Bronie")
+		if miejsce == null:
+			continue
+		for c in miejsce.get_children():
+			c.queue_free()
+		for j in 4:
+			if k >= bronie.size():
+				break
+			var w := ModelePrzedmiotow.wezel(bronie[k])
+			miejsce.add_child(w)
+			postaw_pionowo(w, Vector3(-0.45 + j * 0.3, 0.33, 0.03))
+			k += 1
+
+
+## Broń z ModelePrzedmiotow (leży na boku, lufa wzdłuż −Z) – pionowo, wylotem w górę, profilem do patrzącego (+Z);
+## kolba stoi na wysokości „dol.y”.
+static func postaw_pionowo(w: Node3D, dol: Vector3) -> void:
+	w.rotation = Vector3(PI * 0.5, 0, 0)
+	w.position = Vector3.ZERO
+	var ab := AABB()
+	var pierwszy := true
+	var rodzic := (w.get_parent() as Node3D).global_transform.affine_inverse()
+	for mi in w.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var a := (rodzic * m.global_transform) * m.get_aabb()
+		ab = a if pierwszy else ab.merge(a)
+		pierwszy = false
+	w.position = dol - Vector3(ab.get_center().x, ab.position.y, ab.get_center().z)
 
 
 func _wezel(e: Dictionary, idx: int) -> Node3D:
@@ -98,7 +179,14 @@ func _wezel(e: Dictionary, idx: int) -> Node3D:
 		n.add_child(sb)
 		sb.set_meta("idx_mebla", idx)
 		return n
-	var w := _gen._mebel(id, pos, r * PI * 0.5, true)
+	var w: Node3D
+	if id == "stojak_bron":
+		w = _stojak()
+		add_child(w)
+		w.position = pos
+		w.rotation.y = r * PI * 0.5
+	else:
+		w = _gen._mebel(id, pos, r * PI * 0.5, true)
 	w.set_meta("idx_mebla", idx)
 	# dywan i inne bez kolizji: obszar do wskazywania w trybie budowy
 	if not (w is CollisionObject3D):
@@ -144,6 +232,9 @@ func powod_odmowy(id: String, x: float, z: float, r: int, pomin := -1) -> String
 	var wn := granice.grow(-0.02)
 	if not wn.encloses(o):
 		return "nie mieści się w kryjówce"
+	for prz in przeszkody:
+		if o.intersects(prz):
+			return "wchodzi w ścianę"
 	if id == "zarowka":
 		for i in Gra.kryjowka.size():
 			var e: Dictionary = Gra.kryjowka[i]
@@ -152,6 +243,9 @@ func powod_odmowy(id: String, x: float, z: float, r: int, pomin := -1) -> String
 		return ""
 	if id != "dywan" and o.intersects(strefa_drzwi):
 		return "zasłania przejście"
+	for ws in wolne_strefy:
+		if id != "dywan" and o.intersects(ws):
+			return "zasłania przejście"
 	if id != "dywan" and gracz:
 		var gp := Vector2(gracz.global_position.x, gracz.global_position.z) - Vector2(global_position.x, global_position.z)
 		if o.grow(0.3).has_point(gp):
@@ -373,6 +467,8 @@ func zacznij_stawianie(id: String, idx := -1) -> void:
 
 
 func _model_ducha(id: String) -> Node3D:
+	if id == "stojak_bron":
+		return _stojak(true)
 	var path := "res://assets/models/meble/%s.glb" % id
 	if not ResourceLoader.exists(path):
 		path = "res://assets/models/%s.glb" % id

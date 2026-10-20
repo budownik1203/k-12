@@ -20,6 +20,9 @@ const H_REC := 3.0
 const REC := Rect2(-6, 11, 20, 14)
 const KRYJ := Rect2(0, 0, 8, 7)
 const KOR_X := Vector2(3.3, 4.7)
+const IZBA2 := Rect2(8, 0, 5, 7)         # druga izba kryjówki (za przegrodą x = 8)
+const PRZEJSCIE_IZB := Vector2(2.6, 4.0) # otwór w przegrodzie (z)
+const CENA_IZBY := 25000
 
 var kryjowka: Kryjowka
 var _kolizje: StaticBody3D
@@ -48,6 +51,7 @@ func _ready() -> void:
 	kryjowka.wysokosc = H_KRYJ
 	kryjowka.strefa_drzwi = Rect2(KOR_X.x - 0.1, KRYJ.end.y - 1.0, KOR_X.y - KOR_X.x + 0.2, 1.0)
 	swiat.add_child(kryjowka)
+	_ustaw_izby()
 	ekran_ekw = load("res://scripts/ui/ekran_ekwipunku.gd").new()
 	ekran_ekw.gracz = gracz
 	ekran_ekw.tryb_bazy = true
@@ -95,8 +99,13 @@ func _buduj_placowke() -> void:
 	b.plaszczyzna("beton", KRYJ.position.x, KRYJ.position.y, KRYJ.end.x, KRYJ.end.y, 0.0, true, 2.0, 1.0)
 	b.plaszczyzna("beton", KRYJ.position.x, KRYJ.position.y, KRYJ.end.x, KRYJ.end.y, H_KRYJ, false, 2.0, 1.0)
 	_sciana(b, "beton_sciana", Vector3(0, 0, 0), Vector3(8, 0, 0), H_KRYJ, [], uv_k)
-	_sciana(b, "beton_sciana", Vector3(8, 0, 0), Vector3(8, 0, 7), H_KRYJ, [], uv_k)
 	_sciana(b, "beton_sciana", Vector3(0, 0, 7), Vector3(0, 0, 0), H_KRYJ, [], uv_k)
+	# druga izba (za przegrodą – dostępna po wykupieniu u Kwatermistrza)
+	b.plaszczyzna("beton", IZBA2.position.x, IZBA2.position.y, IZBA2.end.x, IZBA2.end.y, 0.0, true, 2.0, 1.0)
+	b.plaszczyzna("beton", IZBA2.position.x, IZBA2.position.y, IZBA2.end.x, IZBA2.end.y, H_KRYJ, false, 2.0, 1.0)
+	_sciana(b, "beton_sciana", Vector3(8, 0, 0), Vector3(13, 0, 0), H_KRYJ, [], uv_k)
+	_sciana(b, "beton_sciana", Vector3(13, 0, 0), Vector3(13, 0, 7), H_KRYJ, [], uv_k)
+	_sciana(b, "beton_sciana", Vector3(13, 0, 7), Vector3(8, 0, 7), H_KRYJ, [], uv_k)
 	_sciana(b, "beton_sciana", Vector3(8, 0, 7), Vector3(0, 0, 7), H_KRYJ, [[8.0 - KOR_X.y, 8.0 - KOR_X.x, 2.2]], uv_k)
 	# korytarz: lamperia, lastryko
 	b.plaszczyzna("lastryko", KOR_X.x, 7.0, KOR_X.y, 11.0, 0.0, true, 1.0, 1.0)
@@ -153,7 +162,7 @@ func _buduj_placowke() -> void:
 		gen._mebel("krzeslo", Vector3(kp[0], 0, kp[1]), kp[2], true)
 	gen._mebel("dywan", Vector3(4.0, 0, 18.0), 0.0, false)
 	# światło
-	for p in [Vector3(4.0, H_KRYJ, 3.5), Vector3(4.0, H_KOR, 9.0)]:
+	for p in [Vector3(4.0, H_KRYJ, 3.5), Vector3(4.0, H_KOR, 9.0), Vector3(10.5, H_KRYJ, 3.5)]:
 		_lampa(p, true, 1.7 if p.z < 7.0 else 0.9, 8.0 if p.z < 7.0 else 6.0)
 	for p in [Vector3(-2.5, H_REC, 14.5), Vector3(-2.5, H_REC, 20.5), Vector3(4.0, H_REC, 17.5), Vector3(10.5, H_REC, 14.5), Vector3(10.5, H_REC, 20.5), Vector3(4.0, H_REC, 23.2)]:
 		_lampa(p, false, 1.35, 8.0)
@@ -170,6 +179,55 @@ func _lampa(p: Vector3, gola: bool, energia: float, zasieg: float) -> void:
 	l.omni_attenuation = 0.9
 	swiat.add_child(l)
 	l.position = p + Vector3(0, -0.45 if not gola else -0.7, 0)
+
+
+## Przegroda między izbami kryjówki: pełna albo przebita (otwór z futryną). Ustawia też granice stawiania.
+var _przegroda: Node3D
+
+func _ustaw_izby() -> void:
+	if _przegroda and is_instance_valid(_przegroda):
+		_przegroda.queue_free()
+	var dwie := Gra.izby_kryjowki >= 2
+	_przegroda = Node3D.new()
+	_przegroda.name = "Przegroda"
+	swiat.add_child(_przegroda)
+	var b := Kit.Budowniczy.new()
+	var uv_k := func(u: float, y: float) -> Vector2: return Vector2(u, 1.0 - y / 2.8)
+	var sb := StaticBody3D.new()
+	sb.collision_layer = Balistyka.WARSTWA_SWIAT
+	_przegroda.add_child(sb)
+	var stare := _kolizje
+	_kolizje = sb
+	var otw := [[PRZEJSCIE_IZB.x, PRZEJSCIE_IZB.y, 2.2]] if dwie else []
+	var otw2 := [[7.0 - PRZEJSCIE_IZB.y, 7.0 - PRZEJSCIE_IZB.x, 2.2]] if dwie else []
+	_sciana(b, "beton_sciana", Vector3(8, 0, 0), Vector3(8, 0, 7), H_KRYJ, otw, uv_k)
+	_sciana(b, "beton_sciana", Vector3(8, 0, 7), Vector3(8, 0, 0), H_KRYJ, otw2, uv_k)
+	_kolizje = stare
+	var mi := MeshInstance3D.new()
+	mi.mesh = b.zbuduj()
+	_przegroda.add_child(mi)
+	if dwie:
+		var B := preload("res://scripts/core/bryly.gd")
+		var fut := []
+		for zf in [PRZEJSCIE_IZB.x + 0.04, PRZEJSCIE_IZB.y - 0.04]:
+			fut.append({"t": "box", "c": Vector3(8.0, 1.1, zf), "s": Vector3(0.26, 2.2, 0.08), "m": "metal_ciemny_m", "f": 0.006})
+		fut.append({"t": "box", "c": Vector3(8.0, 2.24, (PRZEJSCIE_IZB.x + PRZEJSCIE_IZB.y) * 0.5), "s": Vector3(0.26, 0.08, PRZEJSCIE_IZB.y - PRZEJSCIE_IZB.x), "m": "metal_ciemny_m", "f": 0.006})
+		_przegroda.add_child(B.instancja(fut, false))
+	kryjowka.granice = KRYJ.merge(IZBA2) if dwie else KRYJ
+	kryjowka.przeszkody = [Rect2(7.9, 0.0, 0.2, PRZEJSCIE_IZB.x), Rect2(7.9, PRZEJSCIE_IZB.y, 0.2, 7.0 - PRZEJSCIE_IZB.y)] if dwie else []
+	kryjowka.wolne_strefy = [Rect2(7.4, PRZEJSCIE_IZB.x, 1.2, PRZEJSCIE_IZB.y - PRZEJSCIE_IZB.x)] if dwie else []
+
+
+## Kwatermistrz: przebicie ściany do drugiej izby.
+func rozbuduj_kryjowke() -> bool:
+	if Gra.izby_kryjowki >= 2 or Gra.bony < CENA_IZBY:
+		return false
+	Gra.dodaj_bony(-CENA_IZBY)
+	Gra.izby_kryjowki = 2
+	Gra.zapisz()
+	_ustaw_izby()
+	komunikat("Ekipa przebiła ścianę. Druga izba kryjówki jest twoja.")
+	return true
 
 
 func _box_kolizji(c: Vector3, s: Vector3, rot := 0.0) -> void:
@@ -319,8 +377,7 @@ func _stragan(gen: GeneratorBiomu, id: String, nazwa: String, poz: Vector3, rot:
 			var bid: String = ["kb47", "pm63", "obrzyn"][i]
 			var bw := ModelePrzedmiotow.wezel(Przedmiot.nowy(bid))
 			piv.add_child(bw)
-			bw.rotation = Vector3(0, PI * 0.5, PI * 0.5)
-			bw.position = Vector3(0.55 + i * 0.42, 0.42, -1.79)
+			Kryjowka.postaw_pionowo(bw, Vector3(0.55 + i * 0.42, 0.4, -1.79))
 	_postac(id, nazwa, piv.to_global(Vector3(0, 0, -0.95)), rot + PI, kol, id)
 
 
@@ -630,6 +687,21 @@ func _zrzuty(katalog: String) -> void:
 	get_viewport().get_texture().get_image().save_png(katalog.path_join("baza_plan.png"))
 	kryjowka.zamknij()
 	Gra.meble_zapas.erase("regal_metalowy")
+	# druga izba ze stojakiem na broń
+	Gra.izby_kryjowki = 2
+	_ustaw_izby()
+	if not Gra.kryjowka.any(func(e): return String(e["id"]) == "stojak_bron"):
+		Gra.kryjowka.append({"id": "stojak_bron", "x": 13.0 - 0.25, "z": 3.5, "r": 3})
+	for bid in ["kb47", "pm63"]:
+		Gra.skrytka.dodaj(Przedmiot.nowy(bid))
+	kryjowka.odbuduj()
+	gracz.global_position = Vector3(7.0, 0.05, 3.3)
+	gracz.rotation.y = -PI * 0.5
+	gracz.kamera.rotation.x = -0.12
+	for f in 12:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(katalog.path_join("baza_izba.png"))
 	for fid in ["szabrownik", "kwatermistrz"]:
 		handel.otworz(fid)
 		for f in 6:
@@ -753,5 +825,54 @@ func _test_kryjowki() -> void:
 		print("  BŁĄD: rozejm z reputacji")
 		bl += 1
 	w.free()
+	# druga izba i stojak na broń
+	Gra.bony = 60000
+	Gra.izby_kryjowki = 1
+	_ustaw_izby()
+	var przed_izba := kryjowka.powod_odmowy("stol", 10.5, 3.5, 0)
+	var ok_izba := rozbuduj_kryjowke()
+	var po_izbie := kryjowka.powod_odmowy("stol", 10.5, 3.5, 0)
+	var w_scianie := kryjowka.powod_odmowy("szafka_metalowa", 8.0, 1.0, 0)
+	var w_przejsciu := kryjowka.powod_odmowy("szafka_metalowa", 8.4, 3.3, 0)
+	print("  izba: przed '%s', kupiona %s (bony %d), po '%s', w ścianie '%s', w przejściu '%s'" % [przed_izba, ok_izba, Gra.bony, po_izbie, w_scianie, w_przejsciu])
+	if przed_izba == "" or not ok_izba or po_izbie != "" or w_scianie == "" or w_przejsciu == "" or Gra.bony != 35000:
+		print("  BŁĄD: druga izba")
+		bl += 1
+	if not Gra.skrytka.wszystkie().any(func(p): return (p as Przedmiot).typ() == "bron"):
+		Gra.skrytka.dodaj(Przedmiot.nowy("obrzyn"))
+	Gra.kryjowka.append({"id": "stojak_bron", "x": 11.0, "z": 0.25, "r": 0})
+	kryjowka.odbuduj()
+	await get_tree().process_frame
+	var stojak: Node3D = kryjowka._wezly.back()
+	var bronie_na := (stojak.get_node("Bronie") as Node3D).get_child_count()
+	print("  stojak: broni na stojaku %d, skrytka %d rzędów" % [bronie_na, Gra.skrytka.h])
+	if bronie_na < 1:
+		print("  BŁĄD: stojak nie pokazuje broni")
+		bl += 1
+	# stół roboczy: elaboracja i naprawa pancerza
+	ekran_ekw.otworz_warsztat()
+	await get_tree().process_frame
+	var prasa := Przedmiot.nowy("prasa_elaboracyjna")
+	Gra.skrytka.dodaj(prasa)
+	Gra.skrytka.zabierz("proch", 99)
+	Gra.skrytka.dodaj(Przedmiot.nowy("proch"))
+	Gra.skrytka.dodaj(Przedmiot.nowy("proch"))
+	var a0 := Gra.skrytka.policz("a_762")
+	ekran_ekw._elaboruj(prasa, 2)
+	print("  elaboracja 7,62: naboje +%d, proch %d, prasa użyć %d" % [Gra.skrytka.policz("a_762") - a0, Gra.skrytka.policz("proch"), int(prasa.dane.get("uzycia", 0))])
+	if Gra.skrytka.policz("a_762") - a0 != 15 or Gra.skrytka.policz("proch") != 0 or int(prasa.dane.get("uzycia", 0)) != 7:
+		print("  BŁĄD: elaboracja")
+		bl += 1
+	var kam := Przedmiot.nowy("kamizelka_kl2")
+	kam.dane["wytrz"] = 12.0
+	Gra.skrytka.dodaj(kam)
+	Gra.skrytka.dodaj(Przedmiot.nowy("tkanina_balistyczna"))
+	var w0 := kam.wartosc()
+	ekran_ekw._napraw_pancerz(kam)
+	print("  naprawa kl. 2: wytrz %.0f, maks %.0f, wartość %d → %d, tkaniny %d" % [float(kam.dane["wytrz"]), float(kam.dane.get("maks_wytrz", 0)), w0, kam.wartosc(), Gra.skrytka.policz("tkanina_balistyczna")])
+	if absf(float(kam.dane["wytrz"]) - 36.0) > 0.1 or Gra.skrytka.policz("tkanina_balistyczna") != 0:
+		print("  BŁĄD: naprawa pancerza")
+		bl += 1
+	ekran_ekw.zamknij()
 	print("TEST KRYJÓWKI: błędów ", bl)
 	get_tree().quit()

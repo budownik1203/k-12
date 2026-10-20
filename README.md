@@ -98,14 +98,21 @@ medykamenty – krzyż, żywność i picie – metka z ceną, narzędzia – blu
 1. **Placówka** (chodzona w pierwszej osobie, bez ładowania między częściami):
    - **kryjówka** – twój betonowy boks. Meble kupujesz u Kwatermistrza i stawiasz pod **[B]** (podgląd pod celownikiem,
      **R** / kółko obraca, **LPM** stawia, **PPM** anuluje; na postawionym meblu **LPM** przestawia, **X** chowa do magazynu).
-     Szafki, regały, skrzynie, szafa, biurko i lodówka powiększają skrytkę (start: 16 rzędów). Stół roboczy pozwala montować
-     celowniki i chwyt, prycza leczy połowę ran raz po każdym powrocie, a kuchenka podaje posiłek na ciepło (sytszy, bez pragnienia);
+     Szafki, regały, skrzynie, szafa, biurko, lodówka i stojak na broń powiększają skrytkę (start: 16 rzędów); stojak pokazuje
+     do 4 sztuk broni ze skrytki. Za 25 000 bonów Kwatermistrz przebija ścianę do drugiej izby (5 x 7 m). Stół roboczy:
+     montaż celowników i chwytu, elaboracja amunicji (PPM na prasie: proch → 9x18 ×20, 12/70 ×10, 7,62 ×15) i łatanie pancerza
+     tkaniną balistyczną (każda łata obniża maksymalną wytrzymałość o 10%). Prycza leczy połowę ran raz po każdym powrocie,
+     kuchenka podaje posiłek na ciepło (sytszy, bez pragnienia);
    - **korytarz** do **recepcji** – stragany Zbrojmistrza, Medyka, Pośrednika i Kwatermistrza, przedstawiciele trzech frakcji
      i śluza do strefy;
    - **frakcje** (Szabrownicy, Najemnicy, Wojsko) – reputacja od −100 do 100. Zabity członek frakcji to −5 u niej i +1 u pozostałych;
      ich zlecenia dają bony i reputację. Lepszy sprzęt (kl. 4, BP, tłumiki, celowniki, plecak wojskowy) jest u nich od progu
-     reputacji, ceny spadają do −15%. Przy wysokiej reputacji ich oddziały nie strzelają pierwsze (rozejm do twojego strzału);
-     przy −30 nie handlują;
+     reputacji, ceny spadają do −15%. Przy wysokiej reputacji ich oddziały nie strzelają pierwsze (rozejm do twojego strzału)
+     i ostrzegają przed najbliższym zagrożeniem; przy −30 nie handlują, przy −40 co półtorej–dwie minuty wysyłają oddział
+     tam, gdzie jesteś. Liczą się tylko zabici przez ciebie (nie ofiary wojny frakcji);
+   - **Sęp** – boss Blokowiska: dezerter z najemników z dwoma ludźmi, zaszyty w najgłębszej części strefy (40% rajdów, zawsze
+     przy przyjętym zleceniu na niego). Pancerz kl. 4, KB-47 z kolimatorem na BP, prawie dwa razy więcej zdrowia, nie ucieka.
+     Wojsko płaci za jego śmierć, Najemnicy za jego nieśmiertelnik; zabicie jego ludzi nie kosztuje reputacji;
    - leczenie u Medyka, ubezpieczenie u Pośrednika, darmowy zestaw startowy, gdy nie masz broni (z przydziału – nie do sprzedania).
 2. **Rajd**: losowa sieć szerokich korytarzy z pomieszczeniami bloku oddzielonymi grubym murem (mieszkania, kuchnie, piwnice, magazyny, warsztaty),
    szabrownicy i najemnicy z taktycznym AI, pełzacze (mutanty chodzące po ścianach), łup w szafkach i na zwłokach.
@@ -150,6 +157,8 @@ godot --path . res://scenes/rajd.tscn -- --vm <katalog>          # fazy przeład
 godot --path . res://scenes/baza.tscn -- --test_kryjowki         # meble, skrytka, sen, kuchenka, reputacja, rozejm
 godot --path . res://scenes/baza.tscn -- --zrzuty <katalog>      # kryjówka, recepcja, tryb budowy, handel
 godot --path . res://scenes/rajd.tscn -- --ekonomia --ziarno 3   # sonda balansu: łup w meblach i sprzęt wrogów na mapie
+godot --path . res://scenes/rajd.tscn -- --test_boss --boss --ziarno 3   # Sęp, zabójstwa liczone tylko od gracza, zlecenie
+godot --path . res://scenes/rajd.tscn -- --test_reputacji --ziarno 3     # ostrzeżenie przyjaznego posterunku, polowanie
 ```
 
 Testy używają osobnego pliku zapisu i nie ruszają zapisu gracza.

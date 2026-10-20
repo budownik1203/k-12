@@ -1,4 +1,4 @@
-# Stan demo (20.10.2026, v0.10.0)
+# Stan demo (20.10.2026, v0.11.0)
 
 Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.6, renderer Compatibility.
 
@@ -51,6 +51,10 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 | Kryjówka i meble (v0.10.0) | meble kupowane u Kwatermistrza (18 rodzajów) trafiają do magazynu kwatery; tryb budowy [B]: podgląd mebla pod celownikiem (zielony / czerwony z powodem: poza kryjówką, zasłania przejście, koliduje, stoisz tu), siatka 10 cm, dociąganie do ścian, obrót co 90°, przestawianie i zabieranie; skrytka rośnie z meblami (10 rzędów + szafka 6, regał 8, szafa 8, skrzynia wojskowa 6, biurko 4, lodówka 4, skrzynka 3; maks. 64), zabranie mebla, które ucięłoby przedmioty, jest odrzucane; stół roboczy (montaż celowników), prycza/wersalka (sen: połowa ran, raz po rajdzie), kuchenka (posiłek ×1,5 sytości + herbata), żarówki (światło); stare zapisy dostają dawny schron (3 szafki = 28 rzędów, stół roboczy) |
 | Frakcje i reputacja (v0.10.0) | reputacja u Szabrowników, Najemników i Wojska (−100..100): zabity członek −5 (+1 u pozostałych), zlecenia frakcji +6..14; oferta z progami (kl. 4 od +40, luneta od +55, BP od +20/+30, tłumiki, kolimator, plecak wojskowy), ceny −15%..+25%, przy −30 brak handlu; rozejm w strefie od +35/+40/+50 – oddziały nie strzelają pierwsze, strzał gracza zrywa rozejm całego oddziału (też gdy trafiony zginie od razu); po dwa zlecenia od każdej frakcji, razem najwyżej 3 przyjęte; bilans reputacji w raporcie |
 | Balans (v0.10.0) | sonda --ekonomia: łup w meblach na mapę 1,3–1,6 mln → ok. 0,5 mln bonów (losowania 0–3, częściej puste, kosztowności tańsze: łańcuszek 6000, zegarek 4000, teczka 9000…), broń warta tyle, w jakim jest stanie (55–100%), skup 45/50/40%, łup u Pośrednika 60%; mniej pancerzy kl. 4 u wojska (nowy zestaw z PM-63); głód −10 i pragnienie −14 przy wyjściu do strefy; zestaw startowy z przydziału nie do sprzedania (koniec nieskończonych bonów), ubezpieczenie obejmuje kamizelkę |
+| Boss: Sęp (v0.11.0) | dezerter z najemników z dwoma ludźmi w najgłębszej wolnej części mapy (≥ 40 m od startu), trzymają pozycję twarzą ku wejściu; 40% rajdów, zawsze przy przyjętym zleceniu na niego; czarna skóra, KB-47 z kolimatorem na BP, kl. 4 i hełm, ×1,8 zdrowia, szybsza reakcja i celność, nie ucieka ani się nie poddaje, 3 granaty; nieśmiertelnik (nowy przedmiot) w łupie; zlecenia: Wojsko – likwidacja (15 000, rep. +15), Najemnicy – nieśmiertelnik (14 000, rep. +15); dezerterzy nie wpływają na reputację |
+| Kryjówka: druga izba i stojak (v0.11.0) | Kwatermistrz przebija ścianę do drugiej izby 5 x 7 m (25 000): przegroda z otworem i futryną, granice stawiania rosną, ściana i przejście blokują stawianie; stojak na broń (skrytka +4) pokazuje pionowo do 4 najcenniejszych broni ze skrytki i odświeża się przy zmianach skrytki; broń u Zbrojmistrza też stoi pionowo |
+| Stół roboczy: elaboracja i łaty (v0.11.0) | nowe przedmioty: proch (puszka), prasa do elaboracji (8 użyć), tkanina balistyczna – z modelami 3D i ikonami-szkicami; PPM na prasie przy stole: 9x18 ×20 / 12/70 ×10 (1 proch), 7,62 ×15 (2 proch); PPM na pancerzu: łata tkaniną – pełna wytrzymałość do nowego maksimum (−10% za każdą łatę), łatany wart 15% mniej; proch i prasa w łupie i u Szabrowników, tkanina u wojskowych i Najemników |
+| Reputacja w strefie (v0.11.0) | przyjazny oddział (rozejm), który zobaczy gracza z bliska, raz ostrzega przed najbliższym zagrożeniem (kto, kierunek względem gracza, piętro, odległość); frakcja przy −40 co 80–120 s wysyła najbliższy wolny oddział na pozycję gracza (zapowiedź w radiu, wpis w raporcie); zabójstwa liczone tylko, gdy ostatni trafił gracz (wcześniej ofiary wojny frakcji psuły reputację i nabijały zlecenia) |
 | Poprawki (v0.9.7) | przy zwłokach przyklęk na kolano, obie dłonie przeszukują ciało; zdejmowanie pancerza i hełmu z animacją (szarpanie rzepów i klamer, uniesienie zdjętego); otwieranie mebli wg rodzaju (drzwi łukiem, szuflada do siebie, wieko obiema rękami do góry); przy szybkim zerknięciu na kamizelkę – podsumowanie, co jest w plecaku (czy warto go zdejmować); broń wrogów też się zacina (okrzyk, przerwa w ogniu); brudna broń gracza trochę rozrzuca; przeterminowane leki oznaczone na ikonie |
 | Ekwipunek (v0.9.5) | szabrownicy i najemnicy w patrolu wypatrują leżących rzeczy, ciał i porzuconych plecaków: podchodzą, przyklękają, grzebią (słychać) i zabierają – rzecz trafia do ich łupu (odzyskasz ją z ich ciała); zużycie broni (każdy strzał brudzi, tłumik bardziej; brudna zacina się częściej, pasek stanu na ikonie), czyszczenie zestawem do czyszczenia (6 s z animacją, 4 użycia); przeterminowane leki z szafek (wolniej, czasem nie działają); wgniecenia i przetarcia na ikonie pancerza wg zużycia; taśma izolacyjna – owinięty metal nie brzęczy (6 użyć); przy upadku z wysokości albo ogłuszeniu drobiazg może wypaść z kieszeni spodni; w schronie przycisk „Sortuj skrytkę” |
 | Ekwipunek (v0.9.4) | plecak na plecach niedostępny: przeładowanie, leki, napełnianie [G] i podnoszenie sięgają tylko do kamizelki i kieszeni, a po rozłożeniu plecaka – do otwartych kieszeni; magazynek z ładownicy najszybciej, z kieszeni spodni wolniej (ręka sięga niżej), z plecaka najwolniej; pełny plecak zdejmuje się i zakłada dłużej (ciężki – głośno); kamizelka: osobna klapka na rzep nad każdą ładownicą; brzęk luźnego metalu w plecaku i kieszeniach przy biegu (słyszą go wrogowie); nieznane przedmioty („metalowy drobiazg”, „pakunek”) – obejrzenie z animacją obracania w dłoniach, po ciemku się nie da, w schronie wszystko rozpoznane; znalezione magazynki nieprzeliczone („pełny?”, „~½+”, „mało”) do przeliczenia; oznaczanie ★ (nie wyrzucisz przypadkiem); podgląd wagi po wzięciu łupu (ostrzeżenie o progu); ręka przy łączeniu stosów, wkładaniu magazynka do broni, do pojemnika i wyrzucaniu |
@@ -64,14 +68,12 @@ Pierwsze grywalne demo Strefy K-12 według GDD (wersja 3D FPS). Silnik: Godot 4.
 
 - Jeden biom (Blokowisko) i dwie kondygnacje; brak zapisu w trakcie rajdu (wyjście z gry = zaginięcie w akcji).
 - Ręce i bronie animowane proceduralnie (bez szkieletu); 4 bronie, modyfikacje tylko jako dodatki.
-- Kryjówka ma stały rozmiar (bez rozbudowy pomieszczeń), meble stawiane na podłodze, obrót co 90°.
-- Reputacja nie zmienia składu oddziałów w strefie (tylko rozejm), Pośrednik i handlarze bez własnej reputacji.
-- Boss biomu jeszcze nie istnieje; brak craftu amunicji.
+- Kryjówka: najwyżej dwie izby, meble na podłodze, obrót co 90°.
+- Sęp trzyma pozycję – bez własnego zadania terenowego (np. ucieczki z teczką).
 
 ## Proponowane następne kroki
 
-1. Boss biomu 1: dowódca z oddziałem i zadaniem terenowym (zlecenie Wojska lub Najemników).
-2. Rozbudowa kryjówki: drugie pomieszczenie za bony, meble na ścianie (stojak na broń, tablica z mapą).
-3. Craft amunicji i naprawa pancerza na stole roboczym.
-4. Reputacja wpływa na strefę: przyjazne oddziały ostrzegają przed innymi, wrogie polują na gracza.
-5. Więcej dodatków (kolby, magazynki bębnowe) i druga broń długa.
+1. Drugi biom z własnym bossem i zleceniami.
+2. Zadanie terenowe Sępa: konwój albo ucieczka z łupem do wyjścia.
+3. Meble na ścianie (tablica z mapą strefy – podgląd wyjść przed rajdem).
+4. Więcej dodatków (kolby, magazynki bębnowe) i druga broń długa.

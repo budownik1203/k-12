@@ -12,6 +12,11 @@ var oddzialy: Array = []
 var rng := RandomNumberGenerator.new()
 var zagrozenie := 0.0
 var _nastepna_fala := 240.0
+var boss: Node = null      # Sęp (jeśli jest w tym rajdzie)
+var _rep_t := 4.0          # co ile sprawdzać ostrzeżenia przyjaznych oddziałów
+var _polowanie_t := 75.0   # najbliższe „namierzenie” gracza przez wrogą frakcję
+var _ostrzezone := {}      # oddział -> już ostrzegł
+var _polowanie_zapowiedziane := false
 
 
 class Oddzial:
@@ -81,6 +86,7 @@ func rozstaw(r: Node) -> void:
 	komorki.sort_custom(func(a, b): return po_komorce[a][0]["glebokosc"] > po_komorce[b][0]["glebokosc"])
 	var i := 0
 	var start_pos: Vector3 = r.info.get("start", Vector3.ZERO)
+	var uzyte := {}
 	for k in komorki:
 		if i >= liczba:
 			break
@@ -89,7 +95,22 @@ func rozstaw(r: Node) -> void:
 		var frak := "najemnik" if (najemnicy and i == 0) else "szabrownik"
 		var ile := rng.randi_range(2, 3) if frak == "szabrownik" else 2
 		_oddzial(frak, po_komorce[k], ile, i)
+		uzyte[k] = true
 		i += 1
+	# Sęp: najgłębsza wolna komórka daleko od startu (zawsze, gdy jest na niego zlecenie)
+	var szansa := 1.0 if zlecenie_na_bossa() or OS.get_cmdline_user_args().has("--boss") else 0.4
+	if rng.randf() < szansa:
+		var najg: Vector2i = Vector2i(-999, -999)
+		var gl := -1.0
+		for k in po_komorce:
+			var pk: Dictionary = po_komorce[k][0]
+			if uzyte.has(k) or (pk["pos"] as Vector3).distance_to(start_pos) < 40.0:
+				continue
+			if float(pk.get("glebokosc", 0.0)) > gl:
+				gl = float(pk.get("glebokosc", 0.0))
+				najg = k
+		if najg.x != -999:
+			_boss(po_komorce[najg], start_pos)
 	# fauna: watahy psów w piwnicach i magazynach
 	var stada := 0
 	for k in komorki:
@@ -120,6 +141,48 @@ func _oddzial(frak: String, punkty: Array, ile: int, idx: int) -> void:
 			o.dowodca = w
 		w.set_meta("oddzial_nazwa", o.nazwa)
 	oddzialy.append(o)
+
+
+static func zlecenie_na_bossa() -> bool:
+	for k in Gra.kontrakty.get("aktywne", []):
+		if String(k.get("cel", "")) in ["boss", "niesmiertelnik"]:
+			return true
+	return false
+
+
+## Sęp i dwóch dezerterów: trzymają pozycję w głębi strefy (jak posterunek), twarzą ku wejściu od strony startu.
+func _boss(punkty: Array, start_pos: Vector3) -> void:
+	var o := Oddzial.new()
+	o.nazwa = "Sępy"
+	var p0: Vector3 = punkty[0]["pos"]
+	var kier := start_pos - p0
+	kier.y = 0.0
+	kier = kier.normalized() if kier.length() > 0.1 else Vector3.FORWARD
+	var zest: Dictionary = Dane.frakcje["najemnik"]["zestawy"][0]
+	for j in 3:
+		var w := Wrog.new()
+		w.przygotuj("najemnik", zest, rng)
+		if j == 0:
+			w.uczyn_bossem()
+			boss = w
+		else:
+			w.uczyn_dezerterem()
+		w.menedzer = self
+		w.oddzial = o
+		w.rola = "dowodca" if j == 0 else "strzelec"
+		var bok := kier.cross(Vector3.UP) * (0.0 if j == 0 else (1.4 if j == 1 else -1.4))
+		var p: Vector3 = (punkty[j % punkty.size()]["pos"] as Vector3) if j > 0 and punkty.size() > j else p0 + bok + kier * (0.0 if j == 0 else 1.0)
+		w.posterunek = {"pos": p, "kier": kier}
+		w.stan = "posterunek"
+		rajd.swiat.add_child(w)
+		w.global_position = p + Vector3(0, 0.05, 0)
+		w.rotation.y = atan2(-kier.x, -kier.z)
+		w.set_meta("oddzial_nazwa", o.nazwa)
+		o.czlonkowie.append(w)
+		if j == 0:
+			o.dowodca = w
+	oddzialy.append(o)
+	rajd.dodaj_zdarzenie("Nasłuch: Sęp i jego ludzie zaszyli się w głębi strefy.")
 
 
 func _posterunek(pst: Dictionary, idx: int) -> void:
@@ -184,6 +247,14 @@ func _process(delta: float) -> void:
 	if rajd == null or rajd.koniec:
 		return
 	zagrozenie += delta * 0.01
+	_rep_t -= delta
+	if _rep_t <= 0.0:
+		_rep_t = 1.5
+		_ostrzezenia()
+	_polowanie_t -= delta
+	if _polowanie_t <= 0.0:
+		_polowanie_t = rng.randf_range(80.0, 120.0)
+		_polowanie()
 	_nastepna_fala -= delta * (1.0 + zagrozenie * 0.05)
 	if _nastepna_fala <= 0.0:
 		_nastepna_fala = rng.randf_range(200.0, 300.0)
@@ -211,3 +282,93 @@ func _fala() -> void:
 	else:
 		_oddzial("szabrownik", [s], 2, oddzialy.size())
 		rajd.dodaj_zdarzenie("Do strefy weszła nowa grupa szabrowników.")
+
+
+# ------------------------------------------------------------------ reputacja w strefie
+
+const NAZWY_GRUP := {"szabrownik": "szabrownicy", "najemnik": "najemnicy", "wojskowy": "wojskowi"}
+
+
+static func kierunek(g: Node3D, cel: Vector3) -> String:
+	var lok := g.global_basis.inverse() * (cel - g.global_position)
+	var kat := rad_to_deg(atan2(lok.x, -lok.z))
+	var t := "przed tobą"
+	if kat > 45.0 and kat <= 135.0:
+		t = "po prawej"
+	elif kat < -45.0 and kat >= -135.0:
+		t = "po lewej"
+	elif absf(kat) > 135.0:
+		t = "za tobą"
+	if cel.y - g.global_position.y > 2.0:
+		t += ", piętro wyżej"
+	elif g.global_position.y - cel.y > 2.0:
+		t += ", piętro niżej"
+	return t
+
+
+## Przyjazny oddział (rozejm z reputacji), który zobaczy gracza z bliska, raz ostrzega przed najbliższym zagrożeniem.
+func _ostrzezenia() -> void:
+	var g: Node3D = rajd.gracz
+	if g == null or not is_instance_valid(g):
+		return
+	var space := g.get_world_3d().direct_space_state
+	for o in oddzialy:
+		if _ostrzezone.has(o):
+			continue
+		var d: Node = o.prowadzacy()
+		if d == null or not d.rozejm or d.dezerter or d.stan in ["walka", "ucieczka", "poddany"]:
+			continue
+		if (d as Node3D).global_position.distance_to(g.global_position) > 9.0:
+			continue
+		var q := PhysicsRayQueryParameters3D.create((d as Node3D).global_position + Vector3.UP * 1.6, g.global_position + Vector3.UP * 1.5, Balistyka.WARSTWA_SWIAT)
+		if not space.intersect_ray(q).is_empty():
+			continue
+		_ostrzezone[o] = true
+		var najb: Node3D = null
+		var nd := 45.0
+		for w in get_tree().get_nodes_in_group("wrogowie"):
+			if not is_instance_valid(w) or w == d or w.get("cialo") == null or w.cialo.martwy:
+				continue
+			if w is Wrog and (w.rozejm or w.frakcja == d.frakcja):
+				continue
+			var dd := (w as Node3D).global_position.distance_to(g.global_position)
+			if dd < nd:
+				nd = dd
+				najb = w
+		var kto: String = d.nazwa_jednostki
+		if najb:
+			var grupa: String = "pełzacze" if not (najb is Wrog) else ("ludzie Sępa" if najb.dezerter else NAZWY_GRUP.get(najb.frakcja, "obcy"))
+			d._napis("Uważaj, %s." % grupa)
+			g.komunikat.emit("%s (rozejm): uważaj – %s %s, jakieś %d m." % [kto, grupa, kierunek(g, (najb as Node3D).global_position), int(nd)])
+		else:
+			d._napis("Spokojnie. Czysto.")
+			g.komunikat.emit("%s (rozejm): w okolicy czysto. Tylko nie celuj w nas." % kto)
+
+
+## Wroga frakcja (reputacja ≤ PROG_POLOWANIA) co jakiś czas wysyła najbliższy wolny oddział tam, gdzie gracz jest.
+func _polowanie() -> void:
+	var g: Node3D = rajd.gracz
+	if g == null or not is_instance_valid(g) or rajd.koniec:
+		return
+	for f in FrakcjeBazy.DANE:
+		if FrakcjeBazy.rep(f) > FrakcjeBazy.PROG_POLOWANIA:
+			continue
+		var best: Oddzial = null
+		var bd := INF
+		for o in oddzialy:
+			var d: Node = o.prowadzacy()
+			if d == null or d.frakcja != f or d.dezerter or not (d.posterunek as Dictionary).is_empty() or d.stan == "walka":
+				continue
+			var dd := (d as Node3D).global_position.distance_to(g.global_position)
+			if dd > 15.0 and dd < bd:
+				bd = dd
+				best = o
+		if best == null:
+			continue
+		for w in best.czlonkowie:
+			if is_instance_valid(w):
+				w.alarm_od_oddzialu(g.global_position + Vector3(rng.randf_range(-5.0, 5.0), 0.0, rng.randf_range(-5.0, 5.0)))
+		if not _polowanie_zapowiedziane:
+			_polowanie_zapowiedziane = true
+			g.komunikat.emit("W radiostacji trzaski: %s cię namierzyli (reputacja %d). Ruszają w twoją stronę." % [FrakcjeBazy.DANE[f]["nazwa"], FrakcjeBazy.rep(f)])
+		rajd.dodaj_zdarzenie("%s wysłali oddział %s na pozycję gracza." % [FrakcjeBazy.DANE[f]["nazwa"], best.nazwa])

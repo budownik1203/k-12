@@ -48,7 +48,7 @@ CYWILNE = {"plecak_turystyczny", "worek", "chlebak", "kamizelka_wedkarska", "kam
 
 # ------------------------------------------------------------------ kategorie: papier, tusz, pieczątki, dodatki
 ZYWNOSC = {"konserwa", "suchary", "woda", "wodka", "spirytus", "papierosy", "kartka_mieso"}
-NARZEDZIA = {"klucz_nastawny", "kombinerki", "tasma", "zestaw_czyszczacy", "wytrych", "latarka", "klucz_piwnica",
+NARZEDZIA = {"prasa_elaboracyjna", "proch", "tkanina_balistyczna", "klucz_nastawny", "kombinerki", "tasma", "zestaw_czyszczacy", "wytrych", "latarka", "klucz_piwnica",
              "kompas", "mapa"}
 KALIBRY = {"a_9x18": "9×18 ПСТ", "a_762": "7,62×39 ПС", "a_762bp": "7,62×39 БП", "a_12": "12/70 ДРОБЬ"}
 KATEGORIE = {

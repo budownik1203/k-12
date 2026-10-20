@@ -41,3 +41,13 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Kuchenka | posiłek ze skrytki ×1,5 sytości, woda jako herbata | głód i pragnienie maleją też przy wyjściu do strefy, więc jedzenie w bazie ma sens |
 | Reputacja frakcji | zabijanie −5, zlecenia +, progi oferty, ceny, rozejm w strefie | rozejm korzysta z istniejącego przekupstwa (flaga oddziału); zabójstwa dla zleceń jednej frakcji kosztują reputację u innej – wybór strony |
 | Zestaw z przydziału | darmowy zestaw nie do sprzedania | zamyka pętlę „sprzedaj pistolet → weź nowy zestaw” |
+
+## Boss, warsztat i reputacja w strefie (v0.11.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Sęp | boss z obstawą w głębi strefy; pewny przy przyjętym zleceniu | posterunkowa obrona jak u wojska; dezerterzy poza reputacją i rozejmem najemników |
+| Elaboracja | proch + prasa przy stole roboczym → amunicja | uzupełnia sklep: opłaca się tylko z prochu z łupu (cena prochu 400) |
+| Łaty pancerza | tkanina przywraca wytrzymałość, maks. −10% za łatę, wartość −15% | Medyk/handlarze nie naprawiają – jedyna droga przedłużenia życia pancerza |
+| Ostrzeżenia i polowanie | przyjaźni ostrzegają, wrodzy przy −40 ruszają na gracza | korzysta z istniejącego alarmu oddziału; posterunki wojska nie opuszczają gniazd |
+| Rozliczanie zabójstw | tylko ofiary gracza (kula, granat, wykrwawienie po trafieniu) | naprawia nabijanie zleceń i reputacji przez wojnę frakcji |

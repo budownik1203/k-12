@@ -6,6 +6,7 @@ extends CharacterBody3D
 
 var nazwa_jednostki := "Pełzacz"
 var frakcja := "fauna"
+var ostatni_sprawca: Node = null   # kto trafił ostatni – do rozliczeń zabójstw
 var oddzial = null
 var cialo: Cialo
 var stan := "sufit"          # sufit | skok | ziemia | wspinaczka | martwy
@@ -278,9 +279,15 @@ func _wybierz_ofiare() -> void:
 
 # ------------------------------------------------------------------ reakcje
 
+func zabity_przez_gracza() -> bool:
+	return is_instance_valid(ostatni_sprawca) and ostatni_sprawca is Gracz
+
+
 func trafiony(czesc: String, obr: float, _pen: float, od_kogo: Node, punkt: Vector3, kier: Vector3) -> void:
 	if cialo.martwy:
 		return
+	if od_kogo:
+		ostatni_sprawca = od_kogo
 	cialo.obrazenia(czesc, obr, "pocisk")
 	Efekty.czastki(get_parent(), punkt, -kier, Color(0.32, 0.36, 0.12), 9, 1.8)
 	Dzwiek.graj_3d("trafienie_cialo", punkt, get_parent(), -2.0)

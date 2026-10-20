@@ -164,6 +164,8 @@ func wartosc() -> int:
 				v += (dd as Przedmiot).wartosc()
 		"pancerz":
 			v *= clamp(dane["wytrz"] / float(d["pancerz"]["wytrzymalosc"]), 0.2, 1.0)
+			if dane.has("maks_wytrz"):
+				v *= 0.85     # łatany: skupujący widzą szwy
 		"med":
 			v *= float(dane["uzycia"]) / float(d["med"]["uzycia"])
 		"pojemnik":

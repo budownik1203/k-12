@@ -441,6 +441,28 @@ static func _lup(id: String) -> Array:
 			return [_b(Vector3(0, 0.015, 0), Vector3(0.14, 0.03, 0.07), "metal_jasny", 0.006, Color(0.45, 0.5, 0.35)),
 				_w(Vector3(-0.1, 0.006, 0.05), Vector3(0.14, 0.006, 0.05), 0.003, 0.003, "metal_jasny", 6),
 				_w(Vector3(0.06, 0.0, -0.06), Vector3(0.06, 0.03, -0.06), 0.015, 0.015, "mosiadz", 10)]
+		"niesmiertelnik":
+			var cz4 := [_b(Vector3(0, 0.0015, 0.0), Vector3(0.028, 0.003, 0.05), "metal_jasny", 0.006, Color(0.75, 0.76, 0.72)),
+				_b(Vector3(0, 0.0032, 0.004), Vector3(0.018, 0.0006, 0.03), "czern", 0.0, Color(0.3, 0.3, 0.3))]
+			for i in 9:
+				var a := float(i) / 9.0 * PI
+				cz4.append(_w(Vector3(cos(a) * 0.025, 0.002, -0.03 - sin(a) * 0.035), Vector3(cos(a + 0.35) * 0.025, 0.002, -0.03 - sin(a + 0.35) * 0.035), 0.0015, 0.0015, "metal_jasny", 5))
+			return cz4
+		"proch":
+			return [_w(Vector3(0, 0, 0), Vector3(0, 0.11, 0), 0.036, 0.036, "metal_jasny", 14, Color(0.55, 0.42, 0.3)),
+				_w(Vector3(0, 0.03, 0), Vector3(0, 0.08, 0), 0.0365, 0.0365, "opakowanie", 14, Color(0.85, 0.75, 0.45)),
+				_w(Vector3(0, 0.11, 0), Vector3(0, 0.116, 0), 0.037, 0.037, "metal_jasny", 14, Color(0.5, 0.5, 0.48))]
+		"prasa_elaboracyjna":
+			return [_b(Vector3(0, 0.01, 0), Vector3(0.12, 0.02, 0.12), "metal_jasny", 0.004, Color(0.3, 0.35, 0.3)),
+				_w(Vector3(0.0, 0.02, 0.035), Vector3(0.0, 0.17, 0.035), 0.012, 0.012, "metal_jasny", 8, Color(0.3, 0.35, 0.3)),
+				_b(Vector3(0, 0.15, 0.0), Vector3(0.05, 0.05, 0.09), "metal_jasny", 0.006, Color(0.3, 0.35, 0.3)),
+				_w(Vector3(0.0, 0.07, -0.02), Vector3(0.0, 0.13, -0.02), 0.01, 0.01, "metal", 8),
+				_w(Vector3(0.0, 0.17, 0.0), Vector3(0.0, 0.2, -0.13), 0.006, 0.006, "metal_jasny", 6),
+				_w(Vector3(0.0, 0.2, -0.13), Vector3(0.0, 0.2, -0.16), 0.012, 0.012, "bakelit", 8)]
+		"tkanina_balistyczna":
+			return [_b(Vector3(0, 0.012, 0), Vector3(0.2, 0.024, 0.2), "tkanina", 0.01, Color(0.75, 0.62, 0.25)),
+				_b(Vector3(0, 0.025, 0), Vector3(0.21, 0.004, 0.03), "tkanina", 0.0, Color(0.2, 0.22, 0.18)),
+				_b(Vector3(0.06, 0.0255, 0.05), Vector3(0.05, 0.001, 0.03), "bandaz", 0.0, Color(0.9, 0.9, 0.85))]
 		"ikona":
 			return [_b(Vector3(0, 0.01, 0), Vector3(0.18, 0.02, 0.24), "drewno", 0.006),
 				_b(Vector3(0, 0.0205, 0), Vector3(0.14, 0.001, 0.2), "mosiadz", 0.0),

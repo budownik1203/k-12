@@ -2425,6 +2425,11 @@ func _przenies_teraz(p: Przedmiot, z: Dictionary) -> void:
 
 enum { M_UZYJ, M_ROZLADUJ, M_NAPELNIJ, M_WYJMIJ_MAG, M_ZALOZ, M_ZDEJMIJ, M_WYRZUC, M_WEZ, M_SPRZEDAJ, M_LATARKA, M_OGLADAJ, M_PODZIEL, M_OBEJRZYJ, M_OZNACZ, M_SPRAWDZ, M_CZYSC, M_TASMA, M_JEDZ }
 const M_DOD := 100
+const M_ELAB := 200          # + indeks przepisu
+const M_NAPRAW_PANC := 300
+
+## Elaboracja przy stole roboczym: [kaliber (amunicja), sztuk, puszek prochu].
+const PRZEPISY := [["a_9x18", 20, 1], ["a_12", 10, 1], ["a_762", 15, 2]]
 
 
 func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
@@ -2465,6 +2470,18 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 				_menu.add_item("Zdejmij: %s%s" % [dd.nazwa(), " (stół roboczy)" if warsz and not _warsztat else ""], M_DOD + i)
 		if p.dane.get("wewn", 0) > 0 or p.dane.get("komora", "") != "":
 			_menu.add_item("Rozładuj", M_ROZLADUJ)
+	# stół roboczy: elaboracja (na prasie) i naprawa pancerza (tkaniną balistyczną)
+	if p.id == "prasa_elaboracyjna":
+		for i in PRZEPISY.size():
+			var pr: Array = PRZEPISY[i]
+			_menu.add_item("Elaboruj: %s ×%d (%d × proch)" % [Dane.nazwa(pr[0]), pr[1], pr[2]], M_ELAB + i)
+			_menu.set_item_disabled(_menu.item_count - 1, not _warsztat or _ile_materialu("proch") < int(pr[2]))
+		if not _warsztat:
+			_menu.add_item("(elaboracja tylko przy stole roboczym)", M_ELAB + 99)
+			_menu.set_item_disabled(_menu.item_count - 1, true)
+	if t == "pancerz" and float(p.dane.get("wytrz", 0.0)) < _maks_pancerza(p) - 0.5:
+		_menu.add_item("Napraw (tkanina balistyczna)%s" % ("" if _warsztat else " – przy stole roboczym"), M_NAPRAW_PANC)
+		_menu.set_item_disabled(_menu.item_count - 1, not _warsztat or _ile_materialu("tkanina_balistyczna") < 1)
 	if z["typ"] == "slot":
 		_menu.add_item("Zdejmij", M_ZDEJMIJ)
 	elif Ekwipunek.slot_dla(p) != "":
@@ -2480,10 +2497,79 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 	_menu.popup()
 
 
+## Ile sztuk materiału jest pod ręką (w bazie: także w skrytce).
+func _ile_materialu(pid: String) -> int:
+	var n := 0
+	var zr: Array = ekw.siatki_pod_reka()
+	if tryb_bazy:
+		zr.append(Gra.skrytka)
+	for s2 in zr:
+		n += (s2 as Siatka).policz(pid)
+	return n
+
+
+func _zabierz_material(pid: String, ile: int) -> bool:
+	if _ile_materialu(pid) < ile:
+		return false
+	var zr: Array = ekw.siatki_pod_reka()
+	if tryb_bazy:
+		zr.insert(0, Gra.skrytka)
+	for s2 in zr:
+		ile -= (s2 as Siatka).zabierz(pid, ile)
+		if ile <= 0:
+			break
+	return true
+
+
+## Górna granica wytrzymałości pancerza: każda naprawa tkaniną zabiera 10% (łata nigdy nie jest jak nowa).
+static func _maks_pancerza(p: Przedmiot) -> float:
+	return float(p.dane.get("maks_wytrz", float(p.defn()["pancerz"]["wytrzymalosc"])))
+
+
+func _elaboruj(prasa: Przedmiot, i: int) -> void:
+	var pr: Array = PRZEPISY[i]
+	if not _warsztat or not _zabierz_material("proch", int(pr[2])):
+		_komunikat("Za mało prochu.")
+		return
+	var u := int(prasa.dane.get("uzycia", int(prasa.defn().get("uzycia", 1)))) - 1
+	prasa.dane["uzycia"] = u
+	if u <= 0:
+		if not ekw.usun_przedmiot(prasa):
+			Gra.skrytka.usun(prasa)
+		_komunikat("Prasa się rozsypała – matryce do wymiany.")
+	var naboje := Przedmiot.nowy(String(pr[0]), int(pr[1]))
+	if not Gra.skrytka.dodaj(naboje) and not ekw.dodaj(naboje):
+		_komunikat("Brak miejsca na naboje.")
+		return
+	Dzwiek.graj("naboj_wloz", -4.0)
+	_komunikat("Elaboracja: %s ×%d do skrytki." % [Dane.nazwa(pr[0]), int(pr[1])])
+	ekw.zmieniony.emit()
+	_odswiez()
+
+
+func _napraw_pancerz(p: Przedmiot) -> void:
+	if not _warsztat or not _zabierz_material("tkanina_balistyczna", 1):
+		_komunikat("Brak tkaniny balistycznej.")
+		return
+	var nowe_maks := _maks_pancerza(p) * 0.9
+	p.dane["maks_wytrz"] = nowe_maks
+	p.dane["wytrz"] = nowe_maks
+	Dzwiek.graj("rzep", -4.0)
+	_komunikat("%s połatany: %d/%d." % [p.nazwa(), int(nowe_maks), int(p.defn()["pancerz"]["wytrzymalosc"])])
+	ekw.zmieniony.emit()
+	_odswiez()
+
+
 func _menu_akcja(id: int) -> void:
 	var p := _menu_p
 	var z := _menu_zrodlo
 	if p == null:
+		return
+	if id >= M_ELAB and id < M_ELAB + PRZEPISY.size():
+		_elaboruj(p, id - M_ELAB)
+		return
+	if id == M_NAPRAW_PANC:
+		_napraw_pancerz(p)
 		return
 	match id:
 		M_JEDZ:
@@ -2883,6 +2969,8 @@ static func opis_przedmiotu(p: Przedmiot) -> String:
 			t += "\n"
 		"pancerz":
 			t += "Klasa %d · wytrzymałość %d/%d · chroni: %s\n" % [d["pancerz"]["klasa"], int(p.dane["wytrz"]), d["pancerz"]["wytrzymalosc"], ", ".join(d["pancerz"]["strefy"])]
+			if p.dane.has("maks_wytrz"):
+				t += "[color=#d9a35a]Łatany – najwyżej %d (każda łata −10%%)[/color]\n" % int(p.dane["maks_wytrz"])
 		"pojemnik":
 			var pj: Dictionary = d["pojemnik"]
 			t += "Siatka %dx%d · redukcja wagi %d%%\n" % [pj["sw"], pj["sh"], int(pj["redukcja"] * 100)]

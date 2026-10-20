@@ -332,7 +332,9 @@ func _panel_frakcji(fr: String) -> Control:
 	var r := FrakcjeBazy.rep(fr)
 	v.add_child(Motyw.etykieta("%s: %+d (%s)" % [FrakcjeBazy.DANE[fr]["nazwa"], r, FrakcjeBazy.opis_rep(r)], 14, Motyw.ZOLC, Motyw.mono_b()))
 	var pr := FrakcjeBazy.prog_rozejmu(fr)
-	v.add_child(Motyw.etykieta(("W strefie nie strzelają pierwsi (rozejm do twojego strzału)." if r >= pr else "Rozejm w strefie od reputacji %+d." % pr), 13, Motyw.TEKST_CIEMNY))
+	v.add_child(Motyw.etykieta(("W strefie nie strzelają pierwsi i ostrzegają przed innymi." if r >= pr else "Rozejm w strefie od reputacji %+d." % pr), 13, Motyw.TEKST_CIEMNY))
+	if r <= FrakcjeBazy.PROG_POLOWANIA:
+		v.add_child(Motyw.etykieta("Polują na ciebie w strefie.", 13, Color(0.75, 0.2, 0.15), Motyw.mono_b()))
 	v.add_child(Motyw.etykieta("Ceny: %+d%%  ·  zabity ich człowiek: %d" % [int(round((FrakcjeBazy.mnoznik_ceny(fr) - 1.0) * 100.0)), FrakcjeBazy.ZABICIE], 13, Motyw.TEKST_CIEMNY))
 	return v
 
@@ -342,6 +344,27 @@ func _oferta_mebli() -> void:
 	var naglowek := Motyw.etykieta("Meble trafiają do magazynu kwatery – w kryjówce [B] otwiera plan i stawianie.", 13, Motyw.TEKST_CIEMNY)
 	naglowek.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_oferta.add_child(naglowek)
+	# rozbudowa: druga izba
+	var ri := HBoxContainer.new()
+	ri.add_theme_constant_override("separation", 10)
+	var cena_izby := 25000
+	var ni := Motyw.etykieta("Rozbudowa: druga izba (5 x 7 m)" + ("   [wykupiona]" if Gra.izby_kryjowki >= 2 else ""), 15, Motyw.ZOLC)
+	ni.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ni.mouse_filter = Control.MOUSE_FILTER_STOP
+	ni.tooltip_text = "Przebicie ściany do sąsiedniego boksu: miejsce na kolejne meble."
+	ri.add_child(ni)
+	ri.add_child(Motyw.etykieta("%d" % cena_izby, 15, Motyw.ZOLC, Motyw.mono_b()))
+	var bi := Button.new()
+	bi.text = "Kup"
+	bi.disabled = Gra.izby_kryjowki >= 2 or Gra.bony < cena_izby
+	bi.pressed.connect(func():
+		for b in get_tree().get_nodes_in_group("ui_bazy"):
+			if b.has_method("rozbuduj_kryjowke") and b.rozbuduj_kryjowke():
+				Dzwiek.graj("kasa", -6.0)
+				_powitanie.text = "„Ściana poszła. Gruz zostawiamy w gratisie.”"
+		_przebuduj())
+	ri.add_child(bi)
+	_oferta.add_child(ri)
 	for id in MebleKryjowki.KATALOG:
 		var m: Dictionary = MebleKryjowki.KATALOG[id]
 		var r := HBoxContainer.new()

@@ -25,6 +25,7 @@ var kryjowka: Array = []      # postawione meble kryjówki: {"id", "x", "z", "r"
 var meble_zapas := {}         # kupione, niepostawione meble: id -> liczba
 var reputacja := {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
 var odpoczynek := false       # po powrocie z rajdu można raz przespać się w kryjówce
+var izby_kryjowki := 1        # 2 = wykupiona druga izba (przebita ściana)
 
 
 func _ready() -> void:
@@ -42,6 +43,7 @@ func nowa_gra() -> void:
 	meble_zapas = {}
 	reputacja = {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
 	odpoczynek = false
+	izby_kryjowki = 1
 	skrytka = Siatka.new(MebleKryjowki.SZER_SKRYTKI, MebleKryjowki.wiersze_skrytki(kryjowka), 0.0)
 	ekw = Ekwipunek.new()
 	zdrowie = {}
@@ -264,7 +266,7 @@ func _rozlicz_kontrakty(wynik: Dictionary) -> void:
 		match String(k["typ"]):
 			"eliminacja":
 				for z in wynik.get("zabici", []):
-					if String(z.get("frakcja", "")) == k["cel"]:
+					if (String(k["cel"]) == "boss" and z.get("boss", false)) or (String(z.get("frakcja", "")) == k["cel"] and not z.get("dezerter", false)):
 						k["postep"] = int(k["postep"]) + 1
 			"wyjscie":
 				if String(wynik.get("wyjscie", "")) == k["cel"]:
@@ -331,7 +333,7 @@ func koniec_rajdu(wynik: Dictionary) -> void:
 	var bilans := {}
 	for z in wynik.get("zabici", []):
 		var fz := String(z.get("frakcja", ""))
-		if not reputacja.has(fz):
+		if not reputacja.has(fz) or z.get("dezerter", false):
 			continue
 		for f in reputacja:
 			bilans[f] = int(bilans.get(f, 0)) + (FrakcjeBazy.ZABICIE if f == fz else FrakcjeBazy.ZABICIE_INNYCH)
@@ -382,7 +384,7 @@ func zapisz() -> void:
 	var d := {
 		"wersja": WERSJA, "bony": bony, "skrytka": skrytka.to_dict(), "ekw": ekw.to_dict(),
 		"zdrowie": zdrowie, "potrzeby": potrzeby, "kontrakty": kontrakty, "statystyki": statystyki, "ustawienia": ustawienia, "poczta": poczta,
-		"latarka_wydana": true, "kryjowka": kryjowka, "meble_zapas": meble_zapas, "reputacja": reputacja, "odpoczynek": odpoczynek,
+		"latarka_wydana": true, "kryjowka": kryjowka, "meble_zapas": meble_zapas, "reputacja": reputacja, "odpoczynek": odpoczynek, "izby": izby_kryjowki,
 	}
 	var txt := JSON.stringify(d)
 	if FileAccess.file_exists(ZAPIS):
@@ -420,6 +422,7 @@ func wczytaj() -> bool:
 		for f in d.get("reputacja", {}):
 			reputacja[f] = int(d["reputacja"][f])
 		odpoczynek = bool(d.get("odpoczynek", false))
+		izby_kryjowki = int(d.get("izby", 1))
 		if not (kontrakty as Dictionary).has("frakcje"):
 			var o: Array = kontrakty.get("oferty", [])
 			odnow_oferty()

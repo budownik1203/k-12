@@ -15,6 +15,7 @@ const KATALOG := {
 	"szafa": {"cena": 6500, "funkcja": "skrytka", "wiersze": 8, "opis": "Szafa z odzysku. Skrytka +8 rzędów."},
 	"biurko": {"cena": 3500, "funkcja": "skrytka", "wiersze": 4, "opis": "Biurko z szufladami. Skrytka +4 rzędy."},
 	"lodowka": {"cena": 4000, "funkcja": "skrytka", "wiersze": 4, "opis": "Lodówka Mińsk (nie chłodzi). Skrytka +4 rzędy."},
+	"stojak_bron": {"cena": 6000, "funkcja": "skrytka", "wiersze": 4, "opis": "Stojak na broń z odzysku. Skrytka +4 rzędy; pokazuje do 4 sztuk broni ze skrytki."},
 	"stol_warsztatowy": {"cena": 9000, "funkcja": "warsztat", "opis": "Stół roboczy z imadłem: montaż kolimatora, lunety i chwytu."},
 	"lozko": {"cena": 5000, "funkcja": "odpoczynek", "opis": "Prycza. Sen po rajdzie leczy połowę ran (raz po każdym powrocie)."},
 	"wersalka": {"cena": 4000, "funkcja": "odpoczynek", "opis": "Wersalka. Sen po rajdzie leczy połowę ran (raz po każdym powrocie)."},

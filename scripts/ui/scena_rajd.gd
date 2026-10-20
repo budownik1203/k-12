@@ -15,6 +15,7 @@ var hud: Node
 var ekran_ekw: Node
 var czas := 0.0
 var zabici: Array = []
+var zginieni_inni := 0           # polegli w walkach frakcji (bez udziału gracza)
 var zdarzenia: Array = []
 var wartosc_poczatkowa := 0
 var koniec := false
@@ -25,6 +26,8 @@ func _ready() -> void:
 	add_to_group("ui_rajdu")
 	Gra.ekw.ograniczony = true      # plecak na plecach: bez zdjęcia nic z niego nie wyjmiesz
 	var a := OS.get_cmdline_user_args()
+	if a.has("--test_reputacji"):
+		Gra.reputacja = {"szabrownik": -50, "najemnik": 0, "wojskowy": 60}
 	if a.has("--ziarno"):
 		Gra.ziarno_rajdu = int(a[a.find("--ziarno") + 1])
 	widok = Widok3D.zbuduj(self)
@@ -113,6 +116,12 @@ func _ready() -> void:
 	elif args.has("--drzwi_ai"):
 		_tryb_testu = "drzwi_ai"
 		_test_drzwi_ai.call_deferred()
+	elif args.has("--test_boss"):
+		_tryb_testu = "boss"
+		_test_bossa.call_deferred()
+	elif args.has("--test_reputacji"):
+		_tryb_testu = "reputacja"
+		_test_reputacji.call_deferred()
 	elif args.has("--ekonomia"):
 		_tryb_testu = "ekonomia"
 		_sonda_ekonomii.call_deferred()
@@ -619,8 +628,15 @@ func dodaj_zdarzenie(t: String) -> void:
 	zdarzenia.append({"czas": czas, "tekst": t})
 
 
+## Zabity przeciwnik: do raportu, zleceń i reputacji liczą się tylko zabici przez gracza (nie wojna frakcji).
 func zabity_wrog(w: Node) -> void:
-	zabici.append({"frakcja": w.frakcja, "nazwa": w.nazwa_jednostki, "oddzial_nazwa": String(w.get_meta("oddzial_nazwa", ""))})
+	if w.has_method("zabity_przez_gracza") and not w.zabity_przez_gracza():
+		zginieni_inni += 1
+		return
+	zabici.append({"frakcja": w.frakcja, "nazwa": w.nazwa_jednostki, "oddzial_nazwa": String(w.get_meta("oddzial_nazwa", "")),
+		"boss": w.get("boss") == true, "dezerter": w.get("dezerter") == true})
+	if w.get("boss") == true:
+		dodaj_zdarzenie("Sęp nie żyje. Nieśmiertelnik zostaje przy ciele.")
 
 
 func _ewakuacja(nazwa: String) -> void:
@@ -2790,4 +2806,124 @@ func _sonda_ekonomii() -> void:
 				w_wrog += (p as Przedmiot).wartosc()
 	print("EKONOMIA ziarno=%d pojemniki=%d lup_meble=%d lup_ziemia=%d wrogowie=%s sprzet_wrogow=%d wyjscia=%d" % [Gra.ziarno_rajdu, poj, w_poj, w_ziemia, wrogowie, w_wrog, (info["wyjscia"] as Array).size()])
 	print("EKONOMIA kategorie ", kat)
+	get_tree().quit()
+
+
+## Test bossa: Sęp w strefie, twardszy, bez rozejmu; zabójstwa liczone tylko od gracza; zlecenie i reputacja.
+func _test_bossa() -> void:
+	for _i in 30:
+		await get_tree().physics_frame
+	var bl := 0
+	var mw = get_node_or_null("Wrogowie")
+	var s: Wrog = mw.boss if mw else null
+	if s == null:
+		print("  BŁĄD: brak Sępa")
+		print("TEST BOSSA: błędów 1")
+		get_tree().quit()
+		return
+	print("  Sęp: %s, hp klatki %.0f, pancerz %s, rozejm %s, odległość od startu %.0f m" % [s.nazwa_jednostki, s.cialo.hp["klatka"], s.pancerz.id, s.rozejm, s.global_position.distance_to(info["start"])])
+	if s.cialo.hp["klatka"] < 150.0 or s.rozejm or s.global_position.distance_to(info["start"]) < 40.0:
+		print("  BŁĄD: parametry Sępa")
+		bl += 1
+	# wojna frakcji: szabrownik zabity przez innego wroga nie liczy się graczowi
+	var inny: Wrog = null
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w is Wrog and not w.boss and not w.dezerter and w.frakcja == "szabrownik":
+			inny = w
+			break
+	var przed := zabici.size()
+	if inny:
+		while not inny.cialo.martwy:
+			inny.trafiony("glowa", 60.0, 40.0, s, inny.global_position + Vector3.UP * 1.6, Vector3.FORWARD)
+		await get_tree().process_frame
+		print("  szabrownik zabity przez Sępa: zabici gracza %d → %d, polegli inni %d" % [przed, zabici.size(), zginieni_inni])
+		if zabici.size() != przed:
+			print("  BŁĄD: cudze zabójstwo policzone graczowi")
+			bl += 1
+	# gracz zabija Sępa
+	var strzaly := 0
+	while not s.cialo.martwy and strzaly < 40:
+		s.trafiony("klatka", 56.0, 48.0, gracz, s.global_position + Vector3.UP * 1.3, Vector3.FORWARD)
+		strzaly += 1
+	await get_tree().create_timer(0.5).timeout
+	var rek: Dictionary = zabici.back() if not zabici.is_empty() else {}
+	print("  Sęp padł po %d trafieniach BP w klatkę; rekord: %s" % [strzaly, rek])
+	if strzaly < 4 or not rek.get("boss", false):
+		print("  BŁĄD: zabójstwo Sępa")
+		bl += 1
+	var ma_niesm := false
+	for c in swiat.find_children("*", "", true, false):
+		if c is Pojemnik:
+			for p in (c as Pojemnik).siatka.wszystkie():
+				if (p as Przedmiot).id == "niesmiertelnik":
+					ma_niesm = true
+			for cz in (c as Pojemnik).czesci:
+				for p2 in (cz["siatka"] as Siatka).wszystkie():
+					if (p2 as Przedmiot).id == "niesmiertelnik":
+						ma_niesm = true
+	print("  nieśmiertelnik przy zwłokach: ", ma_niesm)
+	if not ma_niesm:
+		print("  BŁĄD: brak nieśmiertelnika")
+		bl += 1
+	# rozliczenie: zlecenie Wojska na Sępa, reputacja Najemników bez kary
+	Gra.reputacja = {"szabrownik": 0, "najemnik": 0, "wojskowy": 0}
+	Gra.kontrakty["aktywne"] = [{"typ": "eliminacja", "cel": "boss", "ile": 1, "postep": 0, "nagroda": 15000, "rep": 15, "od": "wojskowy", "opis": "Sęp"}]
+	var w := {"przezyl": true, "zabici": zabici.duplicate(), "zdarzenia": []}
+	Gra._rozlicz_kontrakty(w)
+	var bil := {}
+	for z in w["zabici"]:
+		if z.get("dezerter", false):
+			continue
+		bil[z["frakcja"]] = int(bil.get(z["frakcja"], 0)) + 1
+	print("  po rozliczeniu: aktywne %d, reputacja %s, zabici bez dezerterów %s" % [Gra.kontrakty["aktywne"].size(), Gra.reputacja, bil])
+	if not Gra.kontrakty["aktywne"].is_empty() or Gra.reputacja["wojskowy"] != 15:
+		print("  BŁĄD: zlecenie na Sępa")
+		bl += 1
+	print("TEST BOSSA: błędów ", bl)
+	get_tree().quit()
+
+
+## Test reputacji w strefie: przyjazny posterunek wojska ostrzega gracza, wrodzy szabrownicy ruszają na jego pozycję.
+func _test_reputacji() -> void:
+	for _i in 30:
+		await get_tree().physics_frame
+	var bl := 0
+	var mw = get_node("Wrogowie")
+	var komunikaty := []
+	gracz.komunikat.connect(func(t): komunikaty.append(t))
+	# ostrzeżenie: gracz staje przy żołnierzu z rozejmem
+	var zol: Wrog = null
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		if w is Wrog and w.frakcja == "wojskowy":
+			zol = w
+			break
+	if zol == null:
+		print("  BŁĄD: brak wojska na mapie")
+		bl += 1
+	else:
+		print("  żołnierz: rozejm %s, stan %s" % [zol.rozejm, zol.stan])
+		gracz.global_position = zol.global_position - zol.global_basis.z * 1.5
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		mw._ostrzezenia()
+		var ostrz := komunikaty.filter(func(t): return String(t).contains("rozejm"))
+		print("  ostrzeżenie: ", ostrz)
+		if not zol.rozejm or ostrz.is_empty():
+			print("  BŁĄD: brak ostrzeżenia")
+			bl += 1
+	# polowanie: szabrownicy przy reputacji −50
+	gracz.global_position = info["start"]
+	await get_tree().physics_frame
+	mw._polowanie()
+	var szuka := 0
+	for o in mw.oddzialy:
+		for w in o.czlonkowie:
+			if is_instance_valid(w) and w.frakcja == "szabrownik" and w.stan == "szukanie" and (w.ostatnia_pozycja as Vector3).distance_to(gracz.global_position) < 9.0:
+				szuka += 1
+	var zapow := komunikaty.filter(func(t): return String(t).contains("namierzyli"))
+	print("  polowanie: szabrowników w drodze do gracza %d, zapowiedź: %s" % [szuka, zapow])
+	if szuka == 0 or zapow.is_empty():
+		print("  BŁĄD: polowanie")
+		bl += 1
+	print("TEST REPUTACJI: błędów ", bl)
 	get_tree().quit()
