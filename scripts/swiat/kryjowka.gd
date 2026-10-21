@@ -689,7 +689,7 @@ func _buduj_ui() -> void:
 	_lista = VBoxContainer.new()
 	_lista.add_theme_constant_override("separation", 4)
 	v.add_child(_lista)
-	_podpis = Motyw.etykieta("", 14, Motyw.TEKST, Motyw.mono())
+	_podpis = Motyw.etykieta("", 16, Motyw.TEKST, Motyw.mono())
 	_podpis.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_podpis.offset_left = -520
 	_podpis.offset_right = 520

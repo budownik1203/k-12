@@ -526,6 +526,10 @@ func _process(_d: float) -> void:
 func komunikat(t: String) -> void:
 	var l := Motyw.etykieta(t, 15)
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	# długie komunikaty zawijane – nie wchodzą pod licznik bonów w prawym górnym rogu
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var szer := _komunikaty.get_viewport_rect().size.x / maxf(0.01, _komunikaty.get_global_transform_with_canvas().get_scale().x)
+	l.custom_minimum_size = Vector2(clampf(szer - 24.0 - 460.0, 320.0, 860.0), 0)
 	_komunikaty.add_child(l)
 	while _komunikaty.get_child_count() > 5:
 		var c := _komunikaty.get_child(0)

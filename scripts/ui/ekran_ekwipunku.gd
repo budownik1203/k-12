@@ -751,6 +751,63 @@ func _przebuduj() -> void:
 	_odswiez()
 
 
+## Siatki na ekranie nie mogą na siebie nachodzić: kamizelka, plecak, kontener i przeszukiwany mebel / zwłoki
+## rzutowane są na swoje modele, więc potrafią się nałożyć (np. kamizelka na dole kadru i szafka przed graczem).
+## Ważność: panel operatora, kamizelka, plecak, kontener – mebel ustępuje wszystkim. Cel każdej kolejnej ramki
+## przesuwany jest do najbliższego wolnego miejsca na ekranie (szukanie w pierścieniach co 24 px).
+func _przeszkody_ramek(dla: Control) -> Array:
+	var out := []
+	if _lp and _lp.is_visible_in_tree():
+		out.append(_lp.get_global_rect().grow(6.0))
+	var kol := ["kamizelka", "plecak", "bezpieczny", "kieszenie"]
+	for co in _ramki:
+		if not (co in kol):
+			kol.append(co)
+	for co in kol:
+		if not _ramki.has(co):
+			continue
+		var r: Control = _ramki[co]
+		if r == dla:
+			break          # tylko ważniejsze (wcześniejsze) ramki
+		if is_instance_valid(r) and r.visible:
+			out.append(Rect2(r.position, r.size).grow(6.0))
+	return out
+
+
+func _wolne_miejsce(poz: Vector2, roz: Vector2, przeszkody: Array) -> Vector2:
+	var ekran := Rect2(Vector2.ZERO, _root.size)
+	var ok := func(p: Vector2) -> bool:
+		var r := Rect2(p, roz)
+		if not ekran.encloses(r):
+			return false
+		for o in przeszkody:
+			if (o as Rect2).intersects(r):
+				return false
+		return true
+	var start := Vector2(clampf(poz.x, 0.0, maxf(0.0, ekran.size.x - roz.x)), clampf(poz.y, 0.0, maxf(0.0, ekran.size.y - roz.y)))
+	if ok.call(start):
+		return start
+	var krok := 24.0
+	for pierscien in range(1, 80):
+		var najl := Vector2.INF
+		var nd := INF
+		var r := pierscien * krok
+		for k in pierscien * 8:
+			var a := TAU * float(k) / float(pierscien * 8)
+			var p := start + Vector2(cos(a), sin(a)) * r
+			if ok.call(p) and p.distance_to(poz) < nd:
+				nd = p.distance_to(poz)
+				najl = p
+		if najl != Vector2.INF:
+			return najl
+	return start
+
+
+## Zostawione dla zgodności: rozsunięcie bieżących pozycji (bez szukania) – wołane po ustawieniu celów.
+func _rozsun_ramki() -> void:
+	pass
+
+
 ## Wejście ramki pojemnika: kamizelka wjeżdża od dołu (spojrzenie w dół), plecak rozwija się jak rozpinany zamek,
 ## kieszenie i kontener – krótkie rozwinięcie.
 func _animuj_wejscie(r: Control, co: String) -> void:
@@ -944,10 +1001,14 @@ func _process(delta: float) -> void:
 			var cel: Vector2 = (pk as Vector2) - off
 			cel.x = clampf(cel.x, 4.0, _root.size.x - r.size.x - 4.0)
 			cel.y = clampf(cel.y, 4.0, _root.size.y - r.size.y - 30.0)
+			if co != "kamizelka":
+				cel = _wolne_miejsce(cel, r.size, _przeszkody_ramek(r))
 			if not r.visible:
 				r.visible = true
 				r.position = cel
 			r.position = r.position.lerp(cel, 0.5)
+		if _ramka_poj == null or not is_instance_valid(_ramka_poj):
+			_rozsun_ramki()
 		_hover_ziemi()
 		_uchwyty_kieszeni()
 		for c in _warstwa.get_children():
@@ -1011,10 +1072,12 @@ func _process(delta: float) -> void:
 			var cel3: Vector2 = (pk3 as Vector2) - off3
 			cel3.x = clampf(cel3.x, 392.0, maxf(392.0, _root.size.x - _ramka_poj.size.x - 4.0))
 			cel3.y = clampf(cel3.y, 4.0, maxf(4.0, _root.size.y - _ramka_poj.size.y - 30.0))
+			cel3 = _wolne_miejsce(cel3, _ramka_poj.size, _przeszkody_ramek(null))
 			if not _ramka_poj.visible:
 				_ramka_poj.visible = true
 				_ramka_poj.position = cel3
 			_ramka_poj.position = _ramka_poj.position.lerp(cel3, 0.5)
+		_rozsun_ramki()
 		if _etyk_szuk and is_instance_valid(_etyk_szuk):
 			var ic: int = _pojemnik.czesc_szukana()
 			var ciem := _swiatlo_szuk >= 0.0 and _swiatlo_szuk < 0.35
@@ -1064,6 +1127,11 @@ func _process(delta: float) -> void:
 	if not _drag.is_empty():
 		if Input.is_action_just_pressed("przeladuj"):
 			_drag["rot"] = not _drag["rot"]
+			# obrót wokół środka: kursor zostaje na środku przedmiotu (odłożenie obróconego w to samo miejsce trafia)
+			var pd: Przedmiot = _drag["p"]
+			var r0 := pd.rozmiar()
+			var wym := Vector2(r0.y, r0.x) if _drag["rot"] else Vector2(r0.x, r0.y)
+			_drag["off"] = wym * SiatkaUI.KOM * 0.5
 		_root.queue_redraw()
 	_tooltip.position = _root.get_local_mouse_position() + Vector2(18, 14)
 	if _tooltip.position.x + _tooltip.size.x > _root.size.x:
@@ -1595,7 +1663,8 @@ func _upusc_drag(anuluj: bool, mysz_test := Vector2(-1, -1)) -> void:
 		if q != null and ui.ukryty(q):
 			q = null
 		if q != null and q != p:
-			var akcja: bool = (p.typ() == "dodatek" and q.typ() == "bron") or (p.typ() == "amunicja" and q.typ() == "magazynek")
+			var akcja: bool = (p.typ() == "dodatek" and q.typ() == "bron") or (p.typ() == "amunicja" and q.typ() == "magazynek") \
+				or (p.typ() == "magazynek" and q.typ() == "amunicja")
 			if akcja or not _w_swiecie():
 				if _polacz(p, d["z"], q, ui):
 					_po_zmianie()
@@ -1615,8 +1684,6 @@ func _upusc_drag(anuluj: bool, mysz_test := Vector2(-1, -1)) -> void:
 				return
 		var tl: Vector2 = mysz - d["off"] - ui.global_position
 		var kom := Vector2i(roundi(tl.x / SiatkaUI.KOM), roundi(tl.y / SiatkaUI.KOM))
-		if d["rot"] != p.obrot:
-			kom = pod
 		if p.typ() == "pojemnik" and p.dane["siatka"] == ui.siatka:
 			return
 		var sw := p.szer()
@@ -1628,6 +1695,21 @@ func _upusc_drag(anuluj: bool, mysz_test := Vector2(-1, -1)) -> void:
 		if ui.zakryty_obszar(kom.x, kom.y, sw, sh):
 			_komunikat("Ta kieszeń jest zapięta – kliknij ją, żeby otworzyć")
 			_odswiez()
+			return
+		if q != null and q != p and not ui.siatka.moze(p, kom.x, kom.y, d["rot"], p) and d["z"]["typ"] == "siatka":
+			var zr3: Dictionary = d["z"]
+			var sg3: Siatka = ui.siatka
+			var rot3: bool = d["rot"]
+			var cel3 := _ekran_przedmiotu(q, {"typ": "siatka", "siatka": sg3})
+			_animuj(p, zr3, cel3, func():
+				if _w_zrodle(p, zr3) and sg3.zawiera(q):
+					if _zamien(p, zr3, q, sg3, kom, rot3):
+						if _pojemnik and is_instance_valid(_pojemnik):
+							_pojemnik.poznaj(p)
+						Dzwiek.graj("odloz", -10.0)
+					else:
+						_komunikat("Nie zamienią się – drugi się nie zmieści")
+				_po_zmianie())
 			return
 		if ui.siatka.moze(p, kom.x, kom.y, d["rot"], p):
 			var sg: Siatka = ui.siatka
@@ -1645,6 +1727,83 @@ func _upusc_drag(anuluj: bool, mysz_test := Vector2(-1, -1)) -> void:
 				_po_zmianie())
 		return
 	_odswiez()
+
+
+## Przedmiot pod kursorem, z którym przeciągany wejdzie w interakcję: {"q", "rect" (ekran), "kolor", "opis"}.
+func cel_interakcji_przeciagania(p: Przedmiot, mysz: Vector2) -> Dictionary:
+	for ui in _siatki:
+		if ui.siatka == null or not ui.is_visible_in_tree() or not ui.get_global_rect().has_point(mysz):
+			continue
+		var pod := ui.komorka_pod(mysz - ui.global_position)
+		var q := ui.siatka.przedmiot_w(pod.x, pod.y)
+		if q == null or q == p or ui.ukryty(q):
+			return {}
+		var e := {}
+		for it in ui.siatka.items:
+			if it["p"] == q:
+				e = it
+		if e.is_empty():
+			return {}
+		var rect := Rect2(ui.global_position + Vector2(int(e["x"]), int(e["y"])) * SiatkaUI.KOM, Vector2(q.szer(), q.wys()) * SiatkaUI.KOM)
+		var kolor := Color(0.95, 0.95, 0.92)
+		var opis := "zamień miejscami"
+		if (p.typ() == "amunicja" and q.typ() == "magazynek") or (p.typ() == "magazynek" and q.typ() == "amunicja"):
+			kolor = Color(0.5, 0.8, 1.0)
+			opis = "ładuj magazynek"
+		elif p.typ() == "dodatek" and q.typ() == "bron":
+			kolor = Color(0.5, 0.8, 1.0)
+			opis = "zamontuj"
+		elif p.typ() == "magazynek" and q.typ() == "bron" and p.id in q.defn()["bron"].get("magazynki", []):
+			kolor = Color(0.5, 0.8, 1.0)
+			opis = "włóż do broni"
+		elif p.id == q.id and p.stos_max() > 1:
+			kolor = Color(1.0, 0.62, 0.2)
+			opis = "połącz w stos"
+		elif q.typ() == "pojemnik" and p.typ() != "pojemnik":
+			opis = "włóż do: " + q.nazwa()
+		return {"q": q, "rect": rect, "kolor": kolor, "opis": opis}
+	return {}
+
+
+## Zamiana miejscami: przeciągany p na miejsce q, q na dawne miejsce p (oba w siatkach, jeśli się zmieszczą).
+func _zamien(p: Przedmiot, zp: Dictionary, q: Przedmiot, sq: Siatka, kom: Vector2i, rot: bool) -> bool:
+	if zp.get("typ", "") != "siatka":
+		return false
+	var sp: Siatka = zp["siatka"]
+	var ep := {}
+	var eq := {}
+	for it in sp.items:
+		if it["p"] == p:
+			ep = it
+	for it in sq.items:
+		if it["p"] == q:
+			eq = it
+	if ep.is_empty() or eq.is_empty():
+		return false
+	if q.typ() == "pojemnik" and q.dane.get("siatka") == sp:
+		return false
+	var p_poz := Vector2i(int(ep["x"]), int(ep["y"]))
+	var p_rot := p.obrot
+	var q_poz := Vector2i(int(eq["x"]), int(eq["y"]))
+	var q_rot := q.obrot
+	sp.usun(p)
+	sq.usun(q)
+	# p: tam, gdzie wskazano, albo dokładnie w miejsce q; q: w dawne miejsce p (albo gdziekolwiek w tej siatce)
+	var ok_p := sq.poloz(p, kom.x, kom.y, rot) or sq.poloz(p, q_poz.x, q_poz.y, rot) or sq.poloz(p, q_poz.x, q_poz.y, not rot)
+	var ok_q := false
+	if ok_p:
+		ok_q = sp.poloz(q, p_poz.x, p_poz.y, q_rot) or sp.poloz(q, p_poz.x, p_poz.y, not q_rot)
+		if not ok_q:
+			var m := sp.wolne_miejsce(q)
+			ok_q = not m.is_empty() and sp.poloz(q, m["x"], m["y"], m["rot"])
+	if ok_p and ok_q:
+		return true
+	# nie da się – wszystko wraca
+	sq.usun(p)
+	sp.usun(q)
+	sp.poloz(p, p_poz.x, p_poz.y, p_rot)
+	sq.poloz(q, q_poz.x, q_poz.y, q_rot)
+	return false
 
 
 ## Czy pod kursorem jest coś, na co można upuścić przedmiot (slot, siatka, panel ciała).
@@ -1747,6 +1906,10 @@ func _polacz(p: Przedmiot, z: Dictionary, q: Przedmiot, ui: SiatkaUI) -> bool:
 	if p.typ() == "amunicja" and q.typ() == "magazynek":
 		_seria_mag = false
 		return _napelnij(q, p, z)
+	if p.typ() == "magazynek" and q.typ() == "amunicja":
+		# magazynek przyłożony do paczki: ładowanie z tej paczki (magazynek zostaje tam, skąd go wzięto)
+		_seria_mag = false
+		return _napelnij(p, q, {"typ": "siatka", "siatka": ui.siatka})
 	if p.typ() == "magazynek" and q.typ() == "bron":
 		var bd: Dictionary = q.defn()["bron"]
 		if p.id in bd.get("magazynki", []) and q.dane["mag"] == null:
@@ -3370,8 +3533,19 @@ class Duch:
 		var stary := p.obrot
 		p.obrot = d["rot"]
 		var m := get_local_mouse_position()
-		var tl: Vector2 = m - d["off"] if d["rot"] == stary else m - Vector2(16, 16)
+		var tl: Vector2 = m - d["off"]
 		var r := Rect2(tl, Vector2(p.szer(), p.wys()) * SiatkaUI.KOM)
+		# przedmiot pod kursorem, z którym przeciągany wejdzie w interakcję – podświetlony:
+		# niebieski – składanie (amunicja do magazynka, dodatek na broń, magazynek do broni), pomarańczowy –
+		# łączenie w stos, biały – zamiana miejscami / włożenie do pojemnika
+		var cel_i: Dictionary = ekran.cel_interakcji_przeciagania(p, get_global_mouse_position())
+		if not cel_i.is_empty():
+			var kr: Rect2 = cel_i["rect"]
+			kr.position -= global_position
+			var kc: Color = cel_i["kolor"]
+			draw_rect(kr, Color(kc.r, kc.g, kc.b, 0.22))
+			draw_rect(kr, kc, false, 2.0)
+			draw_string(Motyw.cond(), kr.position + Vector2(2, kr.size.y + 12), String(cel_i["opis"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, kc)
 		# podświetlenie miejsca docelowego
 		for ui in ekran._siatki:
 			if ui.siatka == null or not ui.get_global_rect().has_point(get_global_mouse_position()):

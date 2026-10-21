@@ -156,6 +156,12 @@ func _ready() -> void:
 	elif args.has("--soak"):
 		_tryb_testu = "soak"
 		_test_soak.call_deferred(float(args[args.find("--soak") + 1]))
+	elif args.has("--test_zapiecia"):
+		_tryb_testu = "zapiecia"
+		_test_zapiec.call_deferred(args[args.find("--test_zapiecia") + 1])
+	elif args.has("--test_nakladanie"):
+		_tryb_testu = "nakladanie"
+		_test_nakladania.call_deferred(args[args.find("--test_nakladanie") + 1])
 	elif args.has("--test_v16"):
 		_tryb_testu = "v16"
 		_test_v16.call_deferred(args[args.find("--test_v16") + 1])
@@ -4215,3 +4221,147 @@ func _test_v16(katalog: String) -> void:
 		bl += 1
 	print("TEST V16: błędów ", bl)
 	get_tree().quit()
+
+
+
+## Przeszukiwanie mebla z otwartą kamizelką i plecakiem: siatki nie mogą na siebie nachodzić (kilka mebli).
+func _test_nakladania(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+		(w as Node3D).global_position += Vector3(0, 50, 0)
+	var bl := 0
+	var meble: Array = swiat.find_children("*", "Pojemnik", true, false).filter(func(n): return not String(n.nazwa).begins_with("Zwłoki") and (n as Node3D).global_position.y < 1.5 and n.zamkniety_kluczem == "")
+	meble.sort_custom(func(a, b): return (a as Node3D).global_position.distance_to(info["start"]) < (b as Node3D).global_position.distance_to(info["start"]))
+	Gra.ekw.sloty["kamizelka"] = Przedmiot.nowy("kamizelka_lbv")
+	Gra.ekw.sloty["plecak"] = Przedmiot.nowy("plecak_turystyczny")
+	var mapa_n := swiat.get_world_3d().navigation_map
+	var nr := 0
+	for pj in meble.slice(0, 4):
+		var cel: Vector3 = pj.punkt_wnetrza()
+		var przod: Vector3 = (pj as Node3D).global_basis.z
+		var stan := NavigationServer3D.map_get_closest_point(mapa_n, Vector3(cel.x, (pj as Node3D).global_position.y, cel.z) + przod * 1.0)
+		gracz.global_position = stan
+		var d := cel - (stan + Vector3.UP * 1.6)
+		gracz.rotation.y = atan2(-d.x, -d.z)
+		gracz.kamera.rotation.x = 0.0
+		gracz._pitch = atan2(d.y, Vector2(d.x, d.z).length())
+		await get_tree().create_timer(0.3).timeout
+		for uklad in [["kamizelka"], ["kamizelka", "plecak"]]:
+			ekran_ekw.otworz(pj)
+			await _klatki(5)
+			for co in uklad:
+				ekran_ekw.przelacz_pojemnik(co)
+				await get_tree().create_timer(2.6).timeout
+			await get_tree().create_timer(0.8).timeout
+			var prost := []
+			var nazwy := []
+			for co in ekran_ekw._ramki:
+				var r: Control = ekran_ekw._ramki[co]
+				if is_instance_valid(r) and r.visible:
+					prost.append(r.get_global_rect())
+					nazwy.append(co)
+			if ekran_ekw._ramka_poj and is_instance_valid(ekran_ekw._ramka_poj) and ekran_ekw._ramka_poj.visible:
+				prost.append(ekran_ekw._ramka_poj.get_global_rect())
+				nazwy.append("mebel")
+			var nak := []
+			for i in prost.size():
+				for j in range(i + 1, prost.size()):
+					var x: Rect2 = (prost[i] as Rect2).intersection(prost[j])
+					if x.size.x > 2.0 and x.size.y > 2.0:
+						nak.append("%s×%s %dx%d" % [nazwy[i], nazwy[j], int(x.size.x), int(x.size.y)])
+			print("  %s + %s: ramki %s, nałożenia: %s" % [pj.nazwa, "+".join(uklad), nazwy, nak])
+			bl += nak.size()
+			await _zapisz_kadr(katalog, "nakl_%d_%d" % [nr, uklad.size()], 3)
+			ekran_ekw.zamknij()
+			await get_tree().create_timer(1.6).timeout
+		nr += 1
+	print("TEST NAKŁADANIA: błędów ", bl)
+	get_tree().quit()
+
+
+
+## Każda kieszeń każdego pojemnika otwierana i zapinana prawdziwym gestem myszy (chwyt uchwytu, ciągnięcie
+## wzdłuż jego drogi, puszczenie) – żadna nie może być „nie do otwarcia”.
+func _test_zapiec(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	for w in get_tree().get_nodes_in_group("wrogowie"):
+		w.set_physics_process(false)
+		(w as Node3D).global_position += Vector3(0, 50, 0)
+	Gra.ustawienia["proste_kieszenie"] = false
+	var bl := 0
+	for pid in ["worek", "plecak_turystyczny", "plecak_szturmowy", "chlebak", "plecak_wojskowy", "napiersnik", "kamizelka_lbv", "kamizelka_wedkarska", "kamizelka_mysliwska"]:
+		var pr := Przedmiot.nowy(pid)
+		var slot: String = pr.defn()["pojemnik"]["slot"]
+		Gra.ekw.sloty[slot] = pr
+		ekran_ekw.otworz(null)
+		await _klatki(5)
+		ekran_ekw.przelacz_pojemnik(slot)
+		await get_tree().create_timer(2.8).timeout
+		var wyn := []
+		for i in (ekran_ekw._kieszenie[slot] as Array).size():
+			var otw := await _gest_kieszeni(slot, i, false)
+			await get_tree().create_timer(0.3).timeout
+			if i == 0:
+				await _zapisz_kadr(katalog, "zap_%s_otw" % pid, 2)
+			var zam := await _gest_kieszeni(slot, i, true)
+			wyn.append("%d:%s/%s" % [i, "otw" if otw else "NIE-OTW", "zap" if zam else "NIE-ZAP"])
+			if not otw or not zam:
+				bl += 1
+		print("  %s: %s" % [pid, " ".join(wyn)])
+		ekran_ekw.zamknij()
+		await get_tree().create_timer(1.2).timeout
+	# magazynek przyłożony do paczki amunicji: ładowanie
+	var ek := Gra.ekw
+	var mag := Przedmiot.nowy("mag_pw9")
+	mag.dane["naboje"] = 0
+	var paczka := Przedmiot.nowy("a_9x18", 20)
+	ek.kieszenie.dodaj(mag)
+	ek.kieszenie.dodaj(paczka)
+	ekran_ekw.otworz(null)
+	await _klatki(5)
+	var ui_k: SiatkaUI = null
+	for u in ekran_ekw.find_children("*", "SiatkaUI", true, false):
+		if (u as SiatkaUI).siatka == ek.kieszenie:
+			ui_k = u
+	var ok_p: bool = ui_k != null and ekran_ekw._polacz(mag, {"typ": "siatka", "siatka": ek.kieszenie}, paczka, ui_k)
+	await get_tree().create_timer(6.0).timeout
+	print("  magazynek na paczkę: przyjęte %s, w magazynku %d, w paczce %d" % [ok_p, int(mag.dane["naboje"]), paczka.ilosc])
+	if int(mag.dane["naboje"]) <= 0 or paczka.ilosc >= 20:
+		bl += 1
+	ekran_ekw.zamknij()
+	print("TEST ZAPIĘĆ: błędów ", bl)
+	get_tree().quit()
+
+
+func _gest_kieszeni(slot: String, i: int, zamykaj: bool) -> bool:
+	var e: Dictionary = ekran_ekw._kieszenie[slot][i]
+	for krok in 8:
+		if bool(e["otwarta"]) != zamykaj and not bool(e.get("zamyk", false)) and krok > 0:
+			break
+		if not zamykaj and bool(e["otwarta"]):
+			return true
+		if zamykaj and not bool(e["otwarta"]) and not bool(e.get("zamyk", false)):
+			return true
+		ekran_ekw._uchwyty_kieszeni()
+		if not e.has("uchwyt"):
+			await get_tree().process_frame
+			continue
+		var m0: Vector2 = e["uchwyt"]
+		if not ekran_ekw._chwyc_uchwyt(m0):
+			return false
+		if not ekran_ekw._gest.is_empty():
+			var kier: Vector2 = ekran_ekw._gest["kier"]
+			for st in 26:
+				if ekran_ekw._gest.is_empty():
+					break
+				var f := float(st) / 20.0
+				ekran_ekw._ciagnij_uchwyt(m0 + kier * (-f if zamykaj else f))
+				await get_tree().process_frame
+			ekran_ekw._pusc_uchwyt()
+		await get_tree().create_timer(0.25).timeout
+	return bool(e["otwarta"]) if not zamykaj else not bool(e["otwarta"]) and not bool(e.get("zamyk", false))

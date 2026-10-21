@@ -255,12 +255,13 @@ static func _sznur(n: Node3D, srodek: Vector3, a: float, b: float, y_z: float, y
 	var mi := T.powierzchnia(40, 6, func(u, v): return f.call(u, v, false), func(u, v): return f.call(u, v, true), kol, {})
 	n.add_child(mi)
 	# blokada sznurka i dwa końce zwisające z przodu
-	var bl := _wezel(n, srodek + Vector3(0, y_z, b * zz + 0.012))
+	# blokada przy zebranym środku wylotu; otwieranie = pociągnięcie jej od środka na zewnątrz (do siebie)
+	var bl := _wezel(n, srodek + Vector3(0, y_z + 0.008, b * zz * 0.35))
 	_mi(bl, [{"t": "box", "c": Vector3(0, -0.012, 0.004), "s": Vector3(0.018, 0.026, 0.014), "m": "bakelit", "f": 0.005},
 		{"t": "box", "c": Vector3(0, -0.001, 0.004), "s": Vector3(0.008, 0.004, 0.016), "m": "metal_jasny", "f": 0.001},
 		B.walec(Vector3(-0.004, -0.025, 0.004), Vector3(-0.006, -0.075, 0.012), 0.004, 0.004, "bandaz", 5),
 		B.walec(Vector3(0.004, -0.025, 0.004), Vector3(0.008, -0.068, 0.01), 0.004, 0.004, "bandaz", 5)])
-	return {"sznur": mi, "blokada": bl, "bl_otw": srodek + Vector3(0, y_o - 0.004, b * 1.02 + 0.014)}
+	return {"sznur": mi, "blokada": bl, "bl_otw": srodek + Vector3(0, y_o - 0.004, b * 1.02 + 0.05)}
 
 
 ## Linia zębów zamka błyskawicznego wzdłuż łamanej (punkty w układzie węzła).
@@ -304,8 +305,9 @@ static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k:
 			_zeby(n, [Vector3(dno.x - a * 0.9, y, dno.z), Vector3(dno.x + a * 0.9, y, dno.z)])
 			var su := _suwak(n, Vector3(dno.x - a * 0.85, y + 0.004, dno.z + 0.004))
 			su.scale = Vector3.ONE * clampf(a * 9.0, 0.35, 1.0)
-			return {"kroki": [[[su, "position:x", dno.x + a * 0.85, clampf(a * 3.0, 0.18, 0.55)]], [[tb, "blend_shapes/otw", 1.0, 0.3]]],
-				"dzwieki": ["zamek", "plecak"]}
+			# płaska kieszeń na zamek: nie ma klapy do odchylania – przesunięcie suwaka otwiera wylot
+			return {"kroki": [[[su, "position:x", dno.x + a * 0.85, clampf(a * 3.0, 0.18, 0.55)], [tb, "blend_shapes/otw", 1.0, clampf(a * 3.0, 0.18, 0.55)]]],
+				"dzwieki": ["zamek"]}
 		"sciagacz":
 			var zx := 0.72
 			var zz := 0.5
@@ -314,9 +316,9 @@ static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k:
 			var rr := minf(minf(a, b) * 0.45, h * 0.18)
 			var sz := _sznur(n, dno, a - rr * 0.0, b, h * 0.93, h * 0.92, zx, zz, Color(0.75, 0.72, 0.62))
 			var bl: Node3D = sz["blokada"]
-			return {"kroki": [[[bl, "position:y", bl.position.y + 0.025, 0.22]],
-				[[tb2, "blend_shapes/otw", 1.0, 0.45], [sz["sznur"], "blend_shapes/otw", 1.0, 0.45], [bl, "position", sz["bl_otw"], 0.45]]],
-				"dzwieki": ["plecak", "plecak"]}
+			# jeden ruch: blokadę sznurka ciągnie się od środka wylotu na zewnątrz (zamykanie – z powrotem do środka)
+			return {"kroki": [[[bl, "position", sz["bl_otw"], 0.45], [tb2, "blend_shapes/otw", 1.0, 0.45], [sz["sznur"], "blend_shapes/otw", 1.0, 0.45]]],
+				"dzwieki": ["plecak"]}
 	# klapa: górna część nad wylotem (zawias z tyłu), przednia zwisa na przód kieszeni
 	var tb3 := torba(a, b, h, k, {"zx": 0.92, "zz": 0.55, "grudy": 0.06, "ziarno": ziarno})
 	_dodaj(n, tb3, dno)
@@ -356,11 +358,11 @@ static func _ladownica(n: Node3D, dno: Vector3, a: float, b: float, h: float, k:
 		rul.scale = Vector3(1.0, 0.05, 0.05)
 		# zwijanie: klapa idzie w górę i skraca się ku zawiasowi, rulon rośnie
 		return {"kroki": [[[przod, "rotation:x", 0.25, 0.16]],
-			[[zaw, "rotation:x", -1.45, 0.3], [zaw, "scale", Vector3(1.0, 1.0, 0.04), 0.3], [rul, "scale", Vector3.ONE, 0.3]],
-			[[tb3, "blend_shapes/otw", 1.0, 0.3]]],
-			"dzwieki": [dz, "plecak", "plecak"]}
-	return {"kroki": [[[przod, "rotation:x", 0.25, 0.16]], [[zaw, "rotation:x", odchyl, 0.3]], [[tb3, "blend_shapes/otw", 1.0, 0.3]]],
-		"dzwieki": [dz, "plecak", "plecak"]}
+			[[zaw, "rotation:x", -1.45, 0.3], [zaw, "scale", Vector3(1.0, 1.0, 0.04), 0.3], [rul, "scale", Vector3.ONE, 0.3], [tb3, "blend_shapes/otw", 1.0, 0.3]]],
+			"dzwieki": [dz, "plecak"]}
+	# wylot kieszeni rozchyla się razem z odchyleniem klapy (bez osobnego, niewidocznego kroku)
+	return {"kroki": [[[przod, "rotation:x", 0.25, 0.16]], [[zaw, "rotation:x", odchyl, 0.3], [tb3, "blend_shapes/otw", 1.0, 0.3]]],
+		"dzwieki": [dz, "plecak"]}
 
 
 # ------------------------------------------------------------------ worek
@@ -379,9 +381,8 @@ static func _worek(w: float, d: float, kieszenie: Array) -> Dictionary:
 	_mi(n, [_t(Vector3(0, h * 0.4, b * 1.02 + 0.004), Vector3(a * 0.9, h * 0.22, 0.002), k.darkened(0.35), 0.0)])
 	var sz := _sznur(n, Vector3.ZERO, a, b, h * 0.93, h * 0.9 * 0.93, zx, zz, Color(0.78, 0.72, 0.55))
 	var bl: Node3D = sz["blokada"]
-	var kz := [{"kroki": [[[bl, "position:y", bl.position.y + 0.03, 0.3]],
-		[[tb, "blend_shapes/otw", 1.0, 0.7], [sz["sznur"], "blend_shapes/otw", 1.0, 0.7], [bl, "position", sz["bl_otw"], 0.7]]],
-		"dzwieki": ["plecak", "plecak"]}]
+	var kz := [{"kroki": [[[bl, "position", sz["bl_otw"], 0.7], [tb, "blend_shapes/otw", 1.0, 0.7], [sz["sznur"], "blend_shapes/otw", 1.0, 0.7]]],
+		"dzwieki": ["plecak"]}]
 	while kz.size() < kieszenie.size():
 		kz.append({"kroki": [], "dzwieki": []})
 	return {"wezel": n, "gora": Vector3(0, h * 0.86, 0), "kroki": [], "kieszenie": kz}
@@ -450,9 +451,9 @@ static func _plecak_stojacy(id: String, w: float, d: float, kieszenie: Array) ->
 		var e: Dictionary = kieszenie[i]
 		if i == gi:
 			kz.append({"kroki": [[[paski[0], "rotation:x", -1.3, 0.2]], [[paski[1], "rotation:x", -1.3, 0.2]],
-				[[zaw, "rotation:x", -3.25, 0.55]], [[bl, "position:y", bl.position.y + 0.03, 0.2]],
-				[[tb, "blend_shapes/otw", 1.0, 0.5], [sz["sznur"], "blend_shapes/otw", 1.0, 0.5], [bl, "position", sz["bl_otw"], 0.5]]],
-				"dzwieki": ["klik", "klik", "plecak", "plecak", "plecak"]})
+				[[zaw, "rotation:x", -3.25, 0.55]],
+				[[bl, "position", sz["bl_otw"], 0.5], [tb, "blend_shapes/otw", 1.0, 0.5], [sz["sznur"], "blend_shapes/otw", 1.0, 0.5]]],
+				"dzwieki": ["klik", "klik", "plecak", "plecak"]})
 			continue
 		var r: Rect2 = e["r"]
 		var typ := String(e["typ"])
@@ -558,8 +559,8 @@ static func _chlebak(w: float, d: float, kieszenie: Array) -> Dictionary:
 	var kz := []
 	for i in kieszenie.size():
 		if i == gi:
-			kz.append({"kroki": [[[pas, "rotation:x", -1.4, 0.2]], [[przod, "rotation:x", 0.2, 0.3]], [[zaw, "rotation:x", -2.95, 0.45]],
-				[[tb, "blend_shapes/otw", 1.0, 0.35]]], "dzwieki": ["klik", "plecak", "plecak", "plecak"]})
+			kz.append({"kroki": [[[pas, "rotation:x", -1.4, 0.2]], [[przod, "rotation:x", 0.2, 0.3]], [[zaw, "rotation:x", -2.95, 0.45], [tb, "blend_shapes/otw", 1.0, 0.45]]],
+				"dzwieki": ["klik", "plecak", "plecak"]})
 			continue
 		var r: Rect2 = kieszenie[i]["r"]
 		var bz := 0.03
