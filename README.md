@@ -33,9 +33,9 @@ Wchodzisz do losowo składanej strefy, zbierasz łup i albo się ewakuujesz, alb
 | Tab, Tab | szybkie zerknięcie na kamizelkę (ładownice pod ręką) |
 | G | w ekwipunku: napełnij magazynki z amunicji luzem; w rajdzie: rzut granatem (kucając – po podłodze) |
 | L | latarka: wyjmij do lewej ręki (z pistoletem albo samą) / włącz–wyłącz; z latarką taktyczną na broni włącza ją |
-| O | lista wyjść z kierunkiem i odległością |
+| O | mapa (jeśli jest na slocie wyposażenia): plan i stan wyjść |
 | 4–9 | pasek szybkiego dostępu: leki z kamizelki i kieszeni (układa się sam) |
-| H | spójrz na zegarek (zdrowie na tarczy) |
+| H | spójrz na zegarek: zdrowie, a z zegarkiem Rakieta w ekwipunku także czas i okna wyjść |
 | J | obejrzyj broń z bliska, zakładanie i zdejmowanie dodatków |
 | X | przerwij leczenie lub napełnianie (przerywa też strzał i zmiana broni) |
 | Esc | pauza (w rajdzie czas płynie dalej); Ustawienia: czułość, FOV, głośność, kołysanie, skala renderu, cienie, oś Y, wskazówki, FPS |
