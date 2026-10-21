@@ -498,7 +498,7 @@ func zamknij() -> void:
 	Sterowanie.przechwyc(true)
 	_podswietl_pojemnik(false)
 	if _pojemnik != null and is_instance_valid(_pojemnik):
-		_pojemnik.zamknij_mebel()
+		# mebel zostaje otwarty (jak drzwi) – domyka się go ręką
 		if gracz and not tryb_bazy:
 			gracz.widok_ekwipunku("")
 	_pojemnik = null
@@ -2476,8 +2476,9 @@ func _kolejka_krok(delta: float) -> void:
 	_animuj(p, z, cel_scr, func():
 		if _w_zrodle(p, z):
 			_przenies_teraz(p, z))
-	if not _w_swiecie():
-		_zajmij(_koszt_przelozenia(p, z, null))
+	# Ctrl+klik nie jest skrótem: ręka i tak musi znaleźć miejsce i ułożyć rzecz – trwa jak przełożenie
+	# ręczne (przeciągnięcie), w rajdzie dodatkowo chwila na wymacanie wolnego miejsca w kieszeni
+	_zajmij(_koszt_przelozenia(p, z, null) + (0.6 if _w_swiecie() else 0.0))
 
 
 ## Gdzie na ekranie odkłada dłoń przy Ctrl+klik: do mebla / zwłok albo do własnego sprzętu.

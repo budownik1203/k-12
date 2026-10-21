@@ -329,7 +329,15 @@ func _odswiez(delta: float) -> void:
 	# czas rajdu
 	if rajd:
 		var t: float = rajd.czas
-		_czas.text = "RAJD %d:%02d" % [int(t) / 60, int(t) % 60]
+		# zegarek w ekwipunku: dokładny czas; bez niego – na oko (co 5 minut, po świetle i zmęczeniu)
+		_zeg_t -= delta
+		if _zeg_t <= 0.0:
+			_zeg_t = 1.0
+			_ma_zegarek = gracz.ekw.ma_przedmiot("zegarek")
+		if _ma_zegarek:
+			_czas.text = "RAJD %d:%02d" % [int(t) / 60, int(t) % 60]
+		else:
+			_czas.text = "bez zegarka: w strefie ok. %d min" % maxi(5, int(round(t / 300.0)) * 5)
 		# wyjścia
 		# bez pływającej listy: czas rajdu i okna wyjść widać na zegarku ([H]), stan wyjść – na mapie w rękach ([O])
 		var na_zegarku: bool = gracz.bron != null and float(gracz.bron.get("_zegarek")) > 0.85
@@ -347,7 +355,7 @@ func _odswiez(delta: float) -> void:
 				var ew: Ewakuacja = w
 				# bez kierunku i odległości: drogę trzeba znać (strzałki na ścianach, mapa w rękach, kompas)
 				if _wyjscia_t > 0.0 or ew.typ == "czasowe":
-					linie.append("%s — %s" % [ew.nazwa, ew.opis_stanu()])
+					linie.append("%s — %s" % [ew.nazwa, _opis_wyjscia(ew)])
 			_wyjscia.text = "\n".join(linie) if linie.size() > 1 else ""
 		else:
 			_wyjscia.text = ""
@@ -596,6 +604,20 @@ func _trafiony(kier: Vector3, _czesc: String) -> void:
 
 
 var _mapa: MapaStrefy
+var _zeg_t := 0.0
+var _ma_zegarek := false
+
+
+## Stan wyjścia; okno czasowe dokładnie tylko z zegarkiem, bez niego z grubsza.
+func _opis_wyjscia(ew: Ewakuacja) -> String:
+	if ew.typ != "czasowe" or _ma_zegarek:
+		return ew.opis_stanu()
+	var tt: float = ew.rajd_czas
+	if tt < ew.okno_od:
+		return "jeszcze nie (za ok. %d min)" % maxi(5, int(round((ew.okno_od - tt) / 300.0)) * 5)
+	if tt <= ew.okno_do:
+		return "chyba teraz – bez zegarka nie wiesz, jak długo"
+	return "chyba już po"
 
 
 ## Szkic planu z mapy strefy ([O] z mapą na slocie wyposażenia): kondygnacja gracza, odwiedzone pomieszczenia
@@ -697,8 +719,7 @@ class Kropka:
 				var kk: Vector2 = nar[1]
 				draw_line(pp, pp + Vector2(kk.x * dl, 0), kz, 1.5)
 				draw_line(pp, pp + Vector2(0, kk.y * dl), kz, 1.5)
-		if g.bron.ads > 0.6 and g.bron.podparcie > 0.6 and not g.bron.ma_lunete():
-			draw_string(ThemeDB.fallback_font, c + Vector2(-34, 90), "podparta", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.82, 0.7, 0.55))
+		# (bez napisu „podparta” – podparcie czuć po tym, że broń przestaje się kołysać)
 		# (kropka celownika usunięta – mierzy się przyrządami albo „z biodra” na wyczucie)
 		# (znacznik trafienia usunięty – o trafieniu mówi tylko to, co widać i słychać)
 		# ikonka przy celowniku: otwarta dłoń – można coś zrobić; zaciśnięta – można chwycić i przesunąć

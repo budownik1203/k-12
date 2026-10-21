@@ -2452,6 +2452,7 @@ func _zrzut_animacji(katalog: String) -> void:
 		var przod2 := -gracz.global_basis.z
 		przod2.y = 0
 		przod2 = przod2.normalized()
+		var bl_m := 0
 		for mid in lista_m:
 			var pj := Pojemnik.new()
 			pj.nazwa = String(mid)
@@ -2470,17 +2471,39 @@ func _zrzut_animacji(katalog: String) -> void:
 			pj.look_at(gracz.global_position + Vector3.UP * pj.global_position.y, Vector3.UP, true)
 			gracz.rotation.y += 0.6
 			await _klatki(5)
+			# krótkie [F] na zamkniętym: tylko podpowiedź; otwiera ręka (powoli, mysz do siebie)
 			pj.interakcja(gracz)
-			await get_tree().create_timer(0.25).timeout
-			await _zapisz(katalog, "mb_%s_a" % mid)
+			if not gracz.akcja.is_empty() or pj.otwarty_mebel:
+				print("  BŁĄD: %s otworzył się bez ręki" % mid)
+				bl_m += 1
+			pj.chwyc(gracz)
+			for k in 50:
+				pj.chwyc_ruch(gracz, Vector2(0, 5.0), 1.0 / 60.0)
+				await get_tree().physics_frame
+				if k == 20:
+					await _zapisz(katalog, "mb_%s_a" % mid)
+			pj.pusc_chwyt(gracz)
+			if not pj.otwarty_mebel:
+				print("  BŁĄD: %s nie otwiera się ręką (f %.2f)" % [mid, pj._otw_f])
+				bl_m += 1
+			pj.interakcja(gracz)
 			while not gracz.akcja.is_empty():
 				await get_tree().process_frame
 			await get_tree().create_timer(2.6).timeout
 			await _zapisz(katalog, "mb_%s_b" % mid)
 			ekran_ekw.zamknij()
 			await get_tree().create_timer(0.8).timeout
+			# domknięcie ręką (od siebie)
+			pj.chwyc(gracz)
+			for k in 50:
+				pj.chwyc_ruch(gracz, Vector2(0, -6.0), 1.0 / 60.0)
+				await get_tree().physics_frame
+			if pj.otwarty_mebel:
+				print("  BŁĄD: %s nie domyka się" % mid)
+				bl_m += 1
 			pj.queue_free()
 			await _klatki(3)
+		print("TEST MEBLI: błędów %d" % bl_m)
 		return
 	if OS.get_cmdline_user_args().has("--lup"):
 		# wszystkie przedmioty położone na ziemi w siatce przed graczem, kamera w dół

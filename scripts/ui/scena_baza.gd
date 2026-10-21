@@ -505,14 +505,7 @@ func _hud() -> void:
 	_komunikaty = VBoxContainer.new()
 	_komunikaty.position = Vector2(24, 20)
 	root.add_child(_komunikaty)
-	var kropka := ColorRect.new()
-	kropka.color = Color(0.85, 0.82, 0.7, 0.6)
-	kropka.set_anchors_preset(Control.PRESET_CENTER)
-	kropka.offset_left = -1.5
-	kropka.offset_top = -1.5
-	kropka.offset_right = 1.5
-	kropka.offset_bottom = 1.5
-	root.add_child(kropka)
+	# (bez kropki na środku – jak w rajdzie; kropka łapała też kliknięcie LPM przy stawianiu mebli)
 
 
 func _process(_d: float) -> void:
@@ -777,6 +770,78 @@ func _test_kryjowki() -> void:
 	if w_drzwiach == "" or na_szafce == "" or poza == "" or wolne != "":
 		print("  BŁĄD: reguły stawiania")
 		bl += 1
+	# jak gracz: [B], klik w „Postaw: …” na liście, celownik na wolne miejsce, [LPM]
+	gracz.global_position = Vector3(5.0, 0.05, 2.6)
+	gracz.rotation.y = 0.0
+	gracz.kamera.rotation.x = -0.7
+	await get_tree().physics_frame
+	var evb := InputEventAction.new()
+	evb.action = "tryb"
+	evb.pressed = true
+	Input.parse_input_event(evb)
+	await get_tree().process_frame
+	var evb2 := InputEventAction.new()
+	evb2.action = "tryb"
+	evb2.pressed = false
+	Input.parse_input_event(evb2)
+	for f in 4:
+		await get_tree().process_frame
+	var przycisk: Button = null
+	for c in kryjowka._lista.get_children():
+		if c is Button and (c as Button).text.begins_with("Postaw: "):
+			przycisk = c
+	print("  [B]: tryb %d, przycisk %s" % [kryjowka.tryb, przycisk.text if przycisk else "-"])
+	if przycisk:
+		var sr := przycisk.get_global_rect().get_center()
+		var mm := InputEventMouseMotion.new()
+		mm.position = sr
+		mm.global_position = sr
+		get_viewport().push_input(mm, true)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var pod := get_viewport().gui_get_hovered_control()
+		print("  pod kursorem: %s (%s), mysz %s, rect %s, widok %s" % [pod, pod.get_path() if pod else "", Input.mouse_mode, przycisk.get_global_rect(), get_viewport().get_visible_rect()])
+		for wc in [true, false]:
+			var mb := InputEventMouseButton.new()
+			mb.button_index = MOUSE_BUTTON_LEFT
+			mb.pressed = wc
+			mb.position = sr
+			mb.global_position = sr
+			get_viewport().push_input(mb, true)
+			await get_tree().process_frame
+	for f in 6:
+		await get_tree().physics_frame
+	print("  po kliknięciu w liście: tryb %d (stawianie = %d), duch %s, ok %s" % [kryjowka.tryb, Kryjowka.Tryb.STAWIANIE, kryjowka._duch_id, kryjowka._duch_ok])
+	if kryjowka.tryb != Kryjowka.Tryb.STAWIANIE:
+		print("  BŁĄD: wybór mebla z listy nie zaczyna stawiania")
+		bl += 1
+	var przed_klik := Gra.kryjowka.size()
+	for f in 10:
+		await get_tree().physics_frame
+	if kryjowka._duch_ok:
+		for wc in [true, false]:
+			var mb2 := InputEventMouseButton.new()
+			mb2.button_index = MOUSE_BUTTON_LEFT
+			mb2.pressed = wc
+			mb2.position = get_viewport().get_visible_rect().size * 0.5
+			get_viewport().push_input(mb2, true)
+			await get_tree().process_frame
+		await get_tree().physics_frame
+		var mm2 := InputEventMouseMotion.new()
+		mm2.position = get_viewport().get_visible_rect().size * 0.5
+		get_viewport().push_input(mm2, true)
+		await get_tree().process_frame
+		var pod2 := get_viewport().gui_get_hovered_control()
+		print("  [LPM] w świecie: mebli %d → %d (pod kursorem %s)" % [przed_klik, Gra.kryjowka.size(), pod2.get_path() if pod2 else "nic"])
+		if Gra.kryjowka.size() != przed_klik + 1:
+			print("  BŁĄD: [LPM] nie stawia mebla")
+			bl += 1
+		else:
+			kryjowka.zabierz(Gra.kryjowka.size() - 1)
+	else:
+		print("  (miejsce pod celownikiem zajęte: %s)" % kryjowka._podpis.text)
+	kryjowka.zamknij()
+	await get_tree().physics_frame
 	# postawienie przez tryb budowy (duch pod celownikiem)
 	gracz.global_position = Vector3(5.0, 0.05, 2.6)
 	gracz.rotation.y = 0.0

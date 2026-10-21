@@ -58,8 +58,14 @@ func _zakoncz(otw: bool) -> void:
 	if _koniec:
 		return
 	_koniec = true
-	Sterowanie.blokada = false
 	skonczone.emit(otw)
+	_root.visible = false
+	# LPM trzymany przy napinaniu: sterowanie wraca dopiero po puszczeniu przycisku (inaczej broń od razu strzela)
+	while Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and is_inside_tree():
+		await get_tree().process_frame
+	Sterowanie.blokada = false
+	if gracz and gracz.get("bron"):
+		gracz.bron.spust_puszczony = true
 	queue_free()
 
 

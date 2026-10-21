@@ -107,3 +107,6 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Czas i wyjścia | czas rajdu i okna czasowe na zegarku [H]; stan wyjść na mapie [O]; brak pływającej listy | HUD bez wiedzy, której postać nie ma; zegarek i mapa to rzeczy, nie nakładki |
 | Kompas | znaczniki wyjść tylko z mapą w rękach | mapa + kompas = namiar; sam kompas nie wie, gdzie jest brama |
 | Celownik | bez kropki – z biodra na wyczucie, dokładnie tylko przez przyrządy | kropka na środku była podpowiedzią, której nie ma w ręku |
+| Meble | drzwiczki, szuflady i wieka ręką (chwyt F + mysz do siebie); krótkie F na otwartym – przeszukanie | jak drzwi: jeden sposób, hałas zależy od ręki |
+| Zegarek | dokładny czas i okna tylko z zegarkiem w ekwipunku | czas jest rzeczą, którą się ma, nie nakładką |
+| Ctrl+klik | tyle co ręczne przełożenie + chwila na wymacanie miejsca | nie skrót, tylko wygoda celowania myszą |

@@ -616,7 +616,17 @@ func _podswietl(idx: int) -> void:
 		Rozlozenie3D.nakladka(_wezly[idx], Rozlozenie3D.mat_podswietlenia())
 
 
-func _unhandled_input(event: InputEvent) -> void:
+## Wejście z głównego okna (świat 3D jest w SubViewport, do którego mysz nie trafia).
+class Przekaznik:
+	extends Node
+	var cel
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if is_instance_valid(cel):
+			cel._wejscie(event)
+
+
+func _wejscie(event: InputEvent) -> void:
 	if tryb == Tryb.WYL:
 		if event.is_action_pressed("tryb") and gracz and w_kryjowce(gracz.global_position) and not Sterowanie.blokada:
 			otworz_liste()
@@ -671,7 +681,15 @@ func _unhandled_input(event: InputEvent) -> void:
 func _buduj_ui() -> void:
 	_ui = CanvasLayer.new()
 	_ui.layer = 18
-	add_child(_ui)
+	# panel w głównym oknie, nie w świecie 3D: świat jest w SubViewport bez wejścia myszy,
+	# więc przyciski listy („Postaw: …”) nie dostawały kliknięć
+	get_tree().root.add_child.call_deferred(_ui)
+	var prz := Przekaznik.new()
+	prz.cel = self
+	_ui.add_child(prz)
+	tree_exiting.connect(func():
+		if is_instance_valid(_ui):
+			_ui.queue_free())
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE

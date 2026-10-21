@@ -221,7 +221,9 @@ func tekst_interakcji(_g) -> String:
 		stan = " (puste)"
 	if zamkniety_kluczem != "" and not otwarty_mebel:
 		stan += " – zamknięte"
-	return "Przeszukaj: " + nazwa + stan
+	if not mebel.is_empty() and not otwarty_mebel:
+		return nazwa + stan + " – przytrzymaj [F] i pociągnij do siebie"
+	return "Przeszukaj: " + nazwa + stan + ("   · przytrzymaj [F] – domknij" if not mebel.is_empty() else "")
 
 
 ## Punkt wnętrza w świecie (tam patrzy postać i tam rzutowane są kafelki siatki).
@@ -237,6 +239,7 @@ func otworz_mebel() -> float:
 	if mebel.is_empty() or otwarty_mebel:
 		return 0.0
 	otwarty_mebel = true
+	_otw_f = 1.0
 	var kroki: Array = mebel["kroki"]
 	if _start.is_empty():
 		_start = ModeleMebli.wartosci_startowe(kroki)
@@ -266,6 +269,7 @@ func zamknij_mebel() -> void:
 	if mebel.is_empty() or not otwarty_mebel:
 		return
 	otwarty_mebel = false
+	_otw_f = 0.0
 	if _tw and _tw.is_valid():
 		_tw.kill()
 	_tw = create_tween()
@@ -286,6 +290,69 @@ func _dzwiek(dz: String, otw: bool) -> void:
 	Gra.emituj_halas(global_position, 6.0 if dz != "wieko" else 8.0, get_tree().get_first_node_in_group("gracz"))
 
 
+# ------------------------------------------------------------------ ręką (drzwiczki, szuflady, wieko)
+
+var przejmuje_mysz := true       # chwycone drzwiczki / szuflada: mysz ciągnie je do siebie
+var _otw_f := 0.0                # 0 – zamknięte, 1 – otwarte do końca
+var _otw_v := 0.0
+var _otw_dzw := 0.0
+
+
+## Chwytać można mebel z ruchomymi częściami (nie zwłoki, nie zamknięty na kłódkę).
+func mozna_chwycic(_g) -> bool:
+	return not mebel.is_empty() and zamkniety_kluczem == ""
+
+
+func chwyc(_g) -> void:
+	if _tw and _tw.is_valid():
+		_tw.kill()
+	if _start.is_empty() and not mebel.is_empty():
+		_start = ModeleMebli.wartosci_startowe(mebel["kroki"])
+
+
+## Mysz do siebie (w dół) – otwiera, od siebie – domyka. Powoli cicho, szarpnięcie słychać.
+func chwyc_ruch(g, m: Vector2, delta: float) -> void:
+	if not mozna_chwycic(g):
+		return
+	var stary := _otw_f
+	_otw_f = clampf(_otw_f + m.y * 0.0042 + absf(m.x) * 0.0006 * signf(m.y), 0.0, 1.0)
+	_otw_v = lerpf(_otw_v, (_otw_f - stary) / maxf(delta, 0.001), 0.5)
+	_ustaw_otwarcie(_otw_f)
+	var byl := otwarty_mebel
+	otwarty_mebel = _otw_f > 0.55
+	if otwarty_mebel and not byl and not _kurz_byl:
+		_kurz_byl = true
+		var pk := punkt_wnetrza() + global_basis.z * 0.25
+		Efekty.kurz(get_parent(), Vector3(pk.x, global_position.y + (0.3 if niski else 0.8), pk.z), 0.7)
+	_otw_dzw -= absf(_otw_f - stary) * 6.0
+	if _otw_dzw <= 0.0 and absf(_otw_f - stary) > 0.0005:
+		_otw_dzw = 1.0
+		var szybko := absf(_otw_v) > 1.6
+		var dz: String = mebel.get("dzwiek", "drzwi")
+		var nazwa_dz: String = {"drzwi": "drzwi", "szuflada": "szuflada", "wieko": "wieko"}.get(dz, "drzwi")
+		Dzwiek.graj_3d(nazwa_dz if szybko else "drzwi_skrzyp", global_position + Vector3.UP * 0.5, get_parent(), -8.0 if szybko else -18.0, randf_range(0.95, 1.1), 18.0 if szybko else 9.0)
+		Gra.emituj_halas(global_position, 6.0 if szybko else 1.5, g)
+
+
+func pusc_chwyt(_g) -> void:
+	_otw_v = 0.0
+
+
+## Ustawia ruchome części: kolejne kroki (np. najpierw drzwiczki, potem szuflada) po kolei wzdłuż f.
+func _ustaw_otwarcie(f: float) -> void:
+	if mebel.is_empty() or _start.is_empty():
+		return
+	var kroki: Array = mebel["kroki"]
+	var n := kroki.size()
+	for i in n:
+		var t := clampf((f - float(i) / n) * n, 0.0, 1.0)
+		t = t * t * (3.0 - 2.0 * t)
+		var krok: Array = kroki[i]
+		for j in krok.size():
+			var zm: Array = krok[j]
+			(zm[0] as Node).set_indexed(NodePath(String(zm[1])), lerp(_start[i][j], zm[2], t))
+
+
 ## Podejście do mebla: postać zwraca się w stronę wnętrza (przy niskich przyklęka), sięga ręką,
 ## otwiera drzwi / szufladę / wieko – dopiero wtedy widać zawartość.
 func interakcja(g) -> void:
@@ -293,6 +360,11 @@ func interakcja(g) -> void:
 		return
 	if zamkniety_kluczem != "":
 		_wylam(g)
+		return
+	if not mebel.is_empty() and not otwarty_mebel:
+		# drzwiczki / szufladę / wieko otwiera ręka – dopiero otwarte można przeszukać
+		Gra.wskazowka("mebel_reka", "Szafki, szuflady i skrzynie otwiera ręka: przytrzymaj F i pociągnij myszą do siebie. Powoli – cicho. Otwarte przeszukasz krótkim F.")
+		g.komunikat.emit("Zamknięte – przytrzymaj [F] i pociągnij do siebie")
 		return
 	var czas := otworz_mebel()
 	if g.has_method("patrz_na"):

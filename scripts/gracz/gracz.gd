@@ -30,7 +30,7 @@ var kucanie := 0.0
 var wychylenie := 0.0
 var wytrzymalosc := 100.0
 var akcja := {}              # {"nazwa", "t", "czas", "koniec": Callable}
-var cel_interakcji: Node = null
+var cel_interakcji: Object = null   # węzeł albo zwykły obiekt (śluza, stanowiska w bazie)
 var tekst_interakcji := ""
 var halas_ruchu := 0.0       # 0..1 do HUD
 var tryb_bazy := false       # w bazie: bez broni i leczenia
@@ -959,7 +959,7 @@ func _samouczek() -> void:
 		if c is Pojemnik:
 			Gra.wskazowka("pojemnik", "Przeszukiwanie idzie po kolei – zawartość odkrywa się z czasem, po ciemku wolniej (latarka [L] pomaga). Przekładanie robi ręka: trwa, a trafienie wytrąca przedmiot.")
 		elif c is Drzwi:
-			Gra.wskazowka("drzwi", "Drzwi: F otwiera i zamyka – słychać to daleko. Kucając F uchylasz je cicho na szparę. Stojąc przy zamkniętych drzwiach, podsłuchasz, co za nimi.")
+			Gra.wskazowka("drzwi", "Drzwi otwiera ręka: przytrzymaj F na klamce i pchnij albo pociągnij myszą. Powoli – cicho (szpara do podglądu), mocno – trzaśnie, słychać daleko. Stojąc przy zamkniętych drzwiach, podsłuchasz, co za nimi.")
 		elif c is LupNaZiemi:
 			Gra.wskazowka("lup", "Podniesienie zajmuje chwilę. Do zapiętego plecaka na plecach nic nie wejdzie – w ekwipunku [Tab] zdejmij go i otwórz kieszeń.")
 		elif c is Wrog:
@@ -1262,7 +1262,7 @@ func _interakcje(aktywne: bool) -> void:
 		return
 	cel_interakcji = cel
 	tekst_interakcji = cel.tekst_interakcji(self) if cel.has_method("tekst_interakcji") else "Użyj"
-	var chwytny: bool = cel.has_method("chwyc_ruch") and not (cel is Drzwi and not (cel as Drzwi).mozna_chwycic(self))
+	var chwytny: bool = cel.has_method("chwyc_ruch") and not (cel.has_method("mozna_chwycic") and not cel.mozna_chwycic(self))
 	rodzaj_celu = "chwyt" if chwytny else "reka"
 	if cel is Pojemnik and (cel as Node).has_meta("ragdoll") and _ciagniete == null:
 		tekst_interakcji += "    [Z] ciągnij za kołnierz"
