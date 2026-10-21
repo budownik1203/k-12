@@ -516,7 +516,7 @@ func _hud() -> void:
 
 
 func _process(_d: float) -> void:
-	_hud_prompt.text = ("[F] " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
+	_hud_prompt.text = (("" if "[F]" in gracz.tekst_interakcji else "[F] ") + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	var s: Dictionary = Gra.statystyki
 	# pod otwartym ekranem (handel, skrytka, ekwipunek) licznik bazy by się nakładał na jego nagłówek
 	_hud_info.visible = not (Sterowanie.blokada or handel.otwarty or (ekran_ekw and ekran_ekw.get("otwarty")))

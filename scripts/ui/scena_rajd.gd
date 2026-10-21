@@ -91,7 +91,7 @@ func _ready() -> void:
 	Sterowanie.menu_otwarte = false
 	Dzwiek.graj("start_rajdu", -6.0)
 	Gra.ukryj_ladowanie()
-	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). [O] – lista wyjść (bez kierunku – drogę trzeba znać).")
+	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). Stan wyjść na mapie [O] (jeśli ją masz), czas i okna – na zegarku [H].")
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
 	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
 	Dzwiek.podloze_fn = _podloze_dzw
@@ -1784,25 +1784,35 @@ func _test_drzwi(katalog: String) -> void:
 		print("  %s: kat %.2f max %.2f poz %s n %s skrzydło %s zawias.rot %s" % [r, rodzaje[r].kat, rodzaje[r].max_kat, rodzaje[r].global_position, rodzaje[r].global_basis.z, rodzaje[r].skrzydlo.global_position, rodzaje[r]._zawias.rotation])
 	ustaw_przed.call(dr, 1.0)
 	await get_tree().create_timer(0.4).timeout
-	# uchylenie kucając
-	gracz.kucanie = 1.0
+	# drzwi tylko ręką: krótkie [F] nic nie otwiera; uchylenie powolnym ruchem, otwarcie i zamknięcie
+	var kat0 := dr.kat
 	dr.interakcja(gracz)
-	await get_tree().create_timer(2.2).timeout
+	await get_tree().create_timer(0.8).timeout
+	if absf(dr.kat - kat0) > 0.01:
+		print("  BŁĄD: krótkie [F] ruszyło drzwi")
+		bledy += 1
+	var st_g := 1.0 if (gracz.global_position - dr.global_position).dot(dr.global_basis.z) > 0.0 else -1.0
+	var pchaj := func(px: float, klatek: int) -> void:
+		for k in klatek:
+			dr.chwyc_ruch(gracz, Vector2(0, px), 1.0 / 60.0)
+			await get_tree().physics_frame
+		dr.pusc_chwyt(gracz)
+	# od strony −Z pchnięcie (mysz w górę) otwiera, od +Z – ciągnięcie
+	await pchaj.call(-2.0 * -st_g if st_g > 0 else -2.0, 20)
+	await get_tree().create_timer(0.6).timeout
 	await _zapisz(katalog, "drzwi_uchylone")
-	print("  uchylone: %s kat %.2f" % [dr.rodzaj, dr.kat])
-	if not (dr.kat < -0.2 and dr.kat > -0.45):
+	print("  uchylone ręką: %s kat %.2f (cicho %s)" % [dr.rodzaj, dr.kat, dr._cichy])
+	if not (dr.kat < -0.08 and dr.kat > -0.6):
 		print("  BŁĄD: uchylenie kat=%.2f" % dr.kat)
 		bledy += 1
-	gracz.kucanie = 0.0
-	await get_tree().create_timer(0.3).timeout
-	dr.interakcja(gracz)
-	await get_tree().create_timer(1.6).timeout
+	await pchaj.call((-14.0 * -st_g) if st_g > 0 else -14.0, 40)
+	await get_tree().create_timer(1.0).timeout
 	await _zapisz(katalog, "drzwi_otwarte")
 	if dr.kat > -1.0 and dr.max_kat < -1.0:
 		print("  BŁĄD: otwarcie kat=%.2f max=%.2f" % [dr.kat, dr.max_kat])
 		bledy += 1
-	dr.interakcja(gracz)
-	await get_tree().create_timer(1.4).timeout
+	await pchaj.call((14.0 * -st_g) if st_g > 0 else 14.0, 50)
+	await get_tree().create_timer(1.0).timeout
 	if not dr.zamkniete():
 		print("  BŁĄD: zamknięcie kat=%.2f" % dr.kat)
 		bledy += 1
@@ -1810,6 +1820,16 @@ func _test_drzwi(katalog: String) -> void:
 	# wyważanie
 	dr.na_klucz = true
 	dr.wytrzymalosc = 2
+	# z wyglądu nie wiadomo, że zamknięte: pierwsze [F] tylko szarpie klamkę
+	if "Zamknięte" in dr.tekst_interakcji(gracz):
+		print("  BŁĄD: zamek widać bez naciśnięcia klamki")
+		bledy += 1
+	dr.interakcja(gracz)
+	await get_tree().create_timer(0.9).timeout
+	print("  klamka: znane %s, wytrzymałość %d, tekst '%s'" % [dr.znane_zamkniecie, dr.wytrzymalosc, dr.tekst_interakcji(gracz)])
+	if not dr.znane_zamkniecie or dr.wytrzymalosc != 2:
+		print("  BŁĄD: naciśnięcie klamki")
+		bledy += 1
 	var kopniecia := 0
 	while not dr.wywazone and kopniecia < 8:
 		dr.interakcja(gracz)
@@ -3536,8 +3556,8 @@ func _test_mapy(katalog: String) -> void:
 		bl += 1
 	gracz.rotation.y += 0.6
 	await _zapisz_kadr(katalog, "spray", 10)
-	hud._wyjscia_t = 8.0
-	await _zapisz_kadr(katalog, "mapa", 10)
+	gracz.zacznij_akcje("Mapa", 36000.0, func(): pass, "mapa", 0, Callable(), {"mapa": true})
+	await _zapisz_kadr(katalog, "mapa", 70)
 	print("TEST MAPY: błędów ", bl)
 	get_tree().quit()
 

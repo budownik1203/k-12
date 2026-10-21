@@ -1,7 +1,7 @@
 class_name Drzwi
 extends Node3D
 ## Drzwi w otworze: skrzydło na zawiasach (AnimatableBody3D – blokuje przejście, wzrok i kule metalowych drzwi),
-## otwierane klamką, uchylane po cichu (kucając), zamykane; zamknięte na klucz – otwierane wytrychem
+## otwierane i zamykane ręką (chwyt [F] + mysz; powoli = cicho); zamknięte na klucz – otwierane wytrychem
 ## albo wyważane kopniakami (głośno, kilka kopnięć, metalowe dłużej). Wrogowie otwierają drzwi na swojej
 ## drodze, zamknięte na klucz wyważają. Stojąc nieruchomo pod zamkniętymi drzwiami można podsłuchać,
 ## co jest za nimi.
@@ -29,6 +29,7 @@ var _cichy := false
 var _ai_t := 0.0
 var _ai_czeka := {}
 var _ai_kop_t := 0.0
+var znane_zamkniecie := false   # gracz już szarpnął klamką i wie, że nie puszcza (zamek / klin z drugiej strony)
 var _podsluch_t := 0.0
 var _podsluch_cd := 0.0
 var _szer_skrzydla := 1.1
@@ -298,19 +299,16 @@ func tekst_interakcji(g) -> String:
 		var st := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
 		if st == klin_strona:
 			return "Wyjmij klin spod drzwi"
-		elif zamkniete():
+		elif zamkniete() and znane_zamkniecie:
 			return "Zaklinowane od drugiej strony – wyważ kopniakami (głośno)"
-	var kuca: bool = g != null and float(g.kucanie) > 0.5
-	if na_klucz and zamkniete():
+	# z wyglądu drzwi nie widać, czy są zamknięte – trzeba nacisnąć klamkę
+	if na_klucz and zamkniete() and znane_zamkniecie:
 		if g != null and g.ekw.ma_przedmiot("wytrych"):
 			return "Zamknięte na klucz – otwórz wytrychem (cicho)"
 		return "Zamknięte na klucz – wyważ kopniakami (głośno)" if rodzaj != "metal" else "Zamknięte na klucz, metalowe – wyważ (bardzo głośno, długo)"
-	var reka := "   · przytrzymaj [F] i myszą – ręką, powoli"
 	if zamkniete():
-		return ("Uchyl drzwi (cicho)" if kuca else "Otwórz drzwi") + reka
-	if kat > -0.75:
-		return ("Zamknij cicho" if kuca else "Otwórz szerzej") + reka
-	return ("Zamknij drzwi (cicho)" if kuca else "Zamknij drzwi") + reka
+		return "Drzwi – przytrzymaj [F] i pchnij myszą"
+	return "Drzwi – przytrzymaj [F]: od siebie pchasz, do siebie ciągniesz"
 
 
 func interakcja(g) -> void:
@@ -325,30 +323,22 @@ func interakcja(g) -> void:
 			g.zacznij_akcje("Wyjmowanie klina", 1.2, func(): wyjmij_klin(g), "podnies")
 			return
 		elif zamkniete():
+			if not znane_zamkniecie:
+				_szarpnij(g)
+				return
 			_kopnij(g)
 			return
-	var kuca: bool = float(g.kucanie) > 0.5
 	if na_klucz and zamkniete():
+		if not znane_zamkniecie:
+			_szarpnij(g)
+			return
 		if g.ekw.ma_przedmiot("wytrych"):
 			_wytrych(g)
 		else:
 			_kopnij(g)
 		return
-	if g.has_method("patrz_na"):
-		g.patrz_na(global_transform * Vector3(szer * 0.5 - 0.14, 1.0, 0.0), 0.3)
-	var gp: Vector3 = g.global_position
-	var po_stronie_otwarcia := (gp - global_position).dot(global_basis.z) > 0.0
-	g.zacznij_akcje("Drzwi", 0.35 if not kuca else 0.6, func():
-		if zamkniete():
-			if kuca:
-				_otworz(-0.32, 0.35, true, g)
-			else:
-				_otworz(max_kat, 2.3 if not po_stronie_otwarcia else 1.6, false, g)
-		elif kat > -0.75 and not kuca:
-			_otworz(max_kat, 1.8, false, g)
-		else:
-			_zamknij(0.5 if kuca else 2.6, kuca, g)
-		, "otwieranie", 0, Callable(), {"id": "drzwi"})
+	# zwykłe drzwi otwiera i zamyka się tylko ręką: przytrzymaj [F] i ruszaj myszą (krótkie [F] nic nie robi)
+	Gra.wskazowka("drzwi_reka", "Drzwi: przytrzymaj [F] na klamce i ruszaj myszą – od siebie pchasz, do siebie ciągniesz. Powoli – cicho, szybko – trzaśnie.")
 
 
 var _slodki_kat := randf_range(15.0, 165.0)
@@ -378,6 +368,7 @@ func chwyc_ruch(g, m: Vector2, delta: float) -> void:
 			_grzech_t -= delta
 			if _grzech_t <= 0.0:
 				_grzech_t = 0.35
+				znane_zamkniecie = true
 				Dzwiek.graj_3d("drzwi_kopniak", srodek(), get_parent(), -18.0, 1.4, 10.0)
 				Gra.emituj_halas(srodek(), 3.0, g)
 				g.komunikat.emit("Zaklinowane – nie ustępują" if klin and not na_klucz else "Zamknięte na klucz")
@@ -394,6 +385,16 @@ func chwyc_ruch(g, m: Vector2, delta: float) -> void:
 		Gra.emituj_halas(srodek(), 2.0 if _cichy else 7.0, g)
 	elif absf(_chwyt_v) > 0.5 and randf() < delta * 2.0:
 		Dzwiek.graj_3d("drzwi_skrzyp", srodek(), get_parent(), -20.0, randf_range(0.85, 1.15), 10.0)
+
+
+## Naciśnięcie klamki zamkniętych drzwi: szarpnięcie, ciche stuknięcie – dopiero teraz wiadomo, że nie puszczają.
+func _szarpnij(g) -> void:
+	g.zacznij_akcje("Klamka", 0.5, func():
+		znane_zamkniecie = true
+		Dzwiek.graj_3d("drzwi_kopniak", srodek(), get_parent(), -18.0, 1.4, 10.0)
+		Gra.emituj_halas(srodek(), 3.0, g)
+		g.komunikat.emit("Klamka nie puszcza – zamknięte na klucz" if na_klucz else "Nie ustępują – coś je blokuje od drugiej strony")
+		, "otwieranie", 0, Callable(), {"id": "drzwi"})
 
 
 ## Puszczona klamka: skrzydło toczy się jeszcze chwilę siłą rozpędu (pchnięte mocno – trzaśnie).

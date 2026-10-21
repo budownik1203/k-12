@@ -97,3 +97,12 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Stres | kule obok, trafienia | przygniecenie ogniem, czynności z ekwipunku wolniejsze |
 | Broń nisko / wysoko | swoboda kontra gotowość | zmęczenie rąk z v0.14 |
 | Wyłączniki | ciemność jako zasadzka | wykrywanie wg oświetlenia (gracz i ciała) |
+
+## Przegląd mechanik (v0.16.3)
+
+| Mechanika | Zmiana | Dlaczego |
+| --- | --- | --- |
+| Drzwi | tylko ręką: przytrzymaj [F] i mysz; krótkie [F] – podpowiedź, klin, pułapka, klamka zamkniętych | dwa sposoby na to samo; ręka daje kontrolę hałasu (powoli = cicho, mocno = trzask) |
+| Zamek i klin z drugiej strony | nieznane, póki nie naciśniesz klamki (ciche szarpnięcie) | wcześniej napis zdradzał stan drzwi z daleka |
+| Czas i wyjścia | czas rajdu i okna czasowe na zegarku [H]; stan wyjść na mapie [O]; brak pływającej listy | HUD bez wiedzy, której postać nie ma; zegarek i mapa to rzeczy, nie nakładki |
+| Kompas | znaczniki wyjść tylko z mapą w rękach | mapa + kompas = namiar; sam kompas nie wie, gdzie jest brama |

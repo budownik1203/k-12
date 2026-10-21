@@ -74,7 +74,7 @@ func _ready() -> void:
 
 
 func tekst_interakcji(_g) -> String:
-	return "[F] Zdejmij potykacz (granat z drutem)"
+	return "Zdejmij potykacz (granat z drutem)"
 
 
 func interakcja(g) -> void:

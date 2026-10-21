@@ -74,8 +74,8 @@ func _ui() -> void:
 	var sterowanie := Motyw.etykieta(
 		"WSAD ruch · Shift bieg · Ctrl kucanie · Q/E wychylenie · Spacja skok\n" +
 		"LPM strzał · PPM celowanie · R przeładowanie (przytrzymaj: upuść magazynek) · B tryb ognia · T sprawdź amunicję\n" +
-		"F interakcja · Tab ekwipunek · G napełnij magazynki · L latarka · O wyjścia · 1/2 broń\n" +
-		"4 bandaż · 5 opatrunek · 6 apteczka · 7 szyna · 8 środek przeciwbólowy", 13, Motyw.TEKST_CIEMNY, Motyw.mono())
+		"F interakcja (przytrzymaj F + mysz: drzwi, skrzynie) · Tab ekwipunek · G granat / napełnianie · L latarka · 1/2 broń\n" +
+		"O mapa · H zegarek · Z ciągnij ciało · Alt ostrożny krok · V broń nisko · 4–9 pasek z ekwipunku", 13, Motyw.TEKST_CIEMNY, Motyw.mono())
 	sterowanie.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	sterowanie.offset_left = 80
 	sterowanie.offset_top = -140

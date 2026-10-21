@@ -1,7 +1,7 @@
 extends CanvasLayer
 ## HUD rajdu: minimalny. Kropka celownika, stan ciała, broń i tryb (bez licznika naboi),
 ## wytrzymałość, waga i hałas, podpowiedź interakcji, postęp akcji, komunikaty, napisy wrogów,
-## lista wyjść [O], odliczanie ewakuacji, wskaźnik trafienia.
+## stan wyjść na mapie [O], czas na zegarku [H], odliczanie ewakuacji.
 
 var rajd: Node
 var gracz: Gracz
@@ -175,10 +175,10 @@ func _ready() -> void:
 	_root.add_child(_biel)
 	_pomoc = PanelContainer.new()
 	_pomoc.set_anchors_preset(Control.PRESET_CENTER)
-	_pomoc.offset_left = -300
-	_pomoc.offset_right = 300
-	_pomoc.offset_top = -230
-	_pomoc.offset_bottom = 230
+	_pomoc.offset_left = -360
+	_pomoc.offset_right = 360
+	_pomoc.offset_top = -250
+	_pomoc.offset_bottom = 250
 	_pomoc.add_theme_stylebox_override("panel", Motyw.styl_kieszeni(true))
 	var lp := Motyw.etykieta("\n".join([
 		"STEROWANIE",
@@ -187,7 +187,9 @@ func _ready() -> void:
 		"B tryb ognia · T sprawdź magazynek",
 		"1 broń główna · 2 pistolet (2x: z latarką) · 3 sama latarka · L latarka wł/wył",
 		"4–9 leki z kamizelki i kieszeni · X przerwij leczenie/napełnianie",
-		"F interakcja · Tab ekwipunek · G napełnij magazynki · O wyjścia",
+		"F interakcja · przytrzymaj F + mysz: drzwi, skrzynie, beczki (ręką)",
+		"Z ciągnij ciało · Alt ostrożny krok · V broń nisko · J obejrzyj broń",
+		"Tab ekwipunek · G granat / napełnianie · O mapa · H zegarek (czas, zdrowie)",
 		"",
 		"EKWIPUNEK",
 		"przeciągnij lek na część ciała – leczy ją",
@@ -200,8 +202,8 @@ func _ready() -> void:
 	_pomoc.add_child(lp)
 	_pomoc.visible = false
 	_root.add_child(_pomoc)
-	komunikat("Wyjścia: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
-	Gra.wskazowka("start", "WSAD – ruch, Shift – bieg, Ctrl – kucanie, F – interakcja, Tab – ekwipunek, O – wyjścia, F1 – pełne sterowanie. Wyjdź żywy przez jedno z wyjść – łup przepada razem z tobą.")
+	komunikat("Zegarek: [H] (czas, zdrowie). Mapa: [O]. Ekwipunek: [Tab]. Sterowanie: [F1].")
+	Gra.wskazowka("start", "WSAD – ruch, Shift – bieg, Ctrl – kucanie, F – interakcja (przytrzymaj F – chwyt: drzwi, skrzynie), Tab – ekwipunek, H – zegarek, F1 – pełne sterowanie. Wyjdź żywy przez jedno z wyjść – łup przepada razem z tobą.")
 	for k in Gra.kontrakty.get("aktywne", []):
 		komunikat("Zlecenie: %s" % k["opis"])
 
@@ -313,7 +315,7 @@ func _odswiez(delta: float) -> void:
 	_cialo.visible = false
 	_waga.visible = prog >= 2
 	# interakcja
-	_interakcja.text = ("[F]  " + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
+	_interakcja.text = (("" if "[F]" in gracz.tekst_interakcji else "[F]  ") + gracz.tekst_interakcji) if gracz.tekst_interakcji != "" and not Sterowanie.blokada else ""
 	# akcja: kółko pod celownikiem (w ekwipunku kółko jest przy kursorze)
 	if not Sterowanie.blokada and not gracz.akcja.get("mapa", false) and not gracz.akcja.get("ciagniecie", false):
 		_kolko.ustaw_z_gracza(gracz)
@@ -329,24 +331,24 @@ func _odswiez(delta: float) -> void:
 		var t: float = rajd.czas
 		_czas.text = "RAJD %d:%02d" % [int(t) / 60, int(t) % 60]
 		# wyjścia
-		if Input.is_action_just_pressed("wyjscia") and not Sterowanie.blokada:
-			_wyjscia_t = 8.0
-		_wyjscia_t -= delta
-		_czas.visible = _wyjscia_t > 0.0
+		# bez pływającej listy: czas rajdu i okna wyjść widać na zegarku ([H]), stan wyjść – na mapie w rękach ([O])
+		var na_zegarku: bool = gracz.bron != null and float(gracz.bron.get("_zegarek")) > 0.85
+		_wyjscia_t = 0.0
+		_czas.visible = na_zegarku
 		if _mapa:
 			# plan widać tylko z mapą w rękach (wyjęcie trwa; z bronią w rękach nic nie widać)
 			_mapa.visible = bool(gracz.akcja.get("mapa", false)) and float(gracz.akcja.get("t", 0.0)) > 0.75
 			if _mapa.visible:
-				_wyjscia_t = maxf(_wyjscia_t, 0.2)
-			if _mapa.visible:
+				_wyjscia_t = 0.2
 				_mapa.queue_redraw()
-		if _wyjscia_t > 0.0:
-			var linie := ["WYJŚCIA ZE STREFY:"]
+		if _wyjscia_t > 0.0 or na_zegarku:
+			var linie := ["WYJŚCIA ZE STREFY:" if _wyjscia_t > 0.0 else "OKNA CZASOWE:"]
 			for w in rajd.info["wyjscia"]:
 				var ew: Ewakuacja = w
 				# bez kierunku i odległości: drogę trzeba znać (strzałki na ścianach, mapa w rękach, kompas)
-				linie.append("%s — %s" % [ew.nazwa, ew.opis_stanu()])
-			_wyjscia.text = "\n".join(linie)
+				if _wyjscia_t > 0.0 or ew.typ == "czasowe":
+					linie.append("%s — %s" % [ew.nazwa, ew.opis_stanu()])
+			_wyjscia.text = "\n".join(linie) if linie.size() > 1 else ""
 		else:
 			_wyjscia.text = ""
 		# odliczanie ewakuacji
@@ -790,7 +792,7 @@ class Kropka:
 		draw_line(c + Vector2(r * 0.3, 0), c + Vector2(r, 0), k, 2.0)
 
 
-## Kompas (gdy jest na slocie wyposażenia): pasek kierunków, przy liście [O] także znaczniki wyjść.
+## Kompas (gdy jest na slocie wyposażenia): pasek kierunków, z mapą w rękach także znaczniki wyjść (mapa + kompas = namiar).
 class Kompas:
 	extends Control
 	var hud

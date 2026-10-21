@@ -362,6 +362,8 @@ func _physics_process(delta: float) -> void:
 		latarka.light_energy = 3.4 * puls
 		latarka_poswiata.light_energy = 0.9 * puls
 	# [O] z mapą w slocie wyposażenia: mapa wyjmowana do rąk (broń schowana, marsz powoli); drugie [O] chowa
+	if we_aktywne and not tryb_bazy and Input.is_action_just_pressed("wyjscia") and not ekw.ma_wyposazenie("mapa") and akcja.is_empty():
+		komunikat.emit("Bez mapy na slocie wyposażenia – drogę trzeba pamiętać (strzałki na ścianach).")
 	if we_aktywne and not tryb_bazy and Input.is_action_just_pressed("wyjscia") and ekw.ma_wyposazenie("mapa"):
 		if akcja.get("mapa", false):
 			przerwij_akcje()
