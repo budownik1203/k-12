@@ -441,6 +441,8 @@ static func _lup(id: String) -> Array:
 			return [_b(Vector3(0, 0.015, 0), Vector3(0.14, 0.03, 0.07), "metal_jasny", 0.006, Color(0.45, 0.5, 0.35)),
 				_w(Vector3(-0.1, 0.006, 0.05), Vector3(0.14, 0.006, 0.05), 0.003, 0.003, "metal_jasny", 6),
 				_w(Vector3(0.06, 0.0, -0.06), Vector3(0.06, 0.03, -0.06), 0.015, 0.015, "mosiadz", 10)]
+		"klin":
+			return [_b(Vector3(0, 0.012, 0), Vector3(0.05, 0.024, 0.13), "drewno", 0.004)]
 		"drut":
 			var cz5 := [_w(Vector3(-0.025, 0.004, -0.05), Vector3(-0.025, 0.004, 0.06), 0.006, 0.003, "drewno", 6),
 				_w(Vector3(0.025, 0.004, -0.05), Vector3(0.025, 0.004, 0.06), 0.006, 0.003, "drewno", 6)]

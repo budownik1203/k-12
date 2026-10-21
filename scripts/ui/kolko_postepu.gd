@@ -20,6 +20,10 @@ func ustaw_z_gracza(g: Gracz) -> void:
 	if g == null or g.akcja.is_empty():
 		visible = false
 		return
+	# krótkie czynności (drzwi, podniesienie, zerknięcie) – bez kółka, widać je w dłoniach; kółko od ok. 2 s
+	if float(g.akcja["czas"]) < 2.0 and int(g.akcja["kroki"]) == 0 and g.kolejka_akcji.is_empty():
+		visible = false
+		return
 	visible = true
 	var a: Dictionary = g.akcja
 	postep = g.postep_kroku()

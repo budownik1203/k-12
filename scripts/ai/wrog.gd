@@ -1619,7 +1619,7 @@ func _walka(delta: float) -> void:
 	elif not _w_oslonie:
 		_kucanie_cel = 0.0 if _przygwozdzenie < 1.0 else 1.0
 	# pod silnym ostrzałem chowa głowę zamiast odpowiadać ogniem
-	if _przygwozdzenie > 1.3 and _w_oslonie:
+	if _przygwozdzenie > 0.95 and _w_oslonie:
 		_kucanie_cel = 1.0
 		return
 	if _zachwianie > 0.0:
@@ -1763,7 +1763,7 @@ func _wybierz_pozycje() -> void:
 func przygniec(sila: float, od_kogo: Node = null) -> void:
 	if cialo == null or cialo.martwy:
 		return
-	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.35 * sila)
+	_przygwozdzenie = minf(2.0, _przygwozdzenie + 0.5 * sila)
 	morale -= 1.2 * sila
 	if od_kogo is Node3D and wrogi(od_kogo) and stan in ["patrol", "czujny", "szukanie"]:
 		gracz = od_kogo
@@ -1815,7 +1815,8 @@ func _strzelaj(delta: float) -> void:
 	var cel := _punkt_celu(gracz, false)
 	var d := oko.distance_to(cel)
 	var celnosc := float(dane_frakcji.get("celnosc", 0.6))
-	var kat := (4.5 * (1.5 - celnosc)) * (1.0 + d / 25.0) * (1.0 + _halas_celu(gracz) * 0.8)
+	# celność spada z odległością wyraźniej (karabin z ręki, stres) – walka na dystans to tłumienie, nie snajperka
+	var kat := (4.5 * (1.5 - celnosc)) * (1.0 + d / 14.0) * (1.0 + _halas_celu(gracz) * 0.8)
 	kat *= cialo.mnoznik_celnosci()
 	# pierwsze strzały są nerwowe i niecelne, potem przeciwnik się "wstrzeliwuje"
 	kat *= lerpf(2.2, 1.0, clampf(_czas_walki / 3.5, 0.0, 1.0)) * (1.0 + _przygwozdzenie)
@@ -1849,11 +1850,11 @@ func _strzelaj(delta: float) -> void:
 		# kula obok gracza (nie w niego): świst i przygniecenie ogniem
 		if not col.has_meta("gracz"):
 			var gr := get_tree().get_first_node_in_group("gracz") as Node3D
-			if gr and gr.has_method("przygniec"):
+			if gr and gr.has_method("swist"):
 				var dd := Balistyka.odl_od_odcinka(gr.global_position + Vector3.UP * 1.5, oko, r["position"])
 				if dd < 1.8:
 					Dzwiek.graj("swist", lerpf(-2.0, -12.0, dd / 1.8), randf_range(0.9, 1.15))
-					gr.przygniec(1.0 - dd / 1.8)
+					gr.swist(dd, oko, r["position"])
 	var wylot: Vector3 = (_czesci["bron"] as Node3D).global_transform * Vector3(_czesci["wylot"])
 	Efekty.blysk(get_parent(), wylot, 2.5)
 	var bxf: Transform3D = (_czesci["bron"] as Node3D).global_transform
@@ -1916,6 +1917,13 @@ func _ruch(delta: float) -> void:
 	else:
 		velocity.y = -0.3
 	move_and_slide()
+	# przesuwne przedmioty na drodze: odpycha je z drogi (krzesło łatwo, szafkę z trudem – słychać)
+	for ci in get_slide_collision_count():
+		var kol := get_slide_collision(ci)
+		var c := kol.get_collider()
+		if c is Przesuwny and v.length() > 0.1:
+			(c as Przesuwny).apply_central_impulse(v.normalized() * minf(40.0, (c as Przesuwny).mass * 0.6) * get_physics_process_delta_time() * 6.0)
+
 	kucanie = move_toward(kucanie, _kucanie_cel, delta * 3.5)
 	var pozioma := Vector2(velocity.x, velocity.z).length()
 	if pozioma > 0.5:

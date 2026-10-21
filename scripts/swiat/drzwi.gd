@@ -33,6 +33,11 @@ var _podsluch_t := 0.0
 var _podsluch_cd := 0.0
 var _szer_skrzydla := 1.1
 var pulapka: Node = null
+var przejmuje_mysz := true       # chwycone skrzydło: mysz pcha / ciągnie drzwi
+var klin := false                # klin wbity od strony klin_strona – od drugiej strony drzwi nie ustępują
+var klin_strona := 1.0
+var _chwyt_v := 0.0              # prędkość skrzydła z ręki (po puszczeniu jeszcze chwilę się toczy)
+var _grzech_t := 0.0
 var _spr_pulapki := {}           # wróg -> czy zauważył pułapkę (raz przy podejściu)         # Pulapka: granat w szklance na klamce
 
 
@@ -153,7 +158,10 @@ func _kat_wolny() -> void:
 		var traf := false
 		for y in [0.4, 1.3]:
 			var q := PhysicsRayQueryParameters3D.create(pz + Vector3.UP * y + kier * 0.05, pz + Vector3.UP * y + kier * (_szer_skrzydla + 0.02), Balistyka.WARSTWA_SWIAT)
-			q.exclude = [skrzydlo.get_rid()]
+			var wykl: Array[RID] = [skrzydlo.get_rid()]
+			for pr in get_tree().get_nodes_in_group("przesuwne"):
+				wykl.append((pr as CollisionObject3D).get_rid())
+			q.exclude = wykl
 			if not space.intersect_ray(q).is_empty():
 				traf = true
 		if traf:
@@ -184,7 +192,11 @@ func srodek() -> Vector3:
 
 # ------------------------------------------------------------------ ruch
 
+var _ostatni_otwierajacy: Node = null
+
+
 func _otworz(do_kata: float, predkosc: float, cicho: bool, kto: Node = null) -> void:
+	_ostatni_otwierajacy = kto
 	do_kata = maxf(do_kata, max_kat)
 	if zamkniete():
 		Dzwiek.graj_3d("drzwi_skrzyp" if cicho else "drzwi_otworz", srodek(), get_parent(), -14.0 if cicho else -5.0, randf_range(0.92, 1.08), 18.0 if cicho else 28.0)
@@ -211,7 +223,18 @@ func _physics_process(delta: float) -> void:
 		var nowy := move_toward(kat, _cel, _predkosc * delta)
 		# skrzydło nie przechodzi przez ludzi: stojący w świetle drzwi blokuje je (trzeba się odsunąć)
 		var kto := _ktos_w_drodze(nowy)
-		if kto != null:
+		if kto is Przesuwny:
+			# barykada: skrzydło opiera się o skrzynię / szafkę; wróg napiera (głośno) i po trochu ją spycha
+			nowy = kat
+			_blok_t += delta
+			if _ostatni_otwierajacy is Wrog and _blok_t > 0.9:
+				_blok_t = 0.0
+				var pr := kto as Przesuwny
+				var kier := ((pr.global_position - _zawias.global_position) * Vector3(1, 0, 1)).normalized()
+				pr.apply_central_impulse(kier * pr.mass * 0.9)
+				Dzwiek.graj_3d("drzwi_kopniak", srodek(), get_parent(), -2.0, randf_range(0.85, 1.0), 35.0)
+				Gra.emituj_halas(srodek(), 18.0, _ostatni_otwierajacy)
+		elif kto != null:
 			# gracza drzwi nie przesuwają; wroga (który sam pcha drzwi na siebie) po chwili „mijają”
 			_blok_t += delta
 			if kto.is_in_group("gracz") or _blok_t < 0.8:
@@ -249,7 +272,7 @@ func _ktos_w_drodze(k: float) -> Node:
 		var bs := BoxShape3D.new()
 		bs.size = Vector3(_szer_skrzydla - 0.1, 1.6, GR + 0.02)
 		_ksztalt_q.shape = bs
-		_ksztalt_q.collision_mask = Balistyka.WARSTWA_POSTACIE
+		_ksztalt_q.collision_mask = Balistyka.WARSTWA_POSTACIE | Przesuwny.WARSTWA
 	var tz := Transform3D(Basis(Vector3.UP, k), _zawias.position) * Transform3D(Basis.IDENTITY, Vector3(_szer_skrzydla * 0.5 + 0.05, 0.95, 0))
 	_ksztalt_q.transform = global_transform * tz
 	var r := get_world_3d().direct_space_state.intersect_shape(_ksztalt_q, 1)
@@ -271,16 +294,23 @@ func tekst_interakcji(g) -> String:
 		return "Wyważone drzwi"
 	if strona_pulapki(g):
 		return "Rozbrój pułapkę (granat w szklance) – powoli"
+	if klin and g != null:
+		var st := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
+		if st == klin_strona:
+			return "Wyjmij klin spod drzwi"
+		elif zamkniete():
+			return "Zaklinowane od drugiej strony – wyważ kopniakami (głośno)"
 	var kuca: bool = g != null and float(g.kucanie) > 0.5
 	if na_klucz and zamkniete():
 		if g != null and g.ekw.ma_przedmiot("wytrych"):
 			return "Zamknięte na klucz – otwórz wytrychem (cicho)"
 		return "Zamknięte na klucz – wyważ kopniakami (głośno)" if rodzaj != "metal" else "Zamknięte na klucz, metalowe – wyważ (bardzo głośno, długo)"
+	var reka := "   · przytrzymaj [F] i myszą – ręką, powoli"
 	if zamkniete():
-		return "Uchyl drzwi (cicho)" if kuca else "Otwórz drzwi   [kucnij – uchyl cicho]"
+		return ("Uchyl drzwi (cicho)" if kuca else "Otwórz drzwi") + reka
 	if kat > -0.75:
-		return "Zamknij cicho" if kuca else "Otwórz szerzej"
-	return "Zamknij drzwi (cicho)" if kuca else "Zamknij drzwi"
+		return ("Zamknij cicho" if kuca else "Otwórz szerzej") + reka
+	return ("Zamknij drzwi (cicho)" if kuca else "Zamknij drzwi") + reka
 
 
 func interakcja(g) -> void:
@@ -289,6 +319,14 @@ func interakcja(g) -> void:
 	if strona_pulapki(g):
 		pulapka.rozbroj(g)
 		return
+	if klin:
+		var st := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
+		if st == klin_strona:
+			g.zacznij_akcje("Wyjmowanie klina", 1.2, func(): wyjmij_klin(g), "podnies")
+			return
+		elif zamkniete():
+			_kopnij(g)
+			return
 	var kuca: bool = float(g.kucanie) > 0.5
 	if na_klucz and zamkniete():
 		if g.ekw.ma_przedmiot("wytrych"):
@@ -314,6 +352,79 @@ func interakcja(g) -> void:
 
 
 var _slodki_kat := randf_range(15.0, 165.0)
+
+
+# ------------------------------------------------------------------ chwyt ręką (fizyczne drzwi)
+
+## Chwytać można zwykłe drzwi (nie wyważone, bez pułapki po stronie gracza, bez wytrychu w toku).
+func mozna_chwycic(g) -> bool:
+	return not wywazone and not strona_pulapki(g)
+
+
+func chwyc(g) -> void:
+	if g.has_method("patrz_na"):
+		pass
+	Dzwiek.graj_3d("klik", srodek(), get_parent(), -16.0, 0.6, 6.0)   # klamka
+
+
+## Ruch myszy na chwyconej klamce: w górę / od siebie pcha skrzydło, w dół ciągnie do siebie. Szybki ruch
+## – głośno (skrzypi, trzaska), powolny – cicho; zamknięte na klucz albo zaklinowane tylko szarpią.
+func chwyc_ruch(g, m: Vector2, delta: float) -> void:
+	var strona := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
+	var pchniecie := -m.y * 0.0045 + m.x * 0.0012 * strona
+	if (na_klucz and zamkniete()) or (klin and zamkniete() and strona != klin_strona and pchniecie * strona < 0.0):
+		if absf(pchniecie) > 0.004:
+			_grzech_t -= delta
+			if _grzech_t <= 0.0:
+				_grzech_t = 0.35
+				Dzwiek.graj_3d("drzwi_kopniak", srodek(), get_parent(), -18.0, 1.4, 10.0)
+				Gra.emituj_halas(srodek(), 3.0, g)
+				g.komunikat.emit("Zaklinowane – nie ustępują" if klin and not na_klucz else "Zamknięte na klucz")
+		return
+	# od strony +Z pchnięcie zamyka (kąt do 0), od −Z otwiera (kąt ujemny)
+	var dk := pchniecie * (1.0 if strona > 0.0 else -1.0)
+	var nowy := clampf(kat + dk, max_kat, 0.0)
+	_chwyt_v = lerpf(_chwyt_v, (nowy - kat) / maxf(delta, 0.001), 0.5)
+	_cel = nowy
+	_predkosc = 9.0
+	_cichy = absf(_chwyt_v) < 1.2
+	if zamkniete() and nowy < -0.01:
+		Dzwiek.graj_3d("drzwi_skrzyp" if _cichy else "drzwi_otworz", srodek(), get_parent(), -16.0 if _cichy else -6.0, randf_range(0.92, 1.08), 14.0 if _cichy else 26.0)
+		Gra.emituj_halas(srodek(), 2.0 if _cichy else 7.0, g)
+	elif absf(_chwyt_v) > 0.5 and randf() < delta * 2.0:
+		Dzwiek.graj_3d("drzwi_skrzyp", srodek(), get_parent(), -20.0, randf_range(0.85, 1.15), 10.0)
+
+
+## Puszczona klamka: skrzydło toczy się jeszcze chwilę siłą rozpędu (pchnięte mocno – trzaśnie).
+func pusc_chwyt(_g) -> void:
+	if absf(_chwyt_v) > 0.4:
+		_cel = clampf(kat + _chwyt_v * 0.35, max_kat, 0.0)
+		_predkosc = clampf(absf(_chwyt_v), 0.4, 4.0)
+		_cichy = absf(_chwyt_v) < 1.5
+	_chwyt_v = 0.0
+
+
+## Klin pod drzwi (od strony gracza): z drugiej strony nie da się ich otworzyć bez wyważania.
+func wbij_klin(g) -> void:
+	var strona := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
+	klin = true
+	klin_strona = strona
+	var B := preload("res://scripts/core/bryly.gd")
+	var k := B.instancja([B.box(Vector3.ZERO, Vector3(0.06, 0.04, 0.14), "drewno", 0.005)], false)
+	k.name = "Klin"
+	add_child(k)
+	k.position = Vector3(szer * 0.5 - 0.2, 0.02, strona * 0.1)
+	Dzwiek.graj_3d("drzwi_kopniak", srodek(), get_parent(), -14.0, 1.6, 10.0)
+	Gra.emituj_halas(srodek(), 3.0, g)
+
+
+func wyjmij_klin(g) -> void:
+	klin = false
+	var k := get_node_or_null("Klin")
+	if k:
+		k.queue_free()
+	if not g.ekw.dodaj(Przedmiot.nowy("klin")):
+		g.upusc(Przedmiot.nowy("klin"))
 
 
 ## Wytrych: zbliżenie zamka i ręczne otwieranie (kąt haczyka + napięcie), nie automat.
@@ -362,6 +473,11 @@ func _uderzenie(kto: Node) -> void:
 func _wywaz(kto: Node) -> void:
 	wywazone = true
 	na_klucz = false
+	if klin:
+		klin = false
+		var kn := get_node_or_null("Klin")
+		if kn:
+			kn.queue_free()
 	Dzwiek.graj_3d("drzwi_wywaz", srodek(), get_parent(), 2.0, randf_range(0.95, 1.05), 50.0)
 	Gra.emituj_halas(srodek(), 32.0, kto)
 	var zamek := global_transform * Vector3(szer * 0.5 - 0.1, 1.0, 0.0)
@@ -402,7 +518,8 @@ func _wrogowie(dt: float) -> void:
 		elif v.length() < 0.15 and stoi_pod <= 0.0 and d > 0.9:
 			continue
 		_ai_czeka[w] = stoi_pod + dt
-		if na_klucz and zamkniete():
+		var zaklinowane := klin and zamkniete() and signf((wp - global_position).dot(global_basis.z)) != klin_strona
+		if (na_klucz and zamkniete()) or zaklinowane:
 			if w.is_in_group("fauna"):
 				continue
 			# wróg wyważa: najpierw chwilę szarpie klamkę
@@ -467,13 +584,18 @@ func _podsluch(dt: float) -> void:
 		najblizej = minf(najblizej, d)
 		if str(w.get("stan")) in ["walka", "czujny", "szukanie"]:
 			czujni += 1
+	# przez drzwi słychać niepewnie: liczba i odległość to zgadywanie (czasem złe)
+	if ile > 0 and randf() < 0.25:
+		ile = maxi(1, ile + (1 if randf() < 0.5 else -1))
+	if ile > 0 and randf() < 0.2:
+		ile = 0          # stoją cicho – nic nie słychać
 	var t: String
 	if ile == 0:
-		t = "Pod drzwiami: cisza."
+		t = "Pod drzwiami: chyba cisza."
 	elif get_tree().get_nodes_in_group("fauna").any(func(f): return is_instance_valid(f) and (f as Node3D).global_position.distance_to(c) < 14.0 and str(f.get("stan")) != "martwy"):
 		t = "Za drzwiami: drapanie i klikanie. Coś tam jest."
 	elif czujni > 0:
-		t = "Za drzwiami: szepty, szczęk broni – %s czeka." % ("ktoś" if ile == 1 else "kilku")
+		t = "Za drzwiami: chyba szepty, szczęk metalu – ktoś %s." % ("czeka" if randf() < 0.7 else "się kręci")
 	else:
-		t = "Za drzwiami: kroki%s – %s." % ["" if ile == 1 else " (kilka osób)", "tuż za progiem" if najblizej < 4.0 else ("niedaleko" if najblizej < 8.0 else "dalej w środku")]
+		t = "Za drzwiami: kroki? %s" % ("Raczej blisko." if najblizej < 5.0 else ("Gdzieś w środku." if randf() < 0.7 else "Trudno powiedzieć, ile ich."))
 	g.emit_signal("komunikat", t)

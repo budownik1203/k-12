@@ -46,6 +46,7 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_naklejki()
 	_postaw_drzwi()
+	_przedmioty_i_wylaczniki()
 	_zaplanuj_zdarzenia()
 	Gra.etap_ladowania(3)
 	await get_tree().process_frame
@@ -90,7 +91,7 @@ func _ready() -> void:
 	Sterowanie.menu_otwarte = false
 	Dzwiek.graj("start_rajdu", -6.0)
 	Gra.ukryj_ladowanie()
-	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). [O] – lista wyjść z kierunkiem.")
+	Gra.wskazowka.call_deferred("strzalki", "Poprzednicy wymalowali na ścianach strzałki do wyjść: BRAMA – białe, PIWNICA 7 – żółte (na klucz), OKNO – czerwone (tylko w oknie czasowym). [O] – lista wyjść (bez kierunku – drogę trzeba znać).")
 	Dzwiek.ambient("ambient_rajd", self, -4.0)
 	# akustyka: kroki wg podłoża, pogłos wg pomieszczenia, wiatr w tle, napięcie przy wrogach
 	Dzwiek.podloze_fn = _podloze_dzw
@@ -155,6 +156,9 @@ func _ready() -> void:
 	elif args.has("--soak"):
 		_tryb_testu = "soak"
 		_test_soak.call_deferred(float(args[args.find("--soak") + 1]))
+	elif args.has("--test_v16"):
+		_tryb_testu = "v16"
+		_test_v16.call_deferred(args[args.find("--test_v16") + 1])
 	elif args.has("--test_v15"):
 		_tryb_testu = "v15"
 		_test_v15.call_deferred(args[args.find("--test_v15") + 1])
@@ -483,6 +487,97 @@ func _postaw_drzwi() -> void:
 			d.ustaw_kat(-rng.randf_range(0.25, 0.6))
 		else:
 			d.ustaw_kat(Drzwi.KAT_PELNY)
+
+
+## Fizyczne przedmioty do przesuwania (skrzynki, krzesła, beczki, szafki – przy ścianach) i wyłączniki światła
+## przy wejściach do pomieszczeń z lampami.
+func _przedmioty_i_wylaczniki() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = Gra.ziarno_rajdu * 17 + 3
+	var space := swiat.get_world_3d().direct_space_state
+	var mapa := swiat.get_world_3d().navigation_map
+	for para in [[gen, Vector3.ZERO, info, WARSTWA_PARTER], [gen_p, OFF_P, info_p, WARSTWA_PIETRO]]:
+		var g: GeneratorBiomu = para[0]
+		var off: Vector3 = para[1]
+		var inf: Dictionary = para[2]
+		if g == null:
+			continue
+		for k in g.komorki:
+			var kom: Dictionary = g.komorki[k]
+			if String(kom.get("typ", "korytarz")) == "korytarz" or not kom.has("rect"):
+				continue
+			var r: Rect2 = kom["rect"]
+			# wyłącznik: przy pierwszym otworze, po stronie zamka (na ścianie obok framugi)
+			var lampy := []
+			for l in inf.get("lampy", []):
+				if is_instance_valid(l) and l.get_script() != null and "wylaczona" in l:
+					var lp: Vector3 = (l as Node3D).global_position
+					if r.has_point(Vector2(lp.x, lp.z)) and absf(lp.y - off.y) < GeneratorBiomu.H + 0.5:
+						lampy.append(l)
+			if not lampy.is_empty():
+				var postawiony := false
+				for d in GeneratorBiomu.DIRS:
+					if postawiony:
+						break
+					for otw in kom["otwory"][d]:
+						var b: Array = g._bok(r, d)
+						var u: float = float(otw[1]) + 0.28
+						if u > float(b[3]) - 0.2:
+							u = float(otw[0]) - 0.28
+						if u < float(b[2]) + 0.2:
+							continue
+						var n2: Vector2 = b[4]
+						var nrm := Vector3(n2.x, 0, n2.y)
+						var lico: Vector3 = g._punkt_sciany(k, d, u) + off + Vector3.UP * 1.3
+						var rq := space.intersect_ray(PhysicsRayQueryParameters3D.create(lico + nrm * 0.3, lico - nrm * 0.3, Balistyka.WARSTWA_SWIAT))
+						if rq.is_empty():
+							continue
+						var w := Wylacznik.new()
+						w.lampy = lampy
+						w.obszar = r
+						w.wys = off.y
+						swiat.add_child(w)
+						w.global_position = (rq["position"] as Vector3) + (rq["normal"] as Vector3) * 0.005
+						w.look_at(w.global_position + (rq["normal"] as Vector3), Vector3.UP)
+						w.rotate_object_local(Vector3.UP, PI)
+						for gi in w.find_children("*", "GeometryInstance3D", true, false):
+							(gi as GeometryInstance3D).layers = para[3]
+						postawiony = true
+						break
+			# przedmioty przy ścianach
+			if rng.randf() > 0.6:
+				continue
+			for _n in (1 if rng.randf() < 0.8 else 2):
+				var typy := ["krzeslo", "krzeslo", "skrzynka", "skrzynka", "beczka"]
+				if String(kom["typ"]) in ["pokoj", "administracja", "magazyn", "warsztat"]:
+					typy.append("szafka")
+				var typ: String = typy[rng.randi() % typy.size()]
+				var rozm: Vector3 = Przesuwny.RODZAJE[typ]["r"]
+				for proba in 8:
+					var d2: Vector2i = GeneratorBiomu.DIRS[rng.randi() % 4]
+					var b2: Array = g._bok(r, d2)
+					var u2 := rng.randf_range(float(b2[2]) + 0.6, float(b2[3]) - 0.6)
+					var n3: Vector2 = b2[4]
+					var nrm2 := Vector3(n3.x, 0, n3.y)
+					var pp: Vector3 = g._punkt_sciany(k, d2, u2) + off + nrm2 * (maxf(rozm.x, rozm.z) * 0.5 + 0.08)
+					var sq := PhysicsShapeQueryParameters3D.new()
+					var bs := BoxShape3D.new()
+					bs.size = rozm + Vector3(0.1, -0.06, 0.1)
+					sq.shape = bs
+					sq.transform = Transform3D(Basis(), pp + Vector3.UP * (rozm.y * 0.5 + 0.05))
+					sq.collision_mask = Balistyka.WARSTWA_SWIAT | Balistyka.WARSTWA_POSTACIE | Przesuwny.WARSTWA | Balistyka.WARSTWA_INTERAKCJE
+					if not space.intersect_shape(sq, 1).is_empty():
+						continue
+					var np := NavigationServer3D.map_get_closest_point(mapa, pp)
+					if absf(np.y - pp.y) > 0.4 or Vector2(np.x - pp.x, np.z - pp.z).length() > 1.2:
+						continue
+					var pr := Przesuwny.nowy(typ)
+					swiat.add_child(pr)
+					pr.global_position = pp + Vector3.UP * 0.02
+					pr.rotation.y = atan2(nrm2.x, nrm2.z) + rng.randf_range(-0.25, 0.25)
+					for gi in pr.find_children("*", "GeometryInstance3D", true, false):
+						(gi as GeometryInstance3D).layers = para[3]
+					break
 
 
 const KAT_TESTU := -1.62
@@ -1760,7 +1855,8 @@ func _test_drzwi(katalog: String) -> void:
 		kom.clear()
 		await get_tree().create_timer(2.4).timeout
 		print("  podsłuch: %s" % [kom])
-		if not kom.any(func(t): return String(t).begins_with("Za drzwiami")):
+		# podsłuch jest niepewny (czasem „chyba cisza”) – ważne, że w ogóle coś słychać / nie słychać
+		if not kom.any(func(t): return String(t).begins_with("Za drzwiami") or String(t).begins_with("Pod drzwiami")):
 			print("  BŁĄD: podsłuch nic nie dał")
 			bledy += 1
 		# wróg idzie przez zamknięte drzwi – powinien je otworzyć
@@ -3782,7 +3878,7 @@ func _test_soak(sek: float) -> void:
 			wszystkie_d += 1
 			if not (n as Drzwi).zamkniete():
 				otw += 1
-	print("SOAK drzwi otwarte %d / %d" % [otw, wszystkie_d])
+	print("SOAK drzwi otwarte %d / %d, przedmioty przesuwne %d, wyłączniki %d" % [otw, wszystkie_d, get_tree().get_nodes_in_group("przesuwne").size(), swiat.find_children("*", "Wylacznik", true, false).size()])
 	print("SOAK KONIEC")
 	Engine.time_scale = 1.0
 	get_tree().quit()
@@ -3833,6 +3929,7 @@ func _test_v15(katalog: String) -> void:
 		var rd: Ragdoll = pj.get_meta("ragdoll")
 		var c0 := rd.srodek()
 		gracz.look_at(Vector3(c0.x, gracz.global_position.y, c0.z), Vector3.UP)
+		gracz.komunikat.connect(func(t): print("  [komunikat] ", t))
 		gracz._zacznij_ciagnac(pj)
 		Input.action_press("tyl")
 		await get_tree().create_timer(0.5).timeout
@@ -3948,4 +4045,173 @@ func _test_v15(katalog: String) -> void:
 	if hr < hz * 2.5:
 		bl += 1
 	print("TEST V15: błędów ", bl)
+	get_tree().quit()
+
+
+
+## Test v0.16: ikonki celu, fizyczne drzwi, przesuwanie przedmiotów, barykada, klin, kula obok głowy i stres,
+## wyłącznik światła, przełażenie, ostrożny krok.
+func _test_v16(katalog: String) -> void:
+	DirAccess.make_dir_recursive_absolute(katalog)
+	for _i in 20:
+		await get_tree().physics_frame
+	var bl := 0
+	var wszyscy: Array = get_tree().get_nodes_in_group("wrogowie").filter(func(w): return w is Wrog and not w.cialo.martwy)
+	for w in wszyscy:
+		w.set_physics_process(false)
+		(w as Node3D).global_position += Vector3(0, 50, 0)
+	var mapa_n := swiat.get_world_3d().navigation_map
+	# drzwi: zamknięte, zwykłe, na parterze, najbliżej startu
+	var drz: Drzwi = null
+	var najb := INF
+	for n in swiat.find_children("*", "", true, false):
+		if n is Drzwi and not (n as Drzwi).na_klucz and absf((n as Drzwi).global_position.y) < 1.0:
+			var dd := (n as Node3D).global_position.distance_to(info["start"])
+			if dd < najb:
+				najb = dd
+				drz = n
+	drz.ustaw_kat(0.0)
+	var strona := -1.0
+	gracz.global_position = drz.global_transform * Vector3(drz.szer * 0.3, 0.05, -0.9)
+	var klamka := drz.global_transform * Vector3(drz.szer * 0.5 - 0.14, 1.0, 0.0)
+	var d0 := klamka - gracz.global_position
+	gracz.rotation.y = atan2(-d0.x, -d0.z)
+	gracz.kamera.rotation.x = atan2(klamka.y - (gracz.global_position.y + 1.6), Vector2(d0.x, d0.z).length())
+	for _i in 6:
+		await get_tree().physics_frame
+	print("  ikonka przy drzwiach: %s (cel %s, tekst %s, sterowanie %s)" % [gracz.rodzaj_celu, gracz.cel_interakcji, gracz.tekst_interakcji, gracz.sterowanie])
+	if gracz.rodzaj_celu != "chwyt":
+		bl += 1
+	await _zapisz_kadr(katalog, "ikonka_drzwi", 4)
+	# chwyt i pchnięcie myszą (od strony −Z pchnięcie otwiera)
+	for k in 40:
+		drz.chwyc_ruch(gracz, Vector2(0, -14), 1.0 / 60.0)
+		await get_tree().physics_frame
+	drz.pusc_chwyt(gracz)
+	for _i in 30:
+		await get_tree().physics_frame
+	print("  drzwi pchnięte ręką: kąt %.2f" % drz.kat)
+	if drz.kat > -0.3:
+		print("  BŁĄD: chwyt drzwi nie działa")
+		bl += 1
+	for k in 40:
+		drz.chwyc_ruch(gracz, Vector2(0, 14), 1.0 / 60.0)
+		await get_tree().physics_frame
+	for _i in 30:
+		await get_tree().physics_frame
+	print("  drzwi przyciągnięte: kąt %.2f" % drz.kat)
+	# klin od strony gracza: wróg z drugiej strony musi wyważać
+	drz.ustaw_kat(0.0)
+	drz.wbij_klin(gracz)
+	print("  klin: %s, strona %s, tekst: %s" % [drz.klin, drz.klin_strona, drz.tekst_interakcji(gracz)])
+	var wr: Wrog = wszyscy[0]
+	wr.global_position = drz.global_transform * Vector3(drz.szer * 0.3, 0.05, 0.7)
+	wr.set_physics_process(true)
+	wr.stan = "szukanie"
+	wr.ostatnia_pozycja = NavigationServer3D.map_get_closest_point(mapa_n, drz.global_transform * Vector3(0, 0, -4.0))
+	gracz.global_position += Vector3(0, 40, 0)
+	gracz.set_physics_process(false)
+	for _i in 900:
+		await get_tree().physics_frame
+		if drz.wywazone:
+			break
+	print("  wróg przy zaklinowanych drzwiach: wyważone %s, klin %s" % [drz.wywazone, drz.klin])
+	if not drz.wywazone:
+		print("  BŁĄD: zaklinowane drzwi nie do sforsowania")
+		bl += 1
+	wr.set_physics_process(false)
+	gracz.set_physics_process(true)
+	# przedmiot do przesuwania
+	var prz: Array = get_tree().get_nodes_in_group("przesuwne")
+	print("  przedmiotów przesuwnych: %d, wyłączników: %d" % [prz.size(), swiat.find_children("*", "Wylacznik", true, false).size()])
+	if prz.is_empty():
+		bl += 1
+	else:
+		var pr: Przesuwny = null
+		for x in prz:
+			if (x as Przesuwny).rodzaj == "skrzynka":
+				pr = x
+				break
+		if pr == null:
+			pr = prz[0]
+		var miejsce := NavigationServer3D.map_get_closest_point(mapa_n, info["start"])
+		pr.global_position = miejsce + Vector3(0, 0.05, -1.3)
+		pr.linear_velocity = Vector3.ZERO
+		gracz.global_position = miejsce + Vector3(0, 0, 0.0)
+		gracz.rotation.y = 0.0
+		gracz.kamera.rotation.x = -0.5
+		gracz._pitch = -0.5
+		for _i in 30:
+			await get_tree().physics_frame
+		print("  ikonka przy %s: %s" % [pr.rodzaj, gracz.rodzaj_celu])
+		var p0 := pr.global_position
+		pr.chwyc(gracz)
+		for k in 90:
+			gracz.rotation.y += 0.012
+			pr.chwyc_ruch(gracz, Vector2.ZERO, 1.0 / 60.0)
+			await get_tree().physics_frame
+		pr.pusc_chwyt(gracz)
+		print("  %s przesunięta o %.2f m (limit marszu z nią %.2f m/s)" % [pr.rodzaj, p0.distance_to(pr.global_position), pr.limit_predkosci()])
+		if p0.distance_to(pr.global_position) < 0.3:
+			print("  BŁĄD: przedmiot się nie przesuwa")
+			bl += 1
+		# przełażenie przez skrzynię
+		pr.global_position = gracz.global_position + Vector3(0, 0.02, -0.75)
+		pr.rotation = Vector3.ZERO
+		pr.freeze = true
+		gracz.rotation.y = 0.0
+		for _i in 10:
+			await get_tree().physics_frame
+		var g0 := gracz.global_position
+		var prze := gracz._znajdz_przeszkode()
+		print("  przeszkoda przed graczem: %s" % ("wys %.2f m" % float(prze["wys"]) if not prze.is_empty() else "brak"))
+		if not prze.is_empty():
+			prze["t"] = 0.0
+			prze["czas"] = 1.2
+			gracz._przelaz = prze
+			for _i in 100:
+				await get_tree().physics_frame
+			print("  po przełażeniu: przesunięcie %.2f m, w trakcie %s" % [Vector2(gracz.global_position.x - g0.x, gracz.global_position.z - g0.z).length(), not gracz._przelaz.is_empty()])
+			if Vector2(gracz.global_position.x - g0.x, gracz.global_position.z - g0.z).length() < 0.9:
+				bl += 1
+		else:
+			bl += 1
+		pr.freeze = false
+		pr.global_position += Vector3(4, 0, 0)     # z drogi (dalsza część testu idzie prosto)
+	# kula tuż obok głowy: smuga, stres
+	var st0: float = gracz.stres
+	var glowa := gracz.global_position + Vector3.UP * 1.5
+	gracz.swist(0.25, glowa + Vector3(-20, 0, 0.2), glowa + Vector3(10, 0, 0.25))
+	print("  (od razu po kuli: smuga %.2f)" % hud._kula_t)
+	await _zapisz_kadr(katalog, "kula_obok", 2)
+	print("  kula obok: stres %.2f → %.2f, smuga %.2f, przygniecenie %.2f" % [st0, gracz.stres, hud._kula_t, gracz.przygniecenie])
+	if gracz.stres <= st0:
+		bl += 1
+	gracz.rotation.y = 0.0
+	# wyłącznik światła
+	var wl: Array = swiat.find_children("*", "Wylacznik", true, false)
+	if not wl.is_empty():
+		var w0: Wylacznik = wl[0]
+		w0.przelacz(gracz)
+		await get_tree().physics_frame
+		print("  wyłącznik: zgaszone %s (lamp %d)" % [not w0.wlaczone(), w0.lampy.size()])
+		if w0.wlaczone():
+			bl += 1
+		w0.przelacz(gracz)
+	# ostrożny krok
+	gracz.global_position = NavigationServer3D.map_get_closest_point(mapa_n, info["start"])
+	await get_tree().physics_frame
+	Input.action_press("ostrozny")
+	Input.action_press("przod")
+	await get_tree().create_timer(0.8).timeout
+	var p1 := gracz.global_position
+	await get_tree().create_timer(2.0).timeout
+	Input.action_release("przod")
+	Input.action_release("ostrozny")
+	var v := Vector2(gracz.global_position.x - p1.x, gracz.global_position.z - p1.z).length() / 2.0
+	print("  (sterowanie %s, blokada %s, fizyka %s, przelaz %s, akcja %s)" % [gracz.sterowanie, Sterowanie.blokada, gracz.is_physics_processing(), gracz._przelaz, gracz.akcja.get("nazwa", "-")])
+	print("  ostrożny krok: %.2f m/s, hałas ruchu %.2f" % [v, gracz.halas_ruchu])
+	if v > 0.95 or v < 0.5:
+		bl += 1
+	print("TEST V16: błędów ", bl)
 	get_tree().quit()

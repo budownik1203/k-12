@@ -344,15 +344,8 @@ func _odswiez(delta: float) -> void:
 			var linie := ["WYJŚCIA ZE STREFY:"]
 			for w in rajd.info["wyjscia"]:
 				var ew: Ewakuacja = w
-				var d := ew.global_position - gracz.global_position
-				var kier := _kierunek(d)
-				# z mapą na slocie wyposażenia: dokładna odległość; bez mapy tylko ogólny kierunek
-				if gracz.ekw.ma_wyposazenie("mapa"):
-					linie.append("%s — %s  (%s, ~%d m)" % [ew.nazwa, ew.opis_stanu(), kier, int(d.length())])
-				else:
-					linie.append("%s — %s  (%s)" % [ew.nazwa, ew.opis_stanu(), kier])
-			if not gracz.ekw.ma_wyposazenie("mapa"):
-				linie.append("(bez mapy – odległości nieznane)")
+				# bez kierunku i odległości: drogę trzeba znać (strzałki na ścianach, mapa w rękach, kompas)
+				linie.append("%s — %s" % [ew.nazwa, ew.opis_stanu()])
 			_wyjscia.text = "\n".join(linie)
 		else:
 			_wyjscia.text = ""
@@ -370,7 +363,9 @@ func _odswiez(delta: float) -> void:
 	if _mat:
 		var niskie := clampf(1.0 - c.procent() * 1.6, 0.0, 0.6)
 		_mat.set_shader_parameter("kolor_bolu", Color(0.5, 0.0, 0.0, maxf(_trafienie * 0.7, niskie)))
-		_mat.set_shader_parameter("rozmycie_bol", maxf(1.2 if c.bol() else (_trafienie * 2.0), minf(3.0, gracz.oglusz * 1.2)))
+		_kula_t = maxf(0.0, _kula_t - delta * 4.0)
+		var stres: float = gracz.stres
+		_mat.set_shader_parameter("rozmycie_bol", maxf(maxf(1.2 if c.bol() else (_trafienie * 2.0), minf(3.0, gracz.oglusz * 1.2)), _kula_t * _kula_sila * 2.2 + maxf(0.0, stres - 0.6) * 1.2))
 	_oglusz_blysk = maxf(0.0, _oglusz_blysk - delta * 0.7)
 	_biel.color.a = _oglusz_blysk * _oglusz_blysk
 	_kropka.queue_redraw()
@@ -408,7 +403,8 @@ var _ekran_otwarty := false
 
 
 func _ukryj_przy_ekranie() -> void:
-	var ekran := not get_tree().get_nodes_in_group("ekran_ekwipunku").is_empty()
+	# ekran ekwipunku jest w grupie cały czas – liczy się tylko, gdy naprawdę otwarty (wytrych: gdy widoczny)
+	var ekran := get_tree().get_nodes_in_group("ekran_ekwipunku").any(func(n): return bool(n.get("otwarty")) if "otwarty" in n else (n is CanvasItem and (n as CanvasItem).visible) or (n is CanvasLayer and (n as CanvasLayer).visible))
 	for n in [_bron, _pasek, _wyjscia, _czas, _kropka, _stan, _interakcja, _wytrz, _waga, _kompas, _odliczanie, _fps]:
 		if n == null:
 			continue
@@ -573,9 +569,22 @@ func ogluszenie(sila: float) -> void:
 
 ## Znacznik trafienia przy celowniku (wołany przez broń gracza).
 func znacznik_trafienia(zabity: bool, glowa := false) -> void:
-	_znacznik = 1.0
-	_znacznik_zabity = zabity
-	Dzwiek.graj("klik", -6.0 if zabity else -12.0, 2.2 if not glowa else 2.8)
+	# bez znacznika i bez „kliku” trafienia: o skutku mówi tylko cel (drgnięcie, krzyk, upadek)
+	pass
+
+
+## Kula tuż obok głowy: smuga przez kadr, krótkie rozmycie i szarpnięcie obrazu.
+var _kula_a := Vector3.ZERO
+var _kula_b := Vector3.ZERO
+var _kula_t := 0.0
+var _kula_sila := 0.0
+
+
+func blisko_kuli(a: Vector3, b: Vector3, sila: float) -> void:
+	_kula_a = a
+	_kula_b = b
+	_kula_t = 1.0
+	_kula_sila = clampf(sila, 0.2, 1.0)
 
 
 func _trafiony(kier: Vector3, _czesc: String) -> void:
@@ -690,17 +699,65 @@ class Kropka:
 			draw_string(ThemeDB.fallback_font, c + Vector2(-34, 90), "podparta", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.82, 0.7, 0.55))
 		if g.bron.ads < 0.5 and g.bron.przedmiot != null:
 			draw_rect(Rect2(c - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.85, 0.82, 0.7, 0.7))
-		if hud._znacznik > 0.0:
-			var kz := Color(0.9, 0.15, 0.1, hud._znacznik) if hud._znacznik_zabity else Color(0.95, 0.92, 0.85, hud._znacznik)
-			var r1 := 6.0
-			var r2 := 13.0 if hud._znacznik_zabity else 10.0
-			for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
-				draw_line(c + d * r1, c + d * r2, kz, 2.0)
+		# (znacznik trafienia usunięty – o trafieniu mówi tylko to, co widać i słychać)
+		# ikonka przy celowniku: otwarta dłoń – można coś zrobić; zaciśnięta – można chwycić i przesunąć
+		var rodz: String = g.rodzaj_celu
+		if rodz != "" and g.bron.ads < 0.5:
+			_ikona_dloni(c + Vector2(0, 18), rodz == "chwyt")
+		if hud._kula_t > 0.0:
+			# smuga kuli: odcinek toru rzutowany na ekran, jasny i szybko gasnący
+			var kam := get_viewport().get_camera_3d()
+			if kam == null and g.kamera:
+				kam = g.kamera
+			if kam:
+				var a3: Vector3 = hud._kula_a
+				var b3: Vector3 = hud._kula_b
+				var srodek: Vector3 = kam.global_position
+				var t0 := clampf((srodek - a3).dot(b3 - a3) / maxf((b3 - a3).length_squared(), 0.0001), 0.0, 1.0)
+				var bliski := a3.lerp(b3, t0)
+				var kier := (b3 - a3).normalized()
+				var p1 := bliski - kier * 1.5
+				var p2 := bliski + kier * 0.6
+				if not kam.is_position_behind(p1) and not kam.is_position_behind(p2):
+					var skala := Widok3D.skala_ekranu(kam.get_viewport()) if kam.get_viewport() is SubViewport else Vector2.ONE
+					var s1 := kam.unproject_position(p1) * skala
+					var s2 := kam.unproject_position(p2) * skala
+					var al: float = hud._kula_t * hud._kula_sila
+					draw_line(s1, s2, Color(1.0, 0.92, 0.7, al * 0.55), 2.5)
+					draw_line(s1.lerp(s2, 0.5), s2, Color(1.0, 0.97, 0.85, al * 0.8), 1.2)
+			draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), Color(0.9, 0.88, 0.8, hud._kula_t * hud._kula_sila * 0.08))
 		if hud._trafienie > 0.0:
 			var a: float = hud._trafienie_kier
 			var p := c + Vector2(sin(a), -cos(a)) * 110.0
 			var kol := Color(0.8, 0.1, 0.05, hud._trafienie)
 			draw_line(p - Vector2(cos(a), sin(a)) * 26, p + Vector2(cos(a), sin(a)) * 26, kol, 4.0)
+
+
+	## Mała dłoń (12 px): otwarta (interakcja) albo zaciśnięta ze strzałkami (chwyć i przesuń).
+	func _ikona_dloni(p: Vector2, chwyt: bool) -> void:
+		var kol := Color(0.92, 0.88, 0.74, 0.85)
+		var cien := Color(0, 0, 0, 0.5)
+		for przes in [Vector2(1, 1), Vector2.ZERO]:
+			var k: Color = cien if przes != Vector2.ZERO else kol
+			var o: Vector2 = p + przes
+			if chwyt:
+				draw_rect(Rect2(o + Vector2(-5, -3), Vector2(10, 8)), k)
+				for i in 4:
+					draw_rect(Rect2(o + Vector2(-5 + i * 2.6, -5.5), Vector2(2.0, 3.0)), k)
+				draw_rect(Rect2(o + Vector2(-7, -1), Vector2(2.5, 4)), k)
+				# strzałki: przesuń
+				draw_line(o + Vector2(-13, 1), o + Vector2(-9, 1), k, 1.5)
+				draw_line(o + Vector2(-13, 1), o + Vector2(-11, -1), k, 1.5)
+				draw_line(o + Vector2(-13, 1), o + Vector2(-11, 3), k, 1.5)
+				draw_line(o + Vector2(9, 1), o + Vector2(13, 1), k, 1.5)
+				draw_line(o + Vector2(13, 1), o + Vector2(11, -1), k, 1.5)
+				draw_line(o + Vector2(13, 1), o + Vector2(11, 3), k, 1.5)
+			else:
+				draw_rect(Rect2(o + Vector2(-4, -1), Vector2(8, 7)), k)
+				for i in 4:
+					var h: float = [6.0, 7.5, 7.0, 5.5][i]
+					draw_rect(Rect2(o + Vector2(-4 + i * 2.2, -1 - h), Vector2(1.6, h)), k)
+				draw_line(o + Vector2(-4, 3), o + Vector2(-7, -1), k, 1.8)
 
 
 	## Nakładka lunety (PSO): czarne pole wokół okularu, siatka z szewronami i skalą boczną.

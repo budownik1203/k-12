@@ -123,6 +123,7 @@
     {"id": "tkanina_balistyczna", "nazwa": "Tkanina balistyczna", "typ": "lup", "w": 2, "h": 2, "waga": 0.6, "cena": 4000, "opis": "Pakiet aramidu z rozprutej kamizelki. Przy stole roboczym łata pancerz – nigdy do końca."},
     {"id": "farba_spray", "nazwa": "Farba w sprayu", "typ": "lup", "w": 1, "h": 3, "waga": 0.35, "cena": 700, "uzycia": 12, "opis": "Pomarańczowa, z magazynu wyposażenia szkół. Strzałka, krzyżyk, wykrzyknik – zostają na ścianie do końca rajdu."},
     {"id": "drut", "nazwa": "Drut z kołkami", "typ": "lup", "w": 1, "h": 2, "waga": 0.15, "cena": 600, "opis": "Pięć metrów stalowego drutu i dwa kołki. Instrukcja BHP zabrania rozciągania w ciągach komunikacyjnych."},
+    {"id": "klin", "nazwa": "Klin do drzwi", "typ": "lup", "w": 1, "h": 1, "waga": 0.1, "cena": 300, "opis": "Kawałek dębu. Wbity pod drzwi od środka zamienia każde mieszkanie w twierdzę. Na pięć minut."},
     {"id": "szklanka", "nazwa": "Szklanka", "typ": "lup", "w": 1, "h": 2, "waga": 0.2, "cena": 150, "opis": "Szklanka z PRL-owskiej zastawy. Granat F-1 mieści się w niej idealnie – projektanci chyba wiedzieli."},
     {"id": "ikona", "nazwa": "Ikona w ramie", "typ": "lup", "w": 3, "h": 3, "waga": 1.1, "cena": 12000, "opis": "Pośrednik nie pyta o pochodzenie. Święty też milczy."},
     {"id": "latarka", "nazwa": "Latarka KZ-3", "typ": "latarka", "w": 3, "h": 1, "waga": 0.35, "cena": 900,
@@ -136,7 +137,7 @@
     "skrzynia": [["tlumik_9", 2], ["a_762", 14], ["a_9x18", 16], ["a_12", 14], ["mag_kb47", 6], ["mag_pm63", 6], ["mag_pw9", 8], ["przewody", 10], ["klucz_nastawny", 8], ["akumulator", 4], ["proch", 8], ["prasa_elaboracyjna", 1], ["farba_spray", 3], ["nic", 35]],
     "skrzynia_wojskowa": [["granat_f1", 8], ["suchary", 10], ["woda", 6], ["zestaw_czyszczacy", 6], ["tasma", 4], ["tlumik_762", 1], ["hamulec", 3], ["chwyt", 2], ["latarka_taktyczna", 3], ["kolimator", 1], ["napiersnik", 3], ["plecak_wojskowy", 1], ["lornetka", 3], ["kompas", 4], ["a_762", 20], ["a_762bp", 6], ["mag_kb47", 12], ["kb47", 1], ["pm63", 2], ["opatrunek", 10], ["apteczka", 10], ["helm_wz67", 5], ["kamizelka_kl2", 2], ["szyna", 8], ["proch", 6], ["tkanina_balistyczna", 3], ["drut", 5], ["nic", 30]],
     "apteczka_scienna": [["bandaz", 30], ["opatrunek", 12], ["bolostop", 18], ["apteczka", 10], ["szyna", 10], ["spirytus", 10], ["nic", 35]],
-    "regal": [["tasma", 9], ["zestaw_czyszczacy", 3], ["kanister", 3], ["gasnica", 4], ["kombinerki", 8], ["wytrych", 3], ["latarka", 5], ["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["proch", 6], ["prasa_elaboracyjna", 1], ["farba_spray", 5], ["drut", 6], ["nic", 50]]
+    "regal": [["tasma", 9], ["zestaw_czyszczacy", 3], ["kanister", 3], ["gasnica", 4], ["kombinerki", 8], ["wytrych", 3], ["latarka", 5], ["przewody", 14], ["klucz_nastawny", 12], ["lampa_elektronowa", 10], ["akumulator", 5], ["radio", 6], ["a_12", 10], ["konserwa", 10], ["proch", 6], ["prasa_elaboracyjna", 1], ["farba_spray", 5], ["drut", 6], ["klin", 8], ["nic", 50]]
   },
 
   "frakcje": {

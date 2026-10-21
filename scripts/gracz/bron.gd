@@ -686,6 +686,7 @@ func aktualizuj(delta: float, we: Dictionary) -> void:
 	var moze: bool = we.get("moze", true) and przedmiot != null and sciana < 0.6 and _bieg < 0.35
 	# złożenie do strzału: ciężka broń wolniej (ok. 0,3 s pistolet, 0,4 s karabin z dodatkami)
 	var ciez_ads := clampf(przedmiot.waga() / 3.0, 0.6, 1.5) if przedmiot else 1.0
+	ciez_ads *= lerpf(0.85, 1.7, _nisko_f)     # z broni nisko złożenie trwa dłużej
 	ads = move_toward(ads, 1.0 if (we.get("ads", false) and moze and stan == "gotowa") else 0.0, delta * 4.2 / (ciez_ads * (1.0 + (zoom() - 1.0) * 0.35)))
 	if przedmiot == null:
 		# sama latarka: tylko animacja wyjmowania
@@ -1181,6 +1182,8 @@ var _sway_v := Vector2.ZERO
 var _lok := Vector3.ZERO        # wygładzona prędkość gracza w układzie postaci
 var _oddech_t := 0.0
 var sciana := 0.0               # 0..1 – lufa przy przeszkodzie (broń odsunięta / opuszczona)
+var nisko := false               # [V] broń nisko (swobodny marsz, długie złożenie) / wysoko (gotowa, męczy ręce)
+var _nisko_f := 0.0
 var zmecz_rak := 0.0            # 0..1 – ręce mdleją przy długim celowaniu (stojąc szybciej, podparcie prawie nie męczy)
 var podparcie := 0.0            # 0..1 – broń oparta o parapet, mebel, krawędź ściany (mniejszy odrzut)
 var _sciana_t := 0.0
@@ -1319,8 +1322,12 @@ func _process(delta: float) -> void:
 		_kick_rot += _kick_rot_v * hk
 		rk -= hk
 	_przeszkody(delta)
+	# broń nisko: kolba przy biodrze, lufa w podłogę (kadr wolny, do strzału daleko)
+	_nisko_f = move_toward(_nisko_f, 1.0 if nisko and ads < 0.2 else 0.0, delta * 2.4)
+	var nf := _nisko_f * _nisko_f * (3.0 - 2.0 * _nisko_f)
+	hip += Vector3(0.02, -0.09, 0.05) * nf
 	var poz := hip.lerp(ads_poz, t) + bob + _kick + Vector3(-_sway.x, _sway.y, 0) * (1.0 - t * 0.7)
-	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5) + Vector3(0, 0.05, 0) * (1.0 - t)
+	var rot := _kick_rot + Vector3(_sway.y * 2.0, -_sway.x * 2.0, -_sway.x * 1.5) + Vector3(0, 0.05, 0) * (1.0 - t) + Vector3(-0.42, 0.18, 0.1) * nf
 	if gracz:
 		# ruch postaci: przechył przy kroku w bok, broń zostaje w tyle przy ruszaniu, unosi się/opada przy skoku
 		var lv: Vector3 = gracz.global_basis.inverse() * gracz.velocity
@@ -1346,10 +1353,14 @@ func _process(delta: float) -> void:
 			var ciez := clampf(przedmiot.waga() / 3.5, 0.4, 1.6) if przedmiot else 1.0
 			var poza := lerpf(1.0, 0.55, float(gracz.get("kucanie"))) * (1.0 + absf(float(gracz.get("wychylenie"))) * 0.4)
 			zmecz_rak = minf(1.0, zmecz_rak + delta / 16.0 * ciez * poza * (1.0 + zm) * (1.0 - podparcie * 0.9))
+		elif not nisko:
+			# broń wysoko (gotowa do strzału): ręce też pracują, choć wolniej niż przy oku
+			zmecz_rak = clampf(zmecz_rak + delta / 70.0 - (delta * 0.05 if zmecz_rak > 0.45 else 0.0), 0.0, 1.0)
 		else:
 			zmecz_rak = maxf(0.0, zmecz_rak - delta * 0.22)
 		var rece := maxf(0.0, zmecz_rak - 0.3) / 0.7
-		var amp := 0.0022 * (1.0 + prz * 3.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0 + minf(2.5, alk / 40.0) + rece * 2.2) * (1.0 - t * 0.6 * (1.0 - rece * 0.5)) * (1.0 - podparcie * 0.75)
+		var st: float = float(gracz.get("stres")) if gracz.get("stres") != null else 0.0
+		var amp := 0.0022 * (1.0 + st * 2.2 + prz * 3.0 + zm * 2.5 + maxf(0.0, celn - 1.0) * 2.0 + minf(2.5, alk / 40.0) + rece * 2.2) * (1.0 - t * 0.6 * (1.0 - rece * 0.5)) * (1.0 - podparcie * 0.75)
 		poz += Vector3(sin(_oddech_t * 1.1) * amp, sin(_oddech_t * 2.2) * amp * 0.7, 0.0)
 		rot += Vector3(sin(_oddech_t * 2.2 + 0.4) * amp * 1.4, sin(_oddech_t * 1.1 + 0.8) * amp * 1.2, 0.0)
 	# lufa przy przeszkodzie: broń cofnięta i opuszczona (nie przenika przez ścianę), strzał niemożliwy

@@ -347,6 +347,8 @@ func szybka_kamizelka() -> void:
 	_gora.visible = false
 	if not "kamizelka" in otwarte and _otwieranie == "":
 		przelacz_pojemnik("kamizelka")
+		# zerknięcie też trwa: głowa w dół, dłoń szuka ładownicy (chwilę nic nie wyjmiesz)
+		_zajmij(0.7)
 
 
 func _ustaw_widok() -> void:
@@ -2487,6 +2489,7 @@ const M_NAPRAW_PANC := 300
 const M_SPRAY := 400         # + rodzaj znaku
 const M_PULAPKA := 500
 const M_POTYKACZ := 510
+const M_KLIN := 520
 const ZNAKI_SPRAYU := [["Maluj na ścianie: strzałka →", "gracz_strzalka_p"], ["Maluj na ścianie: ← strzałka", "gracz_strzalka_l"],
 	["Maluj na ścianie: krzyżyk (tu byłem)", "gracz_krzyzyk"], ["Maluj na ścianie: wykrzyknik (uwaga)", "gracz_wykrzyknik"]]
 
@@ -2538,6 +2541,9 @@ func _pokaz_menu(p: Przedmiot, z: Dictionary, pos: Vector2) -> void:
 		_menu.set_item_disabled(_menu.item_count - 1, _znajdz_narzedzie("szklanka") == null)
 		_menu.add_item("Rozciągnij potykacz w poprzek przejścia (drut)" if _znajdz_narzedzie("drut") != null else "Potykacz (brak drutu)", M_POTYKACZ)
 		_menu.set_item_disabled(_menu.item_count - 1, _znajdz_narzedzie("drut") == null)
+	# klin: pod zamknięte drzwi przed sobą (od tej strony)
+	if p.id == "klin" and not tryb_bazy and gracz:
+		_menu.add_item("Wbij klin pod drzwi przed sobą", M_KLIN)
 	# puszka sprayu: znak na ścianie przed sobą (w rajdzie)
 	if p.id == "farba_spray" and not tryb_bazy and gracz:
 		for i in ZNAKI_SPRAYU.size():
@@ -2746,6 +2752,21 @@ func _menu_akcja(id: int) -> void:
 		return
 	if id == M_POTYKACZ:
 		_rozciagnij_potykacz(p)
+		return
+	if id == M_KLIN:
+		var kam: Camera3D = gracz.kamera
+		var q := PhysicsRayQueryParameters3D.create(kam.global_position, kam.global_position - kam.global_basis.z * 1.8, Balistyka.WARSTWA_SWIAT)
+		var r := gracz.get_world_3d().direct_space_state.intersect_ray(q)
+		var d: Drzwi = (r["collider"] as Node).get_meta("drzwi") if not r.is_empty() and (r["collider"] as Node).has_meta("drzwi") else null
+		if d == null or not d.zamkniete() or d.wywazone or d.klin:
+			_komunikat("Stań przy zamkniętych drzwiach, przodem do nich.")
+			return
+		zamknij()
+		gracz.zacznij_akcje("Klin pod drzwi", 2.5, func():
+			if not d.zamkniete() or not ekw.usun_przedmiot(p):
+				return
+			d.wbij_klin(gracz)
+			_komunikat("Klin wbity. Od drugiej strony trzeba będzie wyważać – usłyszysz to."), "podnies")
 		return
 	if id >= M_SPRAY and id < M_SPRAY + ZNAKI_SPRAYU.size():
 		_maluj(String(ZNAKI_SPRAYU[id - M_SPRAY][1]))

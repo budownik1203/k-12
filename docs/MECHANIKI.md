@@ -86,3 +86,14 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Impas posterunku | odpuszczenie gniazda | wojna frakcji nie zamraża się na posterunkach |
 | Głośność zapięć | rzep vs zamek | wybór kamizelki = szybkość kontra cisza |
 | Pewny meldunek | Pośrednik za bony | alternatywa dla reputacji u Wojska |
+
+## Fizyka i ciężar ruchu (v0.16.0)
+
+| Mechanika | Opis | Styk z istniejącym |
+| --- | --- | --- |
+| Drzwi ręką | przytrzymaj [F], mysz porusza skrzydłem | pułapki i podsłuch działają jak dotąd; uchylenie ręką = cichy podgląd |
+| Przedmioty przesuwne | skrzynki, krzesła, beczki, szafki | barykady na drzwiach, osłony, przełażenie |
+| Klin | blokuje drzwi od jednej strony | wrogowie wyważają jak drzwi na klucz (słychać) |
+| Stres | kule obok, trafienia | przygniecenie ogniem, czynności z ekwipunku wolniejsze |
+| Broń nisko / wysoko | swoboda kontra gotowość | zmęczenie rąk z v0.14 |
+| Wyłączniki | ciemność jako zasadzka | wykrywanie wg oświetlenia (gracz i ciała) |

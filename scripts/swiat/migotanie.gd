@@ -4,6 +4,7 @@ extends OmniLight3D
 @export var plafon: NodePath
 @export var base_energy := 1.0
 @export var awaria := 0.35  # 0 = stabilna, 0.9 = ciągle gaśnie, 1 = zepsuta (nie świeci)
+var wylaczona := false      # zgaszona wyłącznikiem na ścianie
 
 var _t := 0.0
 var _next := 0.0
@@ -29,7 +30,7 @@ func _collect() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if awaria >= 1.0:
+	if awaria >= 1.0 or wylaczona:
 		_on = false
 	elif _t >= _next:
 		_t = 0.0

@@ -333,6 +333,8 @@ func _physics_process(delta: float) -> void:
 		_wypadanie_t = 0.25
 		_wypadanie(0.25)
 	przygniecenie = maxf(0.0, przygniecenie - delta * 0.3)
+	# stres opada powoli (szybciej, gdy cisza i nikt nie strzela)
+	stres = maxf(0.0, stres - delta * (0.02 if przygniecenie > 0.1 else 0.045))
 	_samouczek_t -= delta
 	if _samouczek_t <= 0.0:
 		_samouczek_t = 0.5
@@ -378,12 +380,25 @@ func _physics_process(delta: float) -> void:
 
 func _rozgladanie(delta: float, aktywne: bool) -> void:
 	var m := Sterowanie.pobierz_mysz() if aktywne else Vector2.ZERO
+	# chwycone skrzydło drzwi: ruch myszy pcha / ciągnie drzwi, widok obraca się tylko trochę
+	if not _chwyt.is_empty() and is_instance_valid(_chwyt["cel"]) and bool(_chwyt["cel"].get("przejmuje_mysz")):
+		_chwyt["m"] = (_chwyt["m"] as Vector2) + m
+		_chwyt["suma"] = float(_chwyt["suma"]) + m.length()
+		m *= 0.2
 	var czul := 0.0022 * float(Gra.ustawienia.get("czulosc", 1.0)) * lerpf(1.0, 0.65, bron.ads)
-	rotate_y(-m.x * czul)
+	if prog_obciazenia() >= 2:
+		czul *= 0.85          # ciężko obładowany obraca się wolniej
 	if bool(Gra.ustawienia.get("odwroc_y", false)):
 		m.y = -m.y
-	_pitch = clampf(_pitch - m.y * czul, deg_to_rad(-86), deg_to_rad(86))
-	bron.dodaj_sway(m)
+	# bezwładność: z ciężką bronią przy oku obrót „dochodzi” z opóźnieniem (lufa ma masę)
+	var ciez := clampf(bron.przedmiot.waga() / 3.5, 0.3, 1.4) if bron.przedmiot else 0.3
+	_obrot_zaleg += m * czul
+	var tempo := lerpf(60.0, lerpf(26.0, 11.0, clampf(ciez - 0.3, 0.0, 1.0)), bron.ads)
+	var czesc := _obrot_zaleg * minf(1.0, delta * tempo)
+	_obrot_zaleg -= czesc
+	rotate_y(-czesc.x)
+	_pitch = clampf(_pitch - czesc.y, deg_to_rad(-86), deg_to_rad(86))
+	bron.dodaj_sway(m * lerpf(0.8, 1.5, clampf(ciez - 0.3, 0.0, 1.0)))
 	# odrzut: szybki wzrost, powolny powrót
 	var krok := _odrzut_cel * minf(1.0, delta * 22.0)
 	_odrzut += krok
@@ -445,7 +460,59 @@ func _sciana_przy_wychyleniu(strona: float) -> bool:
 	return not space.intersect_ray(q).is_empty()
 
 
+## Przełażenie przez niską przeszkodę (barykada, skrzynia, parapet do 1,15 m): [spacja] przy przeszkodzie.
+## Wolne (z plecakiem jeszcze wolniej), głośne, broń na chwilę w dół.
+var _przelaz := {}
+
+
+func _znajdz_przeszkode() -> Dictionary:
+	var space := get_world_3d().direct_space_state
+	var przod := -global_basis.z
+	przod.y = 0.0
+	przod = przod.normalized()
+	var p0 := global_position
+	var traf := {}
+	for h in [0.3, 0.6, 0.9]:
+		var r := space.intersect_ray(PhysicsRayQueryParameters3D.create(p0 + Vector3.UP * h, p0 + Vector3.UP * h + przod * 0.8, Balistyka.WARSTWA_SWIAT))
+		if not r.is_empty():
+			traf = r
+			break
+	if traf.is_empty():
+		return {}
+	# nad przeszkodą musi być wolno (nie ściana)
+	var nad := space.intersect_ray(PhysicsRayQueryParameters3D.create(p0 + Vector3.UP * 1.35, p0 + Vector3.UP * 1.35 + przod * 1.3, Balistyka.WARSTWA_SWIAT))
+	if not nad.is_empty():
+		return {}
+	var d := p0.distance_to((traf["position"] as Vector3) * Vector3(1, 0, 1) + Vector3(0, p0.y, 0))
+	var gora_r := space.intersect_ray(PhysicsRayQueryParameters3D.create(p0 + przod * (d + 0.25) + Vector3.UP * 1.4, p0 + przod * (d + 0.25) + Vector3.UP * 0.1, Balistyka.WARSTWA_SWIAT))
+	if gora_r.is_empty():
+		return {}
+	var gora: Vector3 = gora_r["position"]
+	var wys := gora.y - p0.y
+	if wys < 0.3 or wys > 1.15:
+		return {}
+	var lad_r := space.intersect_ray(PhysicsRayQueryParameters3D.create(p0 + przod * (d + 0.95) + Vector3.UP * 1.4, p0 + przod * (d + 0.95) + Vector3.DOWN * 0.6, Balistyka.WARSTWA_SWIAT))
+	var lad: Vector3 = (lad_r["position"] as Vector3) if not lad_r.is_empty() else gora + przod * 0.7
+	return {"a": p0, "gora": gora + Vector3.UP * 0.05, "lad": lad + Vector3.UP * 0.02, "wys": wys}
+
+
 func _ruch(delta: float, aktywne: bool) -> void:
+	if not _przelaz.is_empty():
+		_przelaz["t"] = float(_przelaz["t"]) + delta
+		var f := clampf(float(_przelaz["t"]) / float(_przelaz["czas"]), 0.0, 1.0)
+		var a: Vector3 = _przelaz["a"]
+		var g: Vector3 = _przelaz["gora"]
+		var l: Vector3 = _przelaz["lad"]
+		# najpierw wspięcie (kolano na przeszkodzie), potem przejście i zsunięcie
+		var p := a.lerp(Vector3(a.x, g.y, a.z), smoothstep(0.0, 0.45, f)).lerp(g, smoothstep(0.3, 0.6, f)).lerp(l, smoothstep(0.6, 1.0, f))
+		global_position = p
+		velocity = Vector3.ZERO
+		kucanie = move_toward(kucanie, 0.6 if f < 0.75 else 0.0, delta * 3.0)
+		if f >= 1.0:
+			_przelaz = {}
+			bron.animacja_akcji("")
+			Dzwiek.krok(global_position, get_parent(), -6.0, 0.8)
+		return
 	var kier := Vector3.ZERO
 	var chce_kucac := false
 	var chce_biec := false
@@ -477,10 +544,29 @@ func _ruch(delta: float, aktywne: bool) -> void:
 		v *= 0.45
 	if akcja.get("ciagniecie", false):
 		v = minf(v, 0.55)       # 80 kg martwego ciężaru
+	if not _chwyt.is_empty() and bool(_chwyt.get("aktywny", false)) and is_instance_valid(_chwyt["cel"]):
+		if _chwyt["cel"].has_method("limit_predkosci"):
+			v = minf(v, _chwyt["cel"].limit_predkosci())
+		else:
+			v = minf(v, 0.9)    # ręka na klamce
+		moze_biec = false
 	if ruch_z_ekwipunkiem and Sterowanie.blokada:
 		# zerkanie w ładownice w marszu: tylko powoli, bez biegu
 		v = minf(v, PREDKOSC_KUC)
 		moze_biec = false
+	if aktywne and Input.is_action_just_pressed("postawa_broni") and bron.przedmiot != null:
+		bron.nisko = not bron.nisko
+		Dzwiek.graj("szelest_0", -16.0, 0.9)
+		komunikat.emit("Broń nisko – swobodniej, ale do strzału dłużej" if bron.nisko else "Broń wysoko – gotowa, ręce się męczą")
+	if not bron.nisko and bron.przedmiot != null and bron.ads < 0.3:
+		v *= 0.94           # broń w gotowości: krok krótszy
+	# ostrożny krok [Alt]: pięta-palce, prawie bezgłośnie, ok. 0,9 m/s
+	ostroznie = aktywne and Input.is_action_pressed("ostrozny") and not moze_biec
+	if ostroznie:
+		v = minf(v, 0.9)
+	# przeciążenie: każdy krok męczy (nawet bez biegu)
+	if prog >= 3 and kier.length() > 0.1:
+		wytrzymalosc = maxf(0.0, wytrzymalosc - delta * 2.5)
 	if oglusz > 0.0:
 		v *= 1.0 - 0.45 * minf(1.0, oglusz / 2.0)
 	if bron.ads > 0.5:
@@ -520,7 +606,19 @@ func _ruch(delta: float, aktywne: bool) -> void:
 				wstrzas_kieszeni(clampf(0.08 + wys * 0.06, 0.08, 0.35), "upadek")
 			_ladowanie = clampf(0.05 + wys * 0.08, 0.05, 0.22)
 			Dzwiek.krok(global_position, get_parent(), clampf(-6.0 + wys * 3.0, -6.0, 3.0), 0.8)
-		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
+		var przesz := {}
+		if aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and akcja.is_empty():
+			przesz = _znajdz_przeszkode()
+		if not przesz.is_empty():
+			przesz["t"] = 0.0
+			przesz["czas"] = 0.9 + float(przesz["wys"]) * 0.8 + prog * 0.3
+			_przelaz = przesz
+			bron.animacja_akcji("schowaj")
+			wytrzymalosc = maxf(0.0, wytrzymalosc - 8.0 - prog * 4.0)
+			Dzwiek.graj_3d(Dzwiek.wariant("szelest"), global_position + Vector3.UP, get_parent(), -8.0, 0.8, 10.0)
+			Gra.emituj_halas(global_position, 6.0 + prog * 2.0, self)
+			wstrzas_kieszeni(0.08, "skok")
+		elif aktywne and not (ruch_z_ekwipunkiem and Sterowanie.blokada) and Input.is_action_just_pressed("skok") and prog < 3 and wytrzymalosc > 12.0 and kucanie < 0.3:
 			velocity.y = 3.0
 			wytrzymalosc -= 15.0
 			wstrzas_kieszeni(0.06, "skok")
@@ -533,18 +631,18 @@ func _ruch(delta: float, aktywne: bool) -> void:
 	move_and_slide()
 	# kroki i hałas
 	var pozioma := Vector2(velocity.x, velocity.z).length()
-	halas_ruchu = clampf(pozioma / PREDKOSC_BIEG, 0.0, 1.0) * (0.35 if kucanie > 0.5 else 1.0)
+	halas_ruchu = clampf(pozioma / PREDKOSC_BIEG, 0.0, 1.0) * (0.35 if kucanie > 0.5 else 1.0) * (0.4 if ostroznie else 1.0)
 	if is_on_floor() and pozioma > 0.4:
 		_krok += pozioma * delta
 		var dl := 0.85 if moze_biec else 0.62
 		if _krok > dl:
 			_krok = 0.0
-			var gl := -14.0 if kucanie > 0.5 else (-4.0 if moze_biec else -9.0)
+			var gl := -14.0 if kucanie > 0.5 else (-4.0 if moze_biec else (-16.0 if ostroznie else -9.0))
 			Dzwiek.krok(global_position, get_parent(), gl + prog * 1.5, 0.95 if prog >= 2 else 1.0)
 			# szelest ubrania i oporządzenia (przy kucaniu i obciążeniu częściej słychać siebie)
 			if randf() < (0.35 if kucanie > 0.5 else 0.15 + prog * 0.08):
 				Dzwiek.graj_3d(Dzwiek.wariant("szelest"), global_position + Vector3.UP * 1.0, get_parent(), -22.0 + prog * 2.0, randf_range(0.85, 1.15), 6.0)
-			var zasieg := 2.5 if kucanie > 0.5 else (11.0 if moze_biec else 6.0)
+			var zasieg := 2.5 if kucanie > 0.5 else (11.0 if moze_biec else (2.0 if ostroznie else 6.0))
 			# brzęk luźnego metalu w plecaku i kieszeniach (w biegu najgłośniej, przy kucaniu prawie wcale)
 			var brz := ekw.brzek() * (1.0 if moze_biec else (0.15 if kucanie > 0.5 else 0.45))
 			if brz > 0.8:
@@ -565,12 +663,20 @@ func _dzwieki_ciala(delta: float) -> void:
 		var f := 1.0 - wytrzymalosc / 40.0
 		Dzwiek.graj("oddech", lerpf(-20.0, -9.0, f), lerpf(1.0, 1.25, f))
 		_oddech_t = lerpf(2.4, 1.7, f)
+		# zadyszkę słychać – bliski wróg wie, że ktoś tu jest
+		if not tryb_bazy:
+			Gra.emituj_halas(global_position, lerpf(2.0, 5.0, f), self)
 	var hp := cialo.procent()
 	_serce_t -= delta
-	if hp < 0.4 and _serce_t <= 0.0:
-		var f2 := 1.0 - hp / 0.4
-		Dzwiek.graj("serce", lerpf(-16.0, -4.0, f2), 1.0)
-		_serce_t = lerpf(1.0, 0.55, f2)
+	# serce: ciężkie rany albo stres (kule obok głowy)
+	var f2 := maxf(1.0 - hp / 0.4 if hp < 0.4 else 0.0, (stres - 0.35) / 0.65 if stres > 0.35 else 0.0)
+	if f2 > 0.0 and _serce_t <= 0.0:
+		Dzwiek.graj("serce", lerpf(-18.0, -5.0, f2), 1.0 + stres * 0.1)
+		_serce_t = lerpf(1.0, 0.5, f2)
+	# szybki oddech w stresie (nawet bez biegu)
+	if stres > 0.55 and _oddech_t <= 0.0 and wytrzymalosc >= 40.0:
+		Dzwiek.graj("oddech", -18.0, 1.2)
+		_oddech_t = 1.9
 
 
 func _sufit_nisko() -> bool:
@@ -650,6 +756,21 @@ var przygniecenie := 0.0       # 0..1 – ostrzał tuż obok: ciemnieje obraz, d
 func przygniec(sila: float) -> void:
 	przygniecenie = minf(1.0, przygniecenie + 0.22 * sila)
 	_kop += 0.004 * sila
+	stres = minf(1.0, stres + 0.08 * sila)
+
+
+var stres := 0.0               # 0..1 – kule obok, trafienia, bliskie wybuchy: drżą ręce, serce wali, czynności idą wolniej
+
+
+## Kula przeleciała tuż obok (wołane przez strzelającego): świst, przygniecenie, stres; bardzo blisko –
+## smuga przez kadr i szarpnięcie głowy.
+func swist(dd: float, a: Vector3, b: Vector3) -> void:
+	var s := 1.0 - dd / 1.8
+	przygniec(s)
+	stres = minf(1.0, stres + 0.1 * s)
+	if dd < 0.8:
+		get_tree().call_group("hud", "blisko_kuli", a, b, 1.0 - dd / 0.8)
+		kopniecie(1.2 * (1.0 - dd / 0.8))
 var _potrzeby_prog := {"glod": 100.0, "pragnienie": 100.0}
 
 
@@ -858,6 +979,10 @@ func _samouczek() -> void:
 ## Mnożnik odzyskiwania sił (głód, pragnienie).
 func mnoznik_sil() -> float:
 	var m := 1.0
+	# zmęczenie całego rajdu: po pół godzinie w strefie siły wracają coraz wolniej (do −45%)
+	var rajd = get_tree().get_first_node_in_group("ui_rajdu") if not tryb_bazy else null
+	if rajd and float(rajd.get("czas")) > 1800.0:
+		m *= 1.0 - minf(0.45, (float(rajd.get("czas")) - 1800.0) / 3600.0)
 	if cialo.zlamanie["klatka"] and cialo.przeciwbol <= 0.0:
 		m *= 0.5           # pęknięte żebro: płytki oddech, siły wracają wolno
 	if float(Gra.potrzeby["glod"]) < 25.0:
@@ -945,7 +1070,8 @@ func postep_kroku() -> float:
 func _akcje(delta: float) -> void:
 	if akcja.is_empty():
 		return
-	akcja["t"] += delta
+	# w stresie palce nie trafiają: czynności (magazynek, opatrunek, zamki) idą wolniej
+	akcja["t"] += delta * (1.0 if akcja.get("mapa", false) or akcja.get("ciagniecie", false) else 1.0 / (1.0 + stres * 0.45))
 	var kroki: int = akcja["kroki"]
 	if kroki > 0:
 		var krok: float = float(akcja["czas"]) / kroki
@@ -988,9 +1114,13 @@ func zaplanuj(nazwa: String, cb: Callable) -> void:
 
 # ------------------------------------------------------------------ ciągnięcie zwłok
 
+var _obrot_zaleg := Vector2.ZERO  # obrót jeszcze „w drodze” (bezwładność broni)
+var ostroznie := false          # [Alt] – ostrożny krok
+var rodzaj_celu := ""            # "reka" – można coś zrobić, "chwyt" – można chwycić i przesunąć ([F] przytrzymaj)
 var _plyta_t: Array = []          # chwile kul zatrzymanych przez płytę (seria = pęknięte żebro)
 var _ciagniete: Ragdoll = null
 var _ciag_dzw := 0.0
+var _ciag_zaklin := 0.0
 
 
 ## Chwyt za kołnierz i ciągnięcie ciała (schować w ciemnym kącie, za drzwiami): broń schowana, krok bardzo
@@ -1019,7 +1149,9 @@ func _ciagnij(delta: float) -> void:
 	przod.y = 0.0
 	# ciało przed graczem, nisko (pochylony, ciągnie tyłem albo przodem – jak chce gracz)
 	_ciagniete.ciagnij(global_position + przod.normalized() * 0.85 + Vector3.UP * 0.35)
-	if Vector2(_ciagniete.srodek().x - global_position.x, _ciagniete.srodek().z - global_position.z).length() > 2.8:
+	var odl_c := Vector2(_ciagniete.srodek().x - global_position.x, _ciagniete.srodek().z - global_position.z).length()
+	_ciag_zaklin = _ciag_zaklin + delta if odl_c > 2.6 else 0.0
+	if _ciag_zaklin > 1.2 or odl_c > 3.6:
 		# zaklinowane o mebel – wyrywa się z ręki
 		_ciagniete.pusc()
 		_ciagniete = null
@@ -1035,7 +1167,53 @@ func _ciagnij(delta: float) -> void:
 	wytrzymalosc = maxf(0.0, wytrzymalosc - delta * 4.0 * pozioma)
 
 
+# ------------------------------------------------------------------ chwyt (drzwi, przedmioty)
+
+var _chwyt := {}
+
+
+func pusc_chwyt() -> void:
+	if not _chwyt.is_empty() and is_instance_valid(_chwyt["cel"]) and bool(_chwyt["aktywny"]) and _chwyt["cel"].has_method("pusc_chwyt"):
+		_chwyt["cel"].pusc_chwyt(self)
+	_chwyt = {}
+
+
+func _obsluz_chwyt(delta: float, aktywne: bool) -> void:
+	if _chwyt.is_empty():
+		return
+	var cel = _chwyt["cel"]
+	if not is_instance_valid(cel):
+		_chwyt = {}
+		return
+	_chwyt["t"] = float(_chwyt["t"]) + delta
+	var trzyma := aktywne and Input.is_action_pressed("interakcja") and akcja.is_empty()
+	if not trzyma:
+		if not bool(_chwyt["aktywny"]) and cel.has_method("interakcja") and aktywne:
+			cel.interakcja(self)     # krótkie wciśnięcie: zwykła czynność
+		pusc_chwyt()
+		return
+	if not bool(_chwyt["aktywny"]) and (float(_chwyt["t"]) > 0.22 or float(_chwyt["suma"]) > 6.0):
+		_chwyt["aktywny"] = true
+		if cel.has_method("chwyc"):
+			cel.chwyc(self)
+		Dzwiek.graj("szelest_0", -16.0, 1.2)
+	if bool(_chwyt["aktywny"]):
+		var odl: float = (cel as Node3D).global_position.distance_to(global_position)
+		if odl > 3.2:
+			pusc_chwyt()
+			return
+		cel.chwyc_ruch(self, _chwyt["m"], delta)
+		_chwyt["m"] = Vector2.ZERO
+
+
 func _interakcje(aktywne: bool) -> void:
+	_obsluz_chwyt(get_physics_process_delta_time(), aktywne)
+	if not _chwyt.is_empty() and bool(_chwyt["aktywny"]):
+		cel_interakcji = _chwyt["cel"]
+		rodzaj_celu = "chwyt"
+		tekst_interakcji = ""
+		return
+	rodzaj_celu = ""
 	# mapa w rękach: [F], ekwipunek albo pasek chowają ją (ręce potrzebne do czegoś innego)
 	if akcja.get("mapa", false) and (Sterowanie.blokada or (aktywne and Input.is_action_just_pressed("interakcja"))):
 		przerwij_akcje()
@@ -1081,13 +1259,19 @@ func _interakcje(aktywne: bool) -> void:
 		return
 	cel_interakcji = cel
 	tekst_interakcji = cel.tekst_interakcji(self) if cel.has_method("tekst_interakcji") else "Użyj"
+	var chwytny: bool = cel.has_method("chwyc_ruch") and not (cel is Drzwi and not (cel as Drzwi).mozna_chwycic(self))
+	rodzaj_celu = "chwyt" if chwytny else "reka"
 	if cel is Pojemnik and (cel as Node).has_meta("ragdoll") and _ciagniete == null:
 		tekst_interakcji += "    [Z] ciągnij za kołnierz"
 		if aktywne and Input.is_action_just_pressed("ciagnij") and akcja.is_empty():
 			_zacznij_ciagnac(cel)
 			return
-	if aktywne and Input.is_action_just_pressed("interakcja") and cel.has_method("interakcja"):
-		cel.interakcja(self)
+	if aktywne and Input.is_action_just_pressed("interakcja") and _chwyt.is_empty():
+		if chwytny and akcja.is_empty():
+			# przytrzymanie = chwyt (drzwi, skrzynka); krótkie wciśnięcie = zwykła czynność
+			_chwyt = {"cel": cel, "t": 0.0, "m": Vector2.ZERO, "suma": 0.0, "aktywny": false}
+		elif cel.has_method("interakcja"):
+			cel.interakcja(self)
 
 
 ## Kładzie przedmiot w konkretnym miejscu (odłożenie z ekwipunku tam, gdzie wskazał kursor).
@@ -1172,6 +1356,7 @@ func trafiony(punkt: Vector3, obr: float, pen: float, od_kogo: Node, srut := fal
 		ogluszenie(0.3, "")
 	cialo.obrazenia(czesc, wynik["obr"], "srut" if srut else "pocisk")
 	_trafienie_shake = 1.0 if wynik["przebity"] else 0.5
+	stres = minf(1.0, stres + (0.3 if wynik["przebity"] else 0.18))
 	_odrzut_cel += Vector2(randf_range(-1.5, 1.5), randf_range(0.5, 2.0))
 	if wynik["pancerz"]:
 		Dzwiek.graj("trafienie_pancerz", -2.0)
