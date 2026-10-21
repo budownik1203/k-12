@@ -2560,6 +2560,35 @@ func _zrzut_animacji(katalog: String) -> void:
 		await _klatki(40)
 		await _zapisz(katalog, "an_zegarek")
 		return
+	if OS.get_cmdline_user_args().has("--latarka_przeladowanie"):
+		# chwyt Harriesa: latarka w lewej dłoni pod pistoletem – ta dłoń z latarką sięga po magazynek
+		Gra.ekw.sloty["util0"] = Przedmiot.nowy("latarka")
+		var pwl: Przedmiot = Gra.nowy_naladowany("pw9", "a_9x18")
+		pwl.dane["mag"].dane["naboje"] = 2
+		Gra.ekw.sloty["pistolet"] = pwl
+		Gra.ekw.kieszenie.dodaj(Gra.magazynek("mag_pw9", "a_9x18", 8))
+		gracz._wybierz_bron("pistolet")
+		await _klatki(40)
+		gracz.wez_latarke()
+		await _klatki(60)
+		print("LATARKA: w ręce %s, broń %s" % [gracz.latarka_w_rece, b.przedmiot.id if b.przedmiot else "-"])
+		var lat0: Vector3 = b._lat_node.position if b._lat_node else Vector3.ZERO
+		await _zapisz(katalog, "lat_0")
+		b._zacznij_przeladowanie(false)
+		var tl: float = b.stan_total
+		var max_off := 0.0
+		for fr in [0.15, 0.35, 0.55, 0.72, 0.95]:
+			while b.stan == "przeladowanie" and b.stan_t < tl * fr:
+				await get_tree().process_frame
+				if b._lat_node:
+					max_off = maxf(max_off, (b._lat_node.position - lat0).length())
+			await _zapisz(katalog, "lat_%d" % int(fr * 100))
+		while b.stan != "gotowa":
+			await get_tree().process_frame
+		await _klatki(30)
+		var wrocila: float = (b._lat_node.position - lat0).length() if b._lat_node else 9.0
+		print("TEST LATARKI PRZY PRZEŁADOWANIU: dłoń z latarką sięga %.2f m, wróciła (%.3f) %s" % [max_off, wrocila, "OK" if max_off > 0.1 and wrocila < 0.01 else "BŁĄD"])
+		return
 	# PW-9: ostatni nabój -> zamek w tyle, potem przeładowanie
 	var pw: Przedmiot = Gra.nowy_naladowany("pw9", "a_9x18")
 	pw.dane["mag"].dane["naboje"] = 0

@@ -97,7 +97,8 @@ func chwyc_ruch(g, _m: Vector2, delta: float) -> void:
 	if not _chwycony:
 		chwyc(g)
 	var kam: Camera3D = g.kamera
-	var cel: Vector3 = kam.global_position - kam.global_basis.z * _odl
+	# niesione na wysokości piersi, nie przed oczami (zasłaniałoby widok); ciężkie i tak suną po podłodze
+	var cel: Vector3 = kam.global_position - kam.global_basis.z * _odl - Vector3.UP * 0.45
 	var lekki := mass < 15.0
 	var srodek := global_position + Vector3.UP * float(RODZAJE[rodzaj]["r"].y) * 0.5
 	var d := cel - srodek
@@ -121,6 +122,37 @@ func chwyc_ruch(g, _m: Vector2, delta: float) -> void:
 
 func pusc_chwyt(_g) -> void:
 	_chwycony = false
+	sleeping = false
+
+
+var _straz_t := randf()
+
+
+## Straż przed „lewitacją”: przedmiot, który zasnął albo utknął w powietrzu (wybity przez skrzydło drzwi,
+## odepchnięty o krawędź, upuszczony w niefortunnym miejscu), budzi się i spada; gdyby wbił się w strop
+## albo przeleciał poza budynek – wraca na najbliższą podłogę.
+func _physics_process(delta: float) -> void:
+	if _chwycony:
+		return
+	_straz_t -= delta
+	if _straz_t > 0.0:
+		return
+	_straz_t = 1.0
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.1, global_position + Vector3.DOWN * 4.0, Balistyka.WARSTWA_SWIAT | WARSTWA)
+	q.exclude = [get_rid()]
+	var r := space.intersect_ray(q)
+	if r.is_empty():
+		return
+	var luz: float = global_position.y - float((r["position"] as Vector3).y)
+	if luz > 0.12 and linear_velocity.length() < 0.05:
+		sleeping = false
+		apply_central_impulse(Vector3.DOWN * mass * 0.5)
+	# wbity w strop / zawieszony wysoko nad podłogą (pod sufitem) – na podłogę pod sobą
+	if luz > 1.6 and linear_velocity.length() < 0.3:
+		global_position = (r["position"] as Vector3) + Vector3.UP * 0.03
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
 
 
 ## Ciężar w rękach spowalnia marsz (gracz): lekkie prawie nie, szafkę ledwo.

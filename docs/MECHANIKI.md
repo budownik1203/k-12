@@ -106,3 +106,4 @@ Z 32 propozycji wybrane do realizacji. Przy każdej: co już jest w grze lub w p
 | Zamek i klin z drugiej strony | nieznane, póki nie naciśniesz klamki (ciche szarpnięcie) | wcześniej napis zdradzał stan drzwi z daleka |
 | Czas i wyjścia | czas rajdu i okna czasowe na zegarku [H]; stan wyjść na mapie [O]; brak pływającej listy | HUD bez wiedzy, której postać nie ma; zegarek i mapa to rzeczy, nie nakładki |
 | Kompas | znaczniki wyjść tylko z mapą w rękach | mapa + kompas = namiar; sam kompas nie wie, gdzie jest brama |
+| Celownik | bez kropki – z biodra na wyczucie, dokładnie tylko przez przyrządy | kropka na środku była podpowiedzią, której nie ma w ręku |

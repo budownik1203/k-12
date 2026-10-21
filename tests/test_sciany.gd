@@ -87,6 +87,32 @@ func _ready() -> void:
 					get_viewport().get_texture().get_image().save_png(kadry.path_join("okno_%d_%d.png" % [d.x, d.y]))
 					kam.queue_free()
 					sw.queue_free()
+		if args.has("--przeglad") and kadry != "" and z <= 2:
+			# przegląd korytarzy: z każdego kwadratu korytarza w cztery strony (do obejrzenia na arkuszu)
+			var kam2 := Camera3D.new()
+			swiat.add_child(kam2)
+			kam2.current = true
+			var sw2 := OmniLight3D.new()
+			sw2.omni_range = 14.0
+			sw2.light_energy = 0.8
+			kam2.add_child(sw2)
+			var nr := 0
+			for g2 in [gen, gen_p]:
+				var off := Vector3.ZERO if g2 == gen else pn.position
+				for k in g2.komorki:
+					if g2.komorki[k]["typ"] != "korytarz":
+						continue
+					for d in GeneratorBiomu.DIRS:
+						var c: Vector3 = g2._srodek(k) + off + Vector3.UP * 1.6
+						kam2.global_position = c - Vector3(d.x, 0, d.y) * 1.2
+						kam2.look_at(c + Vector3(d.x, 0, d.y) * 4.0)
+						for _f in 3:
+							await get_tree().process_frame
+						await RenderingServer.frame_post_draw
+						var im := get_viewport().get_texture().get_image()
+						im.resize(480, 270)
+						im.save_png(kadry.path_join("kor_%d_%03d_%s_%d_%d_%d_%d.png" % [z, nr, "p" if g2 == gen else "g", k.x, k.y, d.x, d.y]))
+						nr += 1
 		swiat.queue_free()
 		await get_tree().process_frame
 	print("TEST ŚCIAN: sprawdzonych %d, kierunków okien %d, błędów %d" % [sprawdzone, okna_kier.size(), bledy])

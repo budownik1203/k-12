@@ -76,6 +76,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 	_reka_p = null
 	_reka_l = null
 	_chor = null
+	_chor_reka0 = null
 	_chor_wezly.clear()
 	_ruchome.clear()
 	_luska_reka = null
@@ -151,6 +152,9 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 			_lat_node.position = LAT_HARRIS
 			_lat_node.rotation = Vector3(0.03, 0.0, 0)
 			model.add_child(_lat_node)
+			# łokieć w przestrzeni broni: gdy dłoń z latarką idzie po magazynek, przedramię zostaje pod nią
+			if _reka_l and is_instance_valid(_reka_l):
+				_reka_l.celuj_lokiec(model.transform * (LAT_HARRIS + Vector3(-0.1, -0.3, 0.32)), self)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		if mi == _blysk or mi == _szklo:
 			continue
@@ -175,9 +179,17 @@ const LAT_HARRIS := Vector3(-0.02, -0.075, 0.02)   # latarka pod pistoletem (chw
 func _lat_za_reka(off: Vector3) -> void:
 	if _lewa != null or not latarka_w_rece or _lat_node == null or not is_instance_valid(_lat_node):
 		return
-	_lat_node.position = LAT_HARRIS + off
+	off.z = minf(off.z, 0.04)       # nie pod nos kamery
+	# liczone względem kamery (nie przechylanej broni): dłoń z latarką nie obraca się razem z pistoletem,
+	# tylko schodzi po magazynek i wraca; nadgarstek lekko w dół – snop ucieka na podłogę
+	if _model_spocz == null:
+		_model_spocz = model.transform
 	var w := clampf(off.length() / 0.25, 0.0, 1.0)
-	_lat_node.rotation = Vector3(0.03 - 0.9 * w, 0.35 * w, 0.0)
+	var spocz: Transform3D = (_model_spocz as Transform3D) * Transform3D(Basis.from_euler(Vector3(0.03, 0, 0)), LAT_HARRIS)
+	var cel := Transform3D(Basis(Vector3.RIGHT, -0.45 * w) * spocz.basis, spocz.origin + off)
+	_lat_node.transform = model.transform.affine_inverse() * cel
+
+
 var _kropka_poz := Vector3.ZERO
 var _lat_bron_poz := Vector3.ZERO    # soczewka latarki na broni (współrzędne modelu)
 var _bez_plomienia := false
@@ -1105,6 +1117,8 @@ func _chor_koniec() -> void:
 	if _chor == null:
 		return
 	_chor = null
+	_chor_reka0 = null
+	_model_spocz = null
 	for w in _chor_wezly:
 		if is_instance_valid(w):
 			w.queue_free()
@@ -1127,7 +1141,26 @@ func _kop_anim(r: Vector3, p: Vector3) -> void:
 
 
 ## Choreografia w tej klatce: lewa dłoń, łokieć, palce, przechył broni.
+var _model_spocz = null    # chwyt Harriesa: położenie broni przed przeładowaniem (odniesienie dla dłoni z latarką)
+var _chor_reka0 = null     # pozycja lewej dłoni na początku choreografii (chwyt Harriesa: przesunięcie latarki)
+
+
 func _zastosuj_chor() -> Array:
+	if _lewa == null and latarka_w_rece:
+		# lewa dłoń trzyma latarkę: idzie z nią po magazynek i z powrotem (snop ucieka w dół)
+		if _chor_reka0 == null:
+			_chor_reka0 = _chor.reka.origin
+		if _lat_node and is_instance_valid(_lat_node):
+			# dłoń z latarką idzie tam, gdzie choreografia prowadzi lewą dłoń (ładownica, gniazdo magazynka)
+			if _model_spocz == null:
+				_model_spocz = model.transform
+			var spocz: Transform3D = (_model_spocz as Transform3D) * Transform3D(Basis.from_euler(Vector3(0.03, 0, 0)), LAT_HARRIS)
+			var reka_s: Vector3 = model.transform * _chor.reka.origin
+			var start_s: Vector3 = (_model_spocz as Transform3D) * (_chor_reka0 as Vector3)
+			var w := clampf(reka_s.distance_to(start_s) / 0.2, 0.0, 1.0)
+			var cel_p := spocz.origin.lerp(reka_s + Vector3(0.0, -0.035, 0.0), w)
+			var cel := Transform3D(Basis(Vector3.RIGHT, -0.45 * w) * spocz.basis, cel_p)
+			_lat_node.transform = model.transform.affine_inverse() * cel
 	if _lewa and _reka_l and is_instance_valid(_reka_l):
 		_lewa.transform = Transform3D()
 		_reka_l.transform = _chor.reka
@@ -1468,6 +1501,7 @@ func _process(delta: float) -> void:
 		if _lewa and stan != "ladowanie_wewn" and stan != "sprawdzanie" and stan != "usuwanie":
 			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
 		if _lewa == null and latarka_w_rece and _lat_node and is_instance_valid(_lat_node) and przedmiot != null:
+			_model_spocz = null
 			_lat_node.position = _lat_node.position.lerp(LAT_HARRIS, minf(1.0, delta * 12.0))
 			_lat_node.rotation = _lat_node.rotation.lerp(Vector3(0.03, 0.0, 0.0), minf(1.0, delta * 12.0))
 	if stan != "ladowanie_wewn" and _chor == null:
