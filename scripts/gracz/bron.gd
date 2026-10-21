@@ -148,7 +148,7 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 		if latarka_w_rece:
 			# chwyt Harriesa: latarka pod pistoletem, nadgarstki skrzyżowane
 			_lat_node = _wezel_latarki()
-			_lat_node.position = Vector3(-0.02, -0.075, 0.02)
+			_lat_node.position = LAT_HARRIS
 			_lat_node.rotation = Vector3(0.03, 0.0, 0)
 			model.add_child(_lat_node)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
@@ -167,6 +167,17 @@ func ustaw(p: Przedmiot, latarka := false) -> void:
 
 
 var _szklo: MeshInstance3D
+const LAT_HARRIS := Vector3(-0.02, -0.075, 0.02)   # latarka pod pistoletem (chwyt Harriesa)
+
+
+## Chwyt Harriesa: lewa dłoń trzyma latarkę, więc to ona (z latarką w garści) sięga po magazynek,
+## podsuwa go do chwytu i wraca pod pistolet – snop przy tym ucieka w dół.
+func _lat_za_reka(off: Vector3) -> void:
+	if _lewa != null or not latarka_w_rece or _lat_node == null or not is_instance_valid(_lat_node):
+		return
+	_lat_node.position = LAT_HARRIS + off
+	var w := clampf(off.length() / 0.25, 0.0, 1.0)
+	_lat_node.rotation = Vector3(0.03 - 0.9 * w, 0.35 * w, 0.0)
 var _kropka_poz := Vector3.ZERO
 var _lat_bron_poz := Vector3.ZERO    # soczewka latarki na broni (współrzędne modelu)
 var _bez_plomienia := false
@@ -563,6 +574,7 @@ func _animuj_przeladowanie(f: float) -> void:
 		mag_node.position = mag
 	if not (_byl_pusty and not jest_pistolet() and f >= 0.78):
 		_roll_l = move_toward(_roll_l, 0.0, 0.2)
+	_lat_za_reka((reka - p_przod) * 0.7)
 	if _lewa:
 		if jest_pistolet():
 			_lewa.position = (reka - p_przod) * 0.7
@@ -1428,6 +1440,11 @@ func _process(delta: float) -> void:
 				var wys := smoothstep(0.2, 0.4, f) * (1.0 - smoothstep(0.7, 0.88, f))
 				mag_node.position = Vector3(0, -0.055, 0.012) * wys
 				mag_node.rotation = Vector3(-0.15, 0, 0) * wys
+				if _lewa == null and latarka_w_rece:
+					var p_mag2: Vector3 = Vector3(md["mag"][0][0])
+					var cel2 := p_mag2 + Vector3(0, -0.05, 0) + mag_node.position
+					var pp2: Vector3 = Vector3(md["przod"])
+					_lat_za_reka((pp2.lerp(cel2, smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.88, 1.0, f))) - pp2) * 0.7)
 				if _lewa:
 					var p_mag: Vector3 = Vector3(md["mag"][0][0])
 					var cel := p_mag + Vector3(0, -0.05, 0) + mag_node.position
@@ -1450,6 +1467,9 @@ func _process(delta: float) -> void:
 			_odswiez_mag()
 		if _lewa and stan != "ladowanie_wewn" and stan != "sprawdzanie" and stan != "usuwanie":
 			_lewa.position = _lewa.position.lerp(Vector3.ZERO, minf(1.0, delta * 12.0))
+		if _lewa == null and latarka_w_rece and _lat_node and is_instance_valid(_lat_node) and przedmiot != null:
+			_lat_node.position = _lat_node.position.lerp(LAT_HARRIS, minf(1.0, delta * 12.0))
+			_lat_node.rotation = _lat_node.rotation.lerp(Vector3(0.03, 0.0, 0.0), minf(1.0, delta * 12.0))
 	if stan != "ladowanie_wewn" and _chor == null:
 		if _luska_reka and is_instance_valid(_luska_reka):
 			_luska_reka.visible = false

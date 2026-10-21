@@ -699,8 +699,7 @@ class Kropka:
 				draw_line(pp, pp + Vector2(0, kk.y * dl), kz, 1.5)
 		if g.bron.ads > 0.6 and g.bron.podparcie > 0.6 and not g.bron.ma_lunete():
 			draw_string(ThemeDB.fallback_font, c + Vector2(-34, 90), "podparta", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.85, 0.82, 0.7, 0.55))
-		if g.bron.ads < 0.5 and g.bron.przedmiot != null:
-			draw_rect(Rect2(c - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.85, 0.82, 0.7, 0.7))
+		# (kropka celownika usunięta – mierzy się przyrządami albo „z biodra” na wyczucie)
 		# (znacznik trafienia usunięty – o trafieniu mówi tylko to, co widać i słychać)
 		# ikonka przy celowniku: otwarta dłoń – można coś zrobić; zaciśnięta – można chwycić i przesunąć
 		var rodz: String = g.rodzaj_celu

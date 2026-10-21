@@ -734,6 +734,13 @@ func _plan_okien() -> void:
 
 func _okno(a: Vector3, b: Vector3, y0: float, y1: float, d: Vector2i, krata: bool) -> void:
 	var naz := Vector3(d.x, 0, d.y)
+	# kolejność końców jak w ścianach (_scianka): szyba i ościeża licem do wnętrza – inaczej przy połowie
+	# kierunków ścian były odwrócone (niewidoczne od środka) i przez otwór było widać pustkę za budynkiem
+	var dir := Vector2(b.x - a.x, b.z - a.z)
+	if Vector2(-dir.y, dir.x).dot(Vector2(-d.x, -d.y)) < 0.0:
+		var t := a
+		a = b
+		b = t
 	var gl := naz * 0.35
 	var pa := a + gl
 	var pb := b + gl

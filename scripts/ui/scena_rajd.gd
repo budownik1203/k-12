@@ -666,11 +666,11 @@ func _process(delta: float) -> void:
 		_cull_t = 0.3
 		var gp := gracz.global_position
 		var bliskie := []
+		_widocznosc_swiatel(gp)
 		for l in info["lampy"]:
 			if is_instance_valid(l):
 				var d2 := (l as Node3D).global_position.distance_squared_to(gp)
-				(l as Light3D).visible = d2 < 34.0 * 34.0
-				if d2 < 16.0 * 16.0 and (l as Light3D).light_energy > 0.15:
+				if (l as Light3D).visible and d2 < 16.0 * 16.0 and (l as Light3D).light_energy > 0.15:
 					bliskie.append([d2, l])
 				else:
 					(l as Light3D).shadow_enabled = false
@@ -947,6 +947,38 @@ func opusc_rajd() -> void:
 
 ## Otwiera ekran ekwipunku z przeszukiwanym pojemnikiem (wołane przez Pojemnik).
 ## Oświetlenie punktu 0..1 (lampy w pobliżu, latarka gracza skierowana w tę stronę).
+## Renderer Compatibility rysuje ograniczoną liczbę świateł naraz (i najwyżej kilkanaście na obiekt) – nadmiarowe
+## znikały losowo, także te tuż przy graczu (ciemny korytarz, który „zapalał się” dopiero z bliska). Widoczne są więc
+## tylko światła kondygnacji gracza (z drugiej – tylko blisko schodów/stropu) i najwyżej MAKS najbliższych.
+const MAKS_SWIATEL := 40
+var _swiatla: Array = []
+
+
+func _widocznosc_swiatel(gp: Vector3) -> void:
+	if _swiatla.is_empty():
+		for n in swiat.find_children("*", "OmniLight3D", true, false):
+			if gracz.is_ancestor_of(n):
+				continue
+			_swiatla.append(n)
+	var pietro_g := gp.y > GeneratorBiomu.PIETRO_H - 0.6
+	var kand := []
+	for l in _swiatla:
+		if not is_instance_valid(l):
+			continue
+		var lp: Vector3 = (l as Node3D).global_position
+		var d2 := lp.distance_squared_to(gp)
+		var pietro_l := lp.y > GeneratorBiomu.PIETRO_H + 0.1
+		var ok := d2 < 34.0 * 34.0 and (pietro_l == pietro_g or d2 < 10.0 * 10.0)
+		if ok:
+			kand.append([d2, l])
+		else:
+			(l as Light3D).visible = false
+	kand.sort_custom(func(a, b): return a[0] < b[0])
+	for i in kand.size():
+		(kand[i][1] as Light3D).visible = i < MAKS_SWIATEL
+	_swiatla = _swiatla.filter(func(x): return is_instance_valid(x))
+
+
 func oswietlenie(punkt: Vector3) -> float:
 	var best := 0.12
 	if gracz and gracz.latarka and gracz.latarka.visible:
