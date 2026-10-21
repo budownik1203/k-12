@@ -534,17 +534,37 @@ func _przedmioty_i_wylaczniki() -> void:
 							continue
 						var n2: Vector2 = b[4]
 						var nrm := Vector3(n2.x, 0, n2.y)
+						# nie w innym otworze ani oknie tej ściany
+						var w_otw := false
+						for o2 in kom["otwory"][d]:
+							if u > float(o2[0]) - 0.12 and u < float(o2[1]) + 0.12:
+								w_otw = true
+						for ok2 in kom.get("okna", []):
+							if ok2["d"] == d and absf(u - float(ok2["c"])) < float(ok2["w"]) * 0.5 + 0.12:
+								w_otw = true
+						if w_otw:
+							continue
 						var lico: Vector3 = g._punkt_sciany(k, d, u) + off + Vector3.UP * 1.3
-						var rq := space.intersect_ray(PhysicsRayQueryParameters3D.create(lico + nrm * 0.3, lico - nrm * 0.3, Balistyka.WARSTWA_SWIAT))
-						if rq.is_empty():
+						# ściana musi tam być – liczy się tylko mur (skrzydło drzwi, szafa czy skrzynia przed nim nie)
+						var q := PhysicsRayQueryParameters3D.create(lico + nrm * 0.3, lico - nrm * 0.3, Balistyka.WARSTWA_SWIAT)
+						var rq := {}
+						var wykl: Array[RID] = []
+						for _p in 5:
+							q.exclude = wykl
+							rq = space.intersect_ray(q)
+							if rq.is_empty() or rq["collider"] == g.cialo_scian:
+								break
+							wykl.append((rq["collider"] as CollisionObject3D).get_rid())
+						if rq.is_empty() or rq["collider"] != g.cialo_scian:
 							continue
 						var w := Wylacznik.new()
 						w.lampy = lampy
 						w.obszar = r
 						w.wys = off.y
 						swiat.add_child(w)
-						w.global_position = (rq["position"] as Vector3) + (rq["normal"] as Vector3) * 0.005
-						w.look_at(w.global_position + (rq["normal"] as Vector3), Vector3.UP)
+						# na licu ściany (płaszczyzna z planu, nie punkt trafienia czegoś przed nią)
+						w.global_position = lico + nrm * 0.005
+						w.look_at(w.global_position + nrm, Vector3.UP)
 						w.rotate_object_local(Vector3.UP, PI)
 						for gi in w.find_children("*", "GeometryInstance3D", true, false):
 							(gi as GeometryInstance3D).layers = para[3]
@@ -2562,7 +2582,7 @@ func _zrzut_animacji(katalog: String) -> void:
 		var lista := [["rozladowanie", "mag_kb47", "a_762", 2.4, 8], ["rozladowanie", "obrzyn", "a_12", 1.6, 2], ["magazynek", "mag_kb47", "a_762", 3.0, 6], ["magazynek", "mag_pw9", "a_9x18", 2.4, 6],
 			["magazynek", "mag_pm63", "a_9x18", 2.4, 6],
 			["leczenie_bandaz", "bandaz", "", 3.0, 0], ["leczenie_opatrunek", "opatrunek", "", 5.0, 0],
-			["leczenie_szyna", "szyna", "", 6.0, 0], ["leczenie_bolostop", "bolostop", "", 2.0, 0], ["leczenie_apteczka", "apteczka", "", 2.5, 0]]
+			["leczenie_szyna", "szyna", "", 6.0, 0], ["leczenie_bolostop", "bolostop", "", 2.0, 0], ["leczenie_apteczka", "apteczka", "", 2.5, 0], ["picie", "woda", "", 3.5, 0], ["jedzenie", "konserwa", "", 4.0, 0]]
 		for el in lista:
 			if tylko != "" and String(el[1]) != tylko:
 				continue

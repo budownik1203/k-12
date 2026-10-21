@@ -52,6 +52,7 @@ var komorki := {}        # Vector2i -> {"typ", "glebokosc", "rect", "otwory", "o
 var krawedzie := {}      # "a|b" -> {"a", "b", "otwarte", "c" (środek przejścia), "pa", "pb" (punkty po obu stronach)}
 var bud := Kit.Budowniczy.new()
 var cialo_scian: StaticBody3D
+var cialo_okien: StaticBody3D   # kolizja w oknach (szyba w głębi niszy): blokuje, ale nie jest licem muru
 var oslony: Array = []   # {"pos": Vector3, "niska": bool, "mebel": Vector3}
 var spawny: Array = []   # {"pos": Vector3, "komorka": Vector2i, "glebokosc": int}
 var wyjscia: Array = []
@@ -76,6 +77,10 @@ func generuj(ziarno: int, rodzic: Node3D) -> Dictionary:
 	cialo_scian.name = "Sciany"
 	cialo_scian.collision_layer = Balistyka.WARSTWA_SWIAT
 	swiat.add_child(cialo_scian)
+	cialo_okien = StaticBody3D.new()
+	cialo_okien.name = "Okna"
+	cialo_okien.collision_layer = Balistyka.WARSTWA_SWIAT
+	swiat.add_child(cialo_okien)
 	_uklad()
 	_typy()
 	_prostokaty()
@@ -621,7 +626,7 @@ func _scianka(mat: String, p: Vector2, q: Vector2, nrm: Vector2, kolizja: bool, 
 		_bryla(p, q, nrm, y0, y1)
 
 
-func _bryla(p: Vector2, q: Vector2, nrm: Vector2, y0: float, y1: float) -> void:
+func _bryla(p: Vector2, q: Vector2, nrm: Vector2, y0: float, y1: float, okno := false) -> void:
 	var dir := q - p
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
@@ -630,7 +635,7 @@ func _bryla(p: Vector2, q: Vector2, nrm: Vector2, y0: float, y1: float) -> void:
 	bs.size = Vector3(dl if absf(dir.x) > 0.01 else T, y1 - y0, T if absf(dir.x) > 0.01 else dl)
 	cs.shape = bs
 	cs.position = Vector3(sr.x, (y0 + y1) * 0.5, sr.y)
-	cialo_scian.add_child(cs)
+	(cialo_okien if okno else cialo_scian).add_child(cs)
 
 
 ## Ściana osiowa z otworami. wzdluz_x: ściana biegnie wzdłuż osi x (stala = z).
@@ -646,7 +651,7 @@ func _sciana_osiowa(mat: String, wzdluz_x: bool, stala: float, lo: float, hi: fl
 		_scianka(mat, _pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, true, o[2], H)
 		if o[3] > 0.0:
 			_scianka(mat, _pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, true, 0.0, o[3])
-			_bryla(_pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, o[3], o[2])
+			_bryla(_pkt(wzdluz_x, stala, o0), _pkt(wzdluz_x, stala, o1), nrm, o[3], o[2], true)
 		cur = maxf(cur, o1)
 	_scianka(mat, _pkt(wzdluz_x, stala, cur), _pkt(wzdluz_x, stala, hi), nrm, true)
 
@@ -1128,9 +1133,12 @@ func _detale_korytarza(k: Vector2i, drzwi_poz: Array) -> void:
 	var B := preload("res://scripts/core/bryly.gd")
 	var odcinki := []
 	for ram in komorki[k]["ramiona"]:
-		odcinki.append([ram[1], ram[0].x != 0])
+		odcinki.append([ram[1], ram[0].x != 0, false])
 	var rc: Rect2 = komorki[k]["rect"]
-	odcinki.append([rc, odcinki[0][1] if not odcinki.is_empty() else true])
+	var glowny: bool = odcinki[0][1] if not odcinki.is_empty() else true
+	# kwadrat skrzyżowania: obie osie (ściany we wszystkie strony), bez fragmentów w otworach
+	odcinki.append([rc, glowny, true])
+	odcinki.append([rc, not glowny, true])
 	var rura_strona := -1 if rng.randf() < 0.5 else 1
 	var ma_rure := rng.randf() < 0.75
 	for od in odcinki:
@@ -1147,8 +1155,31 @@ func _detale_korytarza(k: Vector2i, drzwi_poz: Array) -> void:
 			return ((r.position.y if poziomo else r.position.x) if strona < 0 else (r.end.y if poziomo else r.end.x))
 		var roz := func(wzdl: float, h: float, gl: float) -> Vector3:
 			return Vector3(wzdl, h, gl) if poziomo else Vector3(gl, h, wzdl)
+		# odcinki ściany po każdej stronie (strona -1 / +1): w kwadracie skrzyżowania bez przejść,
+		# żeby listwa, puszki z kablem i zacieki nie wisiały w powietrzu w świetle korytarza
+		var mury := {-1: [[a0, a1]], 1: [[a0, a1]]}
+		if bool(od[2]):
+			for st in [-1, 1]:
+				var dk := Vector2i(0, st) if poziomo else Vector2i(st, 0)
+				var lista: Array = [[a0, a1]]
+				for o in komorki[k]["otwory"][dk]:
+					var nowa := []
+					for seg in lista:
+						var s0: float = seg[0]
+						var s1: float = seg[1]
+						var o0: float = float(o[0]) - 0.02
+						var o1: float = float(o[1]) + 0.02
+						if o1 <= s0 or o0 >= s1:
+							nowa.append(seg)
+							continue
+						if o0 - s0 > 0.05:
+							nowa.append([s0, o0])
+						if s1 - o1 > 0.05:
+							nowa.append([o1, s1])
+					lista = nowa
+				mury[st] = lista
 		# rury pod sufitem wzdłuż korytarza z uchwytami
-		if ma_rure:
+		if ma_rure and not (bool(od[2]) and poziomo != glowny):
 			var wz: float = sciana_w.call(rura_strona) - rura_strona * 0.16
 			for i in 2:
 				var ww := wz - rura_strona * i * 0.09
@@ -1160,12 +1191,18 @@ func _detale_korytarza(k: Vector2i, drzwi_poz: Array) -> void:
 				u += 1.5
 		# listwa przypodłogowa
 		for st in [-1, 1]:
-			cz.append({"t": "box", "c": pkt.call((a0 + a1) * 0.5, sciana_w.call(st) - st * 0.008, 0.05), "s": roz.call(dl, 0.1, 0.016), "m": "drewno_m", "k": Color(0.35, 0.26, 0.2), "f": 0.0})
-		# rzeczy na ścianach i podłodze
-		var ile := int(dl / 1.2)
+			for seg in mury[st]:
+				var sl: float = float(seg[1]) - float(seg[0])
+				cz.append({"t": "box", "c": pkt.call((float(seg[0]) + float(seg[1])) * 0.5, sciana_w.call(st) - st * 0.008, 0.05), "s": roz.call(sl, 0.1, 0.016), "m": "drewno_m", "k": Color(0.35, 0.26, 0.2), "f": 0.0})
+		# rzeczy na ścianach i podłodze (tylko tam, gdzie jest mur)
+		var ile := int(dl / 1.2) if not bool(od[2]) else int(dl / 2.4)
 		for i in ile:
-			var u2 := rng.randf_range(a0 + 0.3, a1 - 0.3)
 			var st2 := -1 if rng.randf() < 0.5 else 1
+			var segi: Array = (mury[st2] as Array).filter(func(sg): return float(sg[1]) - float(sg[0]) > 0.7)
+			if segi.is_empty():
+				continue
+			var sg2: Array = segi[rng.randi() % segi.size()]
+			var u2 := rng.randf_range(float(sg2[0]) + 0.3, float(sg2[1]) - 0.3)
 			var w2: float = sciana_w.call(st2)
 			var p0: Vector3 = pkt.call(u2, w2, 0.0)
 			if drzwi_poz.any(func(dp): return Vector2((dp as Vector3).x - p0.x, (dp as Vector3).z - p0.z).length() < 1.0):

@@ -518,9 +518,10 @@ func _picie(t: float, f: float, dol: Vector3) -> void:
 	# butelka uniesiona do ust i przechylona, łyki; na końcu opuszczona
 	var m: Node3D = _rek["model"]
 	var uniesienie := smoothstep(0.0, 0.2, f) * (1.0 - smoothstep(0.85, 1.0, f))
-	var sr := (Vector3(0.04, -0.3, -0.4) + dol).lerp(Vector3(0.03, -0.17, -0.3) + dol, uniesienie)
+	# szyjka do ust (w stronę kamery), dno w górę i od siebie – butelka przechylona ok. 110°
+	var sr := (Vector3(0.04, -0.3, -0.4) + dol).lerp(Vector3(0.01, -0.08, -0.25) + dol, uniesienie)
 	m.position = sr
-	m.rotation = Vector3(-0.9 * uniesienie - 0.1 + sin(t * 4.0) * 0.04 * uniesienie, 0.0, 0.0)
+	m.rotation = Vector3(0.1 + 1.8 * uniesienie + sin(t * 4.0) * 0.05 * uniesienie, 0.0, 0.0)
 	_uloz(prawa, sr + Vector3(0.04, -0.02, 0.02), Vector3(-0.6, 0.2, -0.6), Vector3(0.3, 1.0, 0.2))
 	_uloz(lewa, sr + Vector3(-0.03, -0.08, 0.02), Vector3(0.5, 0.4, -0.6), Vector3(-0.2, -1.0, 0.1))
 	lewa.celuj_lokiec(Vector3(-0.26, -0.5, 0.0), self)
