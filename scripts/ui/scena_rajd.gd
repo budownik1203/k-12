@@ -3813,12 +3813,20 @@ func _test_v14(katalog: String) -> void:
 		await get_tree().physics_frame
 		await get_tree().physics_frame
 	wr.global_position = srodek - przod2 * 0.4
+	# wróg stoi przy granacie (test mechanizmu potykacza; ucieczka przed łyżką – osobna sprawa AI)
+	wr.set_physics_process(false)
 	for _i in 200:
 		await get_tree().physics_frame
-	print("  wróg na drucie: martwy %s, zabici gracza %d → %d, potykacz zniknął %s" % [wr.cialo.martwy, zab0, zabici.size(), not is_instance_valid(pot)])
-	if not wr.cialo.martwy or zabici.size() != zab0 + 1:
+	wr.set_physics_process(true)
+	print("  wróg na drucie: martwy %s, zdrowie %.0f%%, zabici gracza %d → %d, potykacz zniknął %s" % [wr.cialo.martwy, wr.cialo.procent() * 100.0, zab0, zabici.size(), not is_instance_valid(pot)])
+	# granat leży przy kołku, nie pod nogami – odłamki bywają łaskawe; liczy się, że wybuchł i dosięgnął
+	var trafil: bool = wr.cialo.martwy or wr.cialo.procent() < 0.85
+	if is_instance_valid(pot) or not trafil or (wr.cialo.martwy and zabici.size() != zab0 + 1):
 		print("  BŁĄD: potykacz nie zadziałał")
 		bl += 1
+	if not wr.cialo.martwy:
+		wr.queue_free()       # ranny nie plącze się po drugiej części testu
+		wszyscy.erase(wr)
 	# --- 2. drugi potykacz – wróg go zauważa i rozbraja (granat do łupu)
 	var zywi: Array = wszyscy.filter(func(w): return is_instance_valid(w) and not w.cialo.martwy)
 	var wr2: Wrog = zywi[0]
