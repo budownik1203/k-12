@@ -33,29 +33,16 @@ func _ready() -> void:
 		var info := Motyw.etykieta("Strefa nie czeka. Czas rajdu płynie dalej.", 13, Motyw.TEKST_CIEMNY)
 		v.add_child(info)
 	_przycisk(v, "Wznów", zamknij)
-	_przycisk(v, "Ustawienia", func(): _ustawienia.visible = not _ustawienia.visible)
+	var przewijane := ScrollContainer.new()
+	przewijane.custom_minimum_size = Vector2(0, 360)
+	przewijane.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	przewijane.visible = false
+	_przycisk(v, "Ustawienia", func(): przewijane.visible = not przewijane.visible)
 	_ustawienia = VBoxContainer.new()
-	_ustawienia.visible = false
-	v.add_child(_ustawienia)
-	_suwak(_ustawienia, "Czułość myszy", "czulosc", 0.2, 3.0, 0.05)
-	_suwak(_ustawienia, "Pole widzenia (FOV)", "fov", 60.0, 100.0, 1.0)
-	_suwak(_ustawienia, "Głośność", "glosnosc", 0.0, 1.0, 0.05)
-	_suwak(_ustawienia, "Głośność tła", "glosnosc_tla", 0.0, 1.0, 0.05)
-	_suwak(_ustawienia, "Kołysanie kamery", "kolysanie", 0.0, 1.0, 0.05)
-	_suwak(_ustawienia, "Skala renderu (wydajność)", "skala_renderu", 0.5, 1.0, 0.05)
-	_suwak(_ustawienia, "Skala interfejsu", "skala_ui", 0.75, 1.6, 0.05)
-	_przelacznik(_ustawienia, "Odwróć oś Y myszy", "odwroc_y")
-	_przelacznik(_ustawienia, "Cienie od lamp", "cienie")
-	_przelacznik(_ustawienia, "Wygładzanie krawędzi", "wygladzanie")
-	_przelacznik(_ustawienia, "Wskazówki samouczka", "samouczek")
-	_przelacznik(_ustawienia, "Proste otwieranie kieszeni (klik zamiast gestu)", "proste_kieszenie")
-	_przelacznik(_ustawienia, "Licznik klatek (FPS)", "pokaz_fps")
-	var rs := Button.new()
-	rs.text = "Pokaż wskazówki od nowa"
-	rs.pressed.connect(func():
-		Gra.ustawienia["samouczek_widziane"] = []
-		Gra.ustawienia["samouczek"] = true)
-	_ustawienia.add_child(rs)
+	_ustawienia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	przewijane.add_child(_ustawienia)
+	v.add_child(przewijane)
+	zbuduj_ustawienia(_ustawienia)
 	if w_rajdzie:
 		_przycisk(v, "Opuść rajd (zaginięcie w akcji)", func():
 			zamknij()
@@ -79,7 +66,32 @@ func _przycisk(v: Control, t: String, f: Callable) -> void:
 	v.add_child(b)
 
 
-func _suwak(v: Control, t: String, klucz: String, mn: float, mx: float, krok: float) -> void:
+## Lista ustawień (menu pauzy i menu główne).
+static func zbuduj_ustawienia(u: Control) -> void:
+	_przelacznik(u, "Pełny ekran  (F11 / Alt+Enter)", "pelny_ekran")
+	_suwak(u, "Czułość myszy", "czulosc", 0.2, 3.0, 0.05)
+	_suwak(u, "Pole widzenia (FOV)", "fov", 60.0, 100.0, 1.0)
+	_suwak(u, "Głośność", "glosnosc", 0.0, 1.0, 0.05)
+	_suwak(u, "Głośność tła", "glosnosc_tla", 0.0, 1.0, 0.05)
+	_suwak(u, "Kołysanie kamery", "kolysanie", 0.0, 1.0, 0.05)
+	_suwak(u, "Skala renderu (wydajność)", "skala_renderu", 0.5, 1.0, 0.05)
+	_suwak(u, "Skala interfejsu", "skala_ui", 0.75, 1.6, 0.05)
+	_przelacznik(u, "Odwróć oś Y myszy", "odwroc_y")
+	_przelacznik(u, "Cienie od lamp", "cienie")
+	_przelacznik(u, "Wygładzanie krawędzi", "wygladzanie")
+	_przelacznik(u, "Wskazówki samouczka", "samouczek")
+	_przelacznik(u, "Proste otwieranie kieszeni (klik zamiast gestu)", "proste_kieszenie")
+	_przelacznik(u, "Licznik klatek (FPS)", "pokaz_fps")
+	var rs := Button.new()
+	rs.text = "Pokaż wskazówki od nowa"
+	rs.pressed.connect(func():
+		Gra.ustawienia["samouczek_widziane"] = []
+		Gra.ustawienia["samouczek"] = true
+		Gra.ustawienia_zmiana.emit())
+	u.add_child(rs)
+
+
+static func _suwak(v: Control, t: String, klucz: String, mn: float, mx: float, krok: float) -> void:
 	var h := HBoxContainer.new()
 	var l := Motyw.etykieta(t, 14)
 	l.custom_minimum_size = Vector2(170, 0)
@@ -104,7 +116,7 @@ func _suwak(v: Control, t: String, klucz: String, mn: float, mx: float, krok: fl
 	v.add_child(h)
 
 
-func _przelacznik(v: Control, t: String, klucz: String) -> void:
+static func _przelacznik(v: Control, t: String, klucz: String) -> void:
 	var c := CheckButton.new()
 	c.text = t
 	c.button_pressed = bool(Gra.ustawienia.get(klucz, false))

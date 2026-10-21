@@ -7,6 +7,8 @@ var _root: Control
 var _potw: Control
 
 
+var _panel_ust: PanelContainer
+
 func _ready() -> void:
 	var w := Widok3D.zbuduj(self, 0.08, 0.05)
 	var swiat: Node3D = w["swiat"]
@@ -65,7 +67,33 @@ func _ui() -> void:
 	if Gra.istnieje_zapis():
 		_przycisk(v, "Kontynuuj", func(): Gra.idz_do_bazy())
 	_przycisk(v, "Nowa gra", _nowa_gra)
+	_przycisk(v, "Ustawienia", func(): _panel_ust.visible = not _panel_ust.visible)
 	_przycisk(v, "Wyjście", func(): get_tree().quit())
+	# ustawienia (te same co w menu pauzy) po prawej
+	_panel_ust = PanelContainer.new()
+	_panel_ust.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_panel_ust.offset_left = -520
+	_panel_ust.offset_right = -60
+	_panel_ust.offset_top = -250
+	_panel_ust.offset_bottom = 250
+	_panel_ust.visible = false
+	_root.add_child(_panel_ust)
+	var pv := VBoxContainer.new()
+	pv.add_theme_constant_override("separation", 8)
+	_panel_ust.add_child(pv)
+	pv.add_child(Motyw.etykieta("USTAWIENIA", 20, Motyw.TEKST, Motyw.mono_b()))
+	var sc := ScrollContainer.new()
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	pv.add_child(sc)
+	var uv := VBoxContainer.new()
+	uv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(uv)
+	preload("res://scripts/ui/menu_pauzy.gd").zbuduj_ustawienia(uv)
+	var zam := Button.new()
+	zam.text = "Zamknij"
+	zam.pressed.connect(func(): _panel_ust.visible = false)
+	pv.add_child(zam)
 	var stopka := Motyw.etykieta("Demo grywalne · biom 1: Blokowisko · Godot 4.6", 12, Motyw.TEKST_CIEMNY, Motyw.mono())
 	stopka.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	stopka.offset_left = 80
@@ -134,4 +162,20 @@ func _zrzut(k: String) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(k.path_join("menu.png"))
+	# panel ustawień i przełączenie pełnego ekranu (ustawienie zmienia tryb okna)
+	_panel_ust.visible = true
+	for f in 10:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(k.path_join("menu_ustawienia.png"))
+	Gra.ustawienia["pelny_ekran"] = true
+	Gra.ustawienia_zmiana.emit()
+	for f in 10:
+		await get_tree().process_frame
+	print("PELNY EKRAN: tryb okna %d (fullscreen = %d)" % [DisplayServer.window_get_mode(), DisplayServer.WINDOW_MODE_FULLSCREEN])
+	Gra.ustawienia["pelny_ekran"] = false
+	Gra.ustawienia_zmiana.emit()
+	for f in 10:
+		await get_tree().process_frame
+	print("OKNO: tryb okna %d" % DisplayServer.window_get_mode())
 	get_tree().quit()

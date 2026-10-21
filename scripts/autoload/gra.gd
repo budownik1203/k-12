@@ -16,7 +16,7 @@ var potrzeby := {"glod": 80.0, "pragnienie": 80.0}   # 100 = syty / napojony
 var kontrakty := {"oferty": [], "aktywne": []}       # zlecenia Pośrednika
 var statystyki := {"rajdy": 0, "przezyte": 0, "zgony": 0, "zabici": 0, "zarobione": 0}
 var ustawienia := {"czulosc": 1.0, "fov": 75.0, "glosnosc": 0.8, "glosnosc_tla": 0.8, "odwroc_y": false, "kolysanie": 1.0,
-	"skala_renderu": 1.0, "skala_ui": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "proste_kieszenie": false, "samouczek_widziane": []}
+	"skala_renderu": 1.0, "skala_ui": 1.0, "cienie": true, "wygladzanie": true, "samouczek": true, "pokaz_fps": false, "proste_kieszenie": false, "pelny_ekran": false, "samouczek_widziane": []}
 var ostatni_raport := {}
 var poczta: Array = []        # ubezpieczone przedmioty wracające po śmierci (słowniki)
 var ziarno_rajdu := 0
@@ -38,7 +38,60 @@ func _ready() -> void:
 		ZAPIS = "user://zapis_test.json"
 	if not wczytaj():
 		nowa_gra()
+	_wczytaj_ustawienia()
 	Widok3D.skala_ui.call_deferred(get_window())
+	ustawienia_zmiana.connect(func():
+		_zastosuj_okno()
+		_zapisz_ustawienia())
+	_zastosuj_okno.call_deferred()
+
+
+## Ustawienia gracza w osobnym pliku: zmiana w menu głównym (bez zapisu gry) też zostaje.
+const PLIK_USTAWIEN := "user://ustawienia.json"
+
+
+func _wczytaj_ustawienia() -> void:
+	if OS.get_cmdline_user_args().size() > 0 and ZAPIS.ends_with("zapis_test.json"):
+		return     # testy: domyślne ustawienia
+	if not FileAccess.file_exists(PLIK_USTAWIEN):
+		return
+	var f := FileAccess.open(PLIK_USTAWIEN, FileAccess.READ)
+	if f == null:
+		return
+	var d = JSON.parse_string(f.get_as_text())
+	if d is Dictionary:
+		ustawienia.merge(d, true)
+
+
+func _zapisz_ustawienia() -> void:
+	if ZAPIS.ends_with("zapis_test.json"):
+		return
+	var f := FileAccess.open(PLIK_USTAWIEN, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(ustawienia))
+
+
+## Pełny ekran (bez ramki) albo okno.
+func _zastosuj_okno() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var pelny := bool(ustawienia.get("pelny_ekran", false))
+	var tryb := DisplayServer.window_get_mode()
+	var jest := tryb == DisplayServer.WINDOW_MODE_FULLSCREEN or tryb == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	if pelny and not jest:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	elif not pelny and jest:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+## F11 albo Alt+Enter: pełny ekran wł./wył. z każdego miejsca gry.
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var k := event as InputEventKey
+		if k.keycode == KEY_F11 or (k.keycode == KEY_ENTER and k.alt_pressed):
+			ustawienia["pelny_ekran"] = not bool(ustawienia.get("pelny_ekran", false))
+			ustawienia_zmiana.emit()
+			get_viewport().set_input_as_handled()
 
 
 func nowa_gra() -> void:
