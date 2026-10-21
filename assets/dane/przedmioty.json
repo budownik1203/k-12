@@ -103,7 +103,7 @@
      "opis": "Otwiera wyjście przez piwnice. Piwnica nr 7 nie figuruje w dokumentacji budynku.", "klucz": {"otwiera": "wyjscie_piwnica", "uzycia": 3}},
 
     {"id": "mapa", "nazwa": "Mapa strefy (odbitka)", "typ": "mapa", "w": 2, "h": 1, "waga": 0.05, "cena": 2500,
-     "opis": "Na slocie wyposażenia: [O] pokazuje odległości do wyjść. Bez mapy – tylko ogólny kierunek."},
+     "opis": "Na slocie wyposażenia: [O] – mapa w rękach: plan, odwiedzone pomieszczenia, zauważone strzałki i stan wyjść. Bez mapy – tylko pamięć i strzałki na ścianach."},
     {"id": "kompas", "nazwa": "Kompas Azymut", "typ": "kompas", "w": 2, "h": 2, "waga": 0.08, "cena": 1800,
      "opis": "Na slocie wyposażenia: pasek kierunków u góry ekranu. Północ zgodna z linią partii."},
     {"id": "maszyna_do_pisania", "nazwa": "Maszyna do pisania Łucznik", "typ": "lup", "w": 5, "h": 4, "waga": 7.5, "cena": 8000, "opis": "Każda ma swój charakter pisma. Każda jest zarejestrowana."},
