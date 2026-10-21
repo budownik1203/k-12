@@ -691,7 +691,7 @@ func _sufit_nisko() -> bool:
 func _bron(delta: float, aktywne: bool) -> void:
 	if tryb_bazy:
 		return
-	var moze := aktywne and akcja.is_empty() and bron.przedmiot != null
+	var moze := aktywne and akcja.is_empty() and bron.przedmiot != null and _przelaz.is_empty() and _ciagniete == null
 	if aktywne and akcja.is_empty() and not bron.zajeta():
 		if Input.is_action_just_pressed("bron1") and ekw.sloty["glowna"] != null and (aktywny_slot != "glowna" or latarka_w_rece):
 			latarka_w_rece = false
@@ -1148,7 +1148,8 @@ func _ciagnij(delta: float) -> void:
 	var przod := -global_basis.z
 	przod.y = 0.0
 	# ciało przed graczem, nisko (pochylony, ciągnie tyłem albo przodem – jak chce gracz)
-	_ciagniete.ciagnij(global_position + przod.normalized() * 0.85 + Vector3.UP * 0.35)
+	# kołnierz uniesiony (tułów nad podłogą – ciało nie haczy o krawędzie płytek i progi)
+	_ciagniete.ciagnij(global_position + przod.normalized() * 0.85 + Vector3.UP * 0.6)
 	var odl_c := Vector2(_ciagniete.srodek().x - global_position.x, _ciagniete.srodek().z - global_position.z).length()
 	_ciag_zaklin = _ciag_zaklin + delta if odl_c > 2.6 else 0.0
 	if _ciag_zaklin > 1.2 or odl_c > 3.6:

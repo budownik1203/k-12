@@ -563,6 +563,13 @@ func _przedmioty_i_wylaczniki() -> void:
 					var d2: Vector2i = GeneratorBiomu.DIRS[rng.randi() % 4]
 					var b2: Array = g._bok(r, d2)
 					var u2 := rng.randf_range(float(b2[2]) + 0.6, float(b2[3]) - 0.6)
+					# nie w świetle przejścia (drzwi, otwory) – przedmiot nie może zatarasować wejścia
+					var w_otworze := false
+					for otw2 in kom["otwory"][d2]:
+						if u2 > float(otw2[0]) - 1.5 and u2 < float(otw2[1]) + 1.5:   # też łuk skrzydła drzwi
+							w_otworze = true
+					if w_otworze:
+						continue
 					var n3: Vector2 = b2[4]
 					var nrm2 := Vector3(n3.x, 0, n3.y)
 					var pp: Vector3 = g._punkt_sciany(k, d2, u2) + off + nrm2 * (maxf(rozm.x, rozm.z) * 0.5 + 0.08)
@@ -1714,7 +1721,7 @@ func _test_gestow(katalog: String) -> void:
 	print("  magazynek w ładownicy: %s" % kam.zawiera(mag2))
 	ek.ustaw_kieszen("kamizelka", ik, true)
 	var przed := get_tree().get_nodes_in_group("lup_swiat").size()
-	for k in 120:
+	for k in 600:
 		gracz._gubienie(2.0)
 		if not kam.zawiera(mag2):
 			break

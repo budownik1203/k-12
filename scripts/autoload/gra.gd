@@ -135,11 +135,13 @@ func wydaj_zestaw_startowy() -> bool:
 		ekw.zaloz("plecak", w)
 	var m := _magazynek("mag_pw9", "a_9x18", 8)
 	m.dane["przydzial"] = true
-	ekw.dodaj(m)
-	ekw.dodaj(Przedmiot.nowy("a_9x18", 16))
-	ekw.dodaj(Przedmiot.nowy("bandaz"))
+	var reszta := [m, Przedmiot.nowy("a_9x18", 16), Przedmiot.nowy("bandaz")]
 	if not ekw.ma_wyposazenie("latarka") and ekw.znajdz_id("latarka").is_empty():
-		ekw.dodaj(Przedmiot.nowy("latarka"))
+		reszta.append(Przedmiot.nowy("latarka"))
+	# pełne kieszenie: reszta zestawu do skrytki (nie przepada)
+	for pz in reszta:
+		if not ekw.dodaj(pz):
+			skrytka.dodaj(pz)
 	zapisz()
 	return true
 
@@ -159,7 +161,15 @@ func idz_do_bazy() -> void:
 	get_tree().change_scene_to_file("res://scenes/baza.tscn")
 
 
+var _startuje := false
+
+
 func rozpocznij_rajd() -> void:
+	# podwójne kliknięcie „Wejdź do strefy” nie liczy dwóch rajdów
+	if _startuje:
+		return
+	_startuje = true
+	get_tree().create_timer(3.0).timeout.connect(func(): _startuje = false)
 	ziarno_rajdu = nastepne_ziarno if nastepne_ziarno != 0 else randi()
 	nastepne_ziarno = 0
 	rajd_w_toku = true
@@ -574,6 +584,18 @@ func wczytaj() -> bool:
 		if (kontrakty.get("oferty", []) as Array).is_empty():
 			odnow_oferty()
 		statystyki.merge(d.get("statystyki", {}), true)
+		# JSON zwraca liczby jako float – liczniki z powrotem całkowite (inaczej np. "rajdy 2.0" w porównaniach i kluczach)
+		for k in statystyki:
+			if typeof(statystyki[k]) == TYPE_FLOAT and is_equal_approx(float(statystyki[k]), roundf(float(statystyki[k]))):
+				statystyki[k] = int(statystyki[k])
+		var wszystkie_k: Array = (kontrakty.get("oferty", []) as Array) + (kontrakty.get("aktywne", []) as Array)
+		for fl in (kontrakty.get("frakcje", {}) as Dictionary).values():
+			wszystkie_k += fl as Array
+		for _l in 1:
+			for kt in wszystkie_k:
+				for pole in ["ile", "postep", "nagroda", "rep"]:
+					if (kt as Dictionary).has(pole):
+						kt[pole] = int(kt[pole])
 		ustawienia.merge(d.get("ustawienia", {}), true)
 		poczta = d.get("poczta", [])
 		# kryjówka (zapisy sprzed v0.10: dawny schron – trzy szafki, stół roboczy, kącik)

@@ -372,7 +372,8 @@ func chwyc(g) -> void:
 func chwyc_ruch(g, m: Vector2, delta: float) -> void:
 	var strona := 1.0 if (g.global_position - global_position).dot(global_basis.z) > 0.0 else -1.0
 	var pchniecie := -m.y * 0.0045 + m.x * 0.0012 * strona
-	if (na_klucz and zamkniete()) or (klin and zamkniete() and strona != klin_strona and pchniecie * strona < 0.0):
+	# zaklinowane drzwi nie ustępują z żadnej strony – klin trzeba najpierw wyjąć (krótkie [F] od jego strony)
+	if (na_klucz and zamkniete()) or (klin and zamkniete()):
 		if absf(pchniecie) > 0.004:
 			_grzech_t -= delta
 			if _grzech_t <= 0.0:

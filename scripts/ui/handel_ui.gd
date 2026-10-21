@@ -420,6 +420,15 @@ func _kup(pid: String, ile: int, cena: int) -> void:
 		return
 	var p := Przedmiot.nowy(pid, ile)
 	if not Gra.skrytka.dodaj(p):
+		# część mogła trafić do istniejących stosów (amunicja) – za to, co weszło, trzeba zapłacić
+		var weszlo := ile - p.ilosc
+		if weszlo > 0:
+			var czesc := int(ceil(float(cena) * weszlo / float(ile)))
+			Gra.dodaj_bony(-czesc)
+			Dzwiek.graj("kasa", -6.0)
+			_powitanie.text = "„Weszło tylko %d sztuk – policzyłem za tyle. Zrób miejsce w skrytce.”" % weszlo
+			_przebuduj()
+			return
 		_powitanie.text = "„Nie mam gdzie ci tego włożyć. Zrób miejsce w skrytce.”"
 		return
 	Gra.dodaj_bony(-cena)

@@ -136,11 +136,23 @@ func _physics_process(delta: float) -> void:
 		var t: RigidBody3D = bryly["tulow"]
 		var d := ciagnie_do - t.global_position
 		var v := (d * 6.0).limit_length(1.8)
+		# zahaczone (kończyna wbita w framugę, pod meblem): tułów nie rusza mimo ciągnięcia – szarpnięcie w górę
+		# i do ręki uwalnia ciało (tak jak się podrywa ciało przy zaczepieniu)
+		var pozioma := Vector2(t.linear_velocity.x, t.linear_velocity.z).length()
+		if Vector2(d.x, d.z).length() > 0.6 and pozioma < 0.25:
+			_zaczep_t += delta
+		else:
+			_zaczep_t = 0.0
+		if _zaczep_t > 0.35:
+			_zaczep_t = 0.0
+			for k in bryly:
+				var rb2: RigidBody3D = bryly[k]
+				rb2.apply_central_impulse((Vector3(d.x, 0, d.z).normalized() * 1.2 + Vector3.UP * 1.6) * rb2.mass * 0.6)
 		# całe ciało sunie za tułowiem (inaczej nogi tarciem kotwiczą je w miejscu); kończyny lżej
 		for k in bryly:
 			var rb: RigidBody3D = bryly[k]
-			var w := 1.0 if k in ["tulow", "biodra", "glowa"] else 0.75
-			rb.linear_velocity = rb.linear_velocity.lerp(Vector3(v.x, minf(v.y, 0.5) if k == "tulow" else rb.linear_velocity.y, v.z) * w, 0.5)
+			var w := 1.0 if k in ["tulow", "biodra", "glowa"] else 0.9
+			rb.linear_velocity = rb.linear_velocity.lerp(Vector3(v.x * w, minf(v.y, 0.8) if k in ["tulow", "glowa"] else rb.linear_velocity.y, v.z * w), 0.6)
 		if pojemnik and is_instance_valid(pojemnik):
 			pojemnik.global_position = t.global_position
 		return
@@ -174,6 +186,7 @@ func srodek() -> Vector3:
 
 ## Ciągnięcie za kołnierz: ciało odmarza, tułów idzie za dłonią gracza (reszta ciągnie się na przegubach).
 var ciagnie_do := Vector3.INF
+var _zaczep_t := 0.0
 
 
 func ciagnij(cel: Vector3) -> void:
@@ -184,7 +197,7 @@ func ciagnij(cel: Vector3) -> void:
 		set_physics_process(true)
 	if ciagnie_do == Vector3.INF:
 		for b in bryly.values():
-			((b as RigidBody3D).physics_material_override as PhysicsMaterial).friction = 0.3
+			((b as RigidBody3D).physics_material_override as PhysicsMaterial).friction = 0.05
 	ciagnie_do = cel
 	_t = 0.0
 	_spokoj = 0.0
